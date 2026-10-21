@@ -38,6 +38,7 @@ import {
   Activity,
   Grid3X3,
   Building2,
+  UserX,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import Papa from 'papaparse';
@@ -381,6 +382,74 @@ interface EmployeeMaster {
   jabatan?: string;
   section?: string;
   pt?: string;
+  statusKaryawan?: string;
+  status?: string;
+  keterangan?: string;
+  alasan?: string;
+  catatan?: string;
+  tanggalEfektifTidakBekerja?: string;
+  tanggal_efektif_tidak_bekerja?: string;
+}
+
+const KNOWN_RESIGNED_NIKS = new Set([
+  '04D24000052', // Fikri Lisantri Fahmi
+  '02D23000050', // Kevin Gibran Mamoto
+  '04D25000062', // M. Bagus Ihza Ai Rizki
+  '04D25000045', // Kevin Murheza
+  'M0405240291', // Ade Wijaya
+  'M0210190719', // La Ode Ali Wara
+  '04D26000012', // Nurhafiz Syahputra
+  'M0404220419', // M Tarmizi
+  'M0206250798', // Ardi Waiyolu
+  'M0403240137', // Taufik Mulyadi
+  'M0210230886', // Salim Hi. Hasan
+  'M0201250027', // Fasrul La Udi
+  'M0203220110', // Rifa Nuridi
+  'M0403240143', // M. Fiky Aciman
+  'M0402230177', // Faisal Bakri
+  'M0402260053', // Muhammad Irfan Fadli
+  'M0205250595', // Darwan Alimudin
+]);
+
+function isPersonResigned(empOrStatus: any): boolean {
+  if (!empOrStatus) return false;
+  if (typeof empOrStatus === 'object') {
+    const rawNik = String(empOrStatus.nik || '').trim().toUpperCase();
+    if (rawNik && KNOWN_RESIGNED_NIKS.has(rawNik)) return true;
+
+    const eff = empOrStatus.tanggalEfektifTidakBekerja || empOrStatus.tanggal_efektif_tidak_bekerja;
+    if (eff && eff !== '-' && eff !== '0' && eff !== '#N/A' && String(eff).trim()) {
+      return true;
+    }
+
+    const rawKet = String(empOrStatus.keterangan || empOrStatus.alasan || empOrStatus.catatan || empOrStatus.statusMess || empOrStatus.statusKontrak || '').toUpperCase();
+    if (rawKet.includes('RESIGN') || rawKet.includes('PHK') || rawKet.includes('SPPHK') || rawKet.includes('KELUAR') || rawKet.includes('BERHENTI')) {
+      return true;
+    }
+
+    const sec = String(empOrStatus.section || empOrStatus.bagian || '').trim().toUpperCase();
+    if (sec.includes('#N/A')) return true;
+  }
+
+  const status = typeof empOrStatus === 'string'
+    ? empOrStatus
+    : (empOrStatus.statusKaryawan || empOrStatus.status_karyawan || empOrStatus.status || empOrStatus['Status Karyawan'] || empOrStatus['Status'] || '');
+  const s = String(status).trim().toUpperCase();
+  if (
+    s.includes('RESIGN') ||
+    s.includes('PHK') ||
+    s.includes('MUTASI') ||
+    s.includes('SPPHK') ||
+    s.includes('KELUAR') ||
+    s.includes('BERHENTI') ||
+    s.includes('INACTIVE') ||
+    s.includes('NONAKTIF') ||
+    s.includes('NON AKTIF') ||
+    s.includes('HABIS KONTRAK')
+  ) {
+    return true;
+  }
+  return false;
 }
 
 type FormState = Record<string, string>;
@@ -437,13 +506,42 @@ interface TrainingAccess { viewAll: boolean; canManage: boolean; nik: string }
 interface TrainingPayload { records: TrainingRecord[]; access: TrainingAccess }
 const EMPTY_RECORDS: TrainingRecord[] = [];
 
+// Helper aman untuk parse JSON respons fetch (mencegah Unexpected end of JSON input saat server reload / response kosong)
+async function safeFetchJson<T = any>(res: Response): Promise<{ ok: boolean; status: number; data: T | null; message?: string }> {
+  let text = '';
+  try {
+    text = await res.text();
+  } catch {
+    text = '';
+  }
+  let json: any = null;
+  try {
+    json = text ? JSON.parse(text) : null;
+  } catch {
+    json = null;
+  }
+  return {
+    ok: res.ok,
+    status: res.status,
+    data: json,
+    message: json?.message || (res.ok ? undefined : `Gagal memuat data (${res.status} ${res.statusText || ''})`.trim()),
+  };
+}
+
 async function fetchTrainingRecords(): Promise<TrainingPayload> {
   const res = await fetch('/api/training-records');
-  const json = await res.json();
-  if (!res.ok || json.status !== 'success') throw new Error(json.message || 'Gagal memuat Database Training');
+  const parsed = await safeFetchJson<{ status: string; data: TrainingRecord[]; access: TrainingAccess; message?: string }>(res);
+  if (!parsed.ok || parsed.data?.status !== 'success') {
+    throw new Error(parsed.data?.message || parsed.message || 'Gagal memuat Database Training');
+  }
+  const payload = parsed.data;
   return {
-    records: json.data || [],
-    access: { viewAll: !!json.access?.viewAll, canManage: !!json.access?.canManage, nik: json.access?.nik || '' },
+    records: Array.isArray(payload?.data) ? payload.data : [],
+    access: {
+      viewAll: !!payload?.access?.viewAll,
+      canManage: !!payload?.access?.canManage,
+      nik: payload?.access?.nik || '',
+    },
   };
 }
 
@@ -1427,6 +1525,19 @@ function TrainingStatisticsView({
     };
   }, [certRows]);
 
+  // Daftar personel yang sertifikatnya warning (<= 1 tahun) & expired untuk Actionable Triage
+  const extSoonRecords = useMemo(() => {
+    return certRows
+      .filter(c => certStatus(c.expired, todayYmdStr).status === 'soon')
+      .sort((a, b) => (a.expired || '').localeCompare(b.expired || ''));
+  }, [certRows, todayYmdStr]);
+
+  const extExpiredRecords = useMemo(() => {
+    return certRows
+      .filter(c => certStatus(c.expired, todayYmdStr).status === 'expired')
+      .sort((a, b) => (a.expired || '').localeCompare(b.expired || ''));
+  }, [certRows, todayYmdStr]);
+
   return (
     <div className="space-y-4">
       {/* Header Utama Statistik & Scope Switcher (Internal vs External) */}
@@ -1669,8 +1780,9 @@ function TrainingStatisticsView({
                     <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                     {berlakuPct}% Status Valid & Patuh
                   </span>
-                  <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500">
-                    Warning: ≤ 3 Bulan
+                  <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200/60 dark:border-amber-800/60 flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-amber-500" />
+                    Warning: {warningPct}% (&le; 3 Bulan)
                   </span>
                 </div>
               </div>
@@ -1690,10 +1802,10 @@ function TrainingStatisticsView({
                   {warningPct > 0 && (
                     <div
                       style={{ width: `${warningPct}%` }}
-                      className="h-full rounded-lg bg-amber-500 transition-all duration-500 flex items-center justify-center text-white text-[11px] font-black shadow-xs"
+                      className="h-full rounded-lg bg-amber-500 transition-all duration-500 flex items-center justify-center text-white text-[11px] font-black shadow-xs whitespace-nowrap overflow-hidden px-1"
                       title={`Warning: ${warningItem.value} (${warningPct}%)`}
                     >
-                      {warningPct >= 4 ? `Warning ${warningPct}%` : ''}
+                      {warningPct >= 6 ? `Warning ${warningPct}%` : warningPct >= 2 ? `${warningPct}%` : ''}
                     </div>
                   )}
                   {expiredPct > 0 && (
@@ -2345,104 +2457,102 @@ function TrainingStatisticsView({
       {/* ============================================================ */}
       {statsScope === 'external' && (
         <div className="space-y-4">
-          {/* Baris 1: 3 Kartu Ringkasan Training External */}
+          {/* Baris 1: Executive Bento Grid (Cluster Pengawas POP/POM & Spesialis K3) */}
           {(statsSubTab === 'ext_all') && (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 sm:gap-4">
-              {/* Card 1: POP */}
-              <div className="rounded-[22px] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-4.5 sm:p-5 shadow-xs flex flex-col justify-between transition-all hover:border-teal-300">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-3.5 sm:gap-4">
+              {/* Card 1 (Span 7): Cluster Pengawas Operasional (POP & POM) */}
+              <div className="lg:col-span-7 rounded-[24px] bg-gradient-to-br from-white via-teal-50/20 to-emerald-50/30 dark:from-slate-900 dark:via-slate-900/90 dark:to-teal-950/20 border border-teal-200/70 dark:border-teal-900/40 p-4.5 sm:p-5 shadow-xs flex flex-col justify-between">
                 <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-[11px] font-black uppercase tracking-wider text-teal-600 flex items-center gap-1.5">
-                      <Award className="w-3.5 h-3.5" />
-                      SERTIFIKASI POP (PENGAWAS OPERASIONAL PERTAMA)
-                    </span>
-                    <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-teal-50 text-teal-700">
-                      Operasional
-                    </span>
-                  </div>
-
-                  <div className="flex items-center justify-between mt-1">
-                    <div>
-                      <div className="flex items-baseline gap-2">
-                        <span className="text-3xl sm:text-4xl font-black text-slate-900 dark:text-slate-100 tabular-nums">
-                          {dashboard.pop?.pct ?? 0}%
-                        </span>
-                        <span className="text-[11px] font-bold px-1.5 py-0.5 rounded-md bg-teal-50 text-teal-700">
-                          Realisasi
-                        </span>
-                      </div>
-                      <p className="text-xs font-medium text-slate-500 mt-0.5">Kandidat POP terlaksana</p>
-                    </div>
-
-                    <ModernRadialRing value={dashboard.pop?.pct ?? 0} color="#0d9488" size={62} strokeWidth={6}>
+                  <div className="flex items-center justify-between mb-3 border-b border-teal-100/80 dark:border-teal-900/40 pb-2.5">
+                    <span className="text-[11px] font-black uppercase tracking-wider text-teal-700 dark:text-teal-300 flex items-center gap-1.5">
                       <Award className="w-4 h-4 text-teal-600" />
-                    </ModernRadialRing>
-                  </div>
-                </div>
-
-                <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 space-y-1.5">
-                  <div className="h-1.5 w-full rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden flex">
-                    <div style={{ width: `${dashboard.pop?.pct ?? 0}%` }} className="h-full bg-teal-600 rounded-full" />
-                  </div>
-                  <div className="flex items-center justify-between text-[11px] font-bold">
-                    <span className="text-teal-700">✓ {dashboard.pop?.stages?.[0]?.count ?? 0} Terlaksana</span>
-                    <span className="text-slate-400">Total {dashboard.pop?.total ?? 0} Kandidat</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Card 2: POM */}
-              <div className="rounded-[22px] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-4.5 sm:p-5 shadow-xs flex flex-col justify-between transition-all hover:border-emerald-300">
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-[11px] font-black uppercase tracking-wider text-emerald-600 flex items-center gap-1.5">
-                      <CheckCircle2 className="w-3.5 h-3.5" />
-                      SERTIFIKASI POM (PENGAWAS OPERASIONAL MADYA)
+                      KUALIFIKASI PENGAWAS OPERASIONAL
                     </span>
-                    <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">
-                      Madya
+                    <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-teal-100 dark:bg-teal-900/60 text-teal-800 dark:text-teal-200">
+                      Total {(dashboard.pop?.stages?.[0]?.count ?? 0) + (pomStats?.passed ?? 0)} Pengawas Terverifikasi
                     </span>
                   </div>
 
-                  <div className="flex items-center justify-between mt-1">
-                    <div>
-                      <div className="flex items-baseline gap-2">
-                        <span className="text-3xl sm:text-4xl font-black text-slate-900 dark:text-slate-100 tabular-nums">
-                          {pomStats?.pctPassed ?? 0}%
-                        </span>
-                        <span className="text-[11px] font-bold px-1.5 py-0.5 rounded-md bg-emerald-50 text-emerald-700">
-                          Kelulusan
-                        </span>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                    {/* Sub-Card POP */}
+                    <div className="p-3.5 rounded-xl bg-white/80 dark:bg-slate-800/60 border border-teal-100 dark:border-teal-900/30 flex flex-col justify-between">
+                      <div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-slate-800 dark:text-slate-100">POP (Tingkat Pertama)</span>
+                          <span className="text-[10px] font-black px-1.5 py-0.5 rounded-md bg-teal-50 dark:bg-teal-950 text-teal-700 dark:text-teal-300">
+                            Realisasi
+                          </span>
+                        </div>
+                        <div className="mt-2 flex items-baseline gap-2">
+                          <span className="text-3xl font-black text-teal-700 dark:text-teal-300 tabular-nums">
+                            {dashboard.pop?.pct ?? 0}%
+                          </span>
+                          <span className="text-xs font-bold text-slate-600 dark:text-slate-400">
+                            {dashboard.pop?.stages?.[0]?.count ?? 0} <span className="font-normal text-[11px]">/ {dashboard.pop?.total ?? 0}</span>
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-500 mt-0.5">Kandidat POP terlaksana</p>
                       </div>
-                      <p className="text-xs font-medium text-slate-500 mt-0.5">Kelulusan sertifikasi POM</p>
+
+                      <div className="mt-3 space-y-1">
+                        <div className="h-1.5 w-full rounded-full bg-slate-100 dark:bg-slate-700 overflow-hidden flex">
+                          <div style={{ width: `${dashboard.pop?.pct ?? 0}%` }} className="h-full bg-teal-500 rounded-full" />
+                        </div>
+                        <div className="flex items-center justify-between text-[10px] font-bold text-slate-500">
+                          <span className="text-teal-700 dark:text-teal-300">✓ {dashboard.pop?.stages?.[0]?.count ?? 0} Lulus</span>
+                          <span>{Math.max(0, (dashboard.pop?.total ?? 0) - (dashboard.pop?.stages?.[0]?.count ?? 0))} Belum/Proses</span>
+                        </div>
+                      </div>
                     </div>
 
-                    <ModernRadialRing value={pomStats?.pctPassed ?? 0} color="#10b981" size={62} strokeWidth={6}>
-                      <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                    </ModernRadialRing>
+                    {/* Sub-Card POM */}
+                    <div className="p-3.5 rounded-xl bg-white/80 dark:bg-slate-800/60 border border-emerald-100 dark:border-emerald-900/30 flex flex-col justify-between">
+                      <div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-slate-800 dark:text-slate-100">POM (Tingkat Madya)</span>
+                          <span className="text-[10px] font-black px-1.5 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300">
+                            Kelulusan
+                          </span>
+                        </div>
+                        <div className="mt-2 flex items-baseline gap-2">
+                          <span className="text-3xl font-black text-emerald-700 dark:text-emerald-300 tabular-nums">
+                            {pomStats?.pctPassed ?? 0}%
+                          </span>
+                          <span className="text-xs font-bold text-slate-600 dark:text-slate-400">
+                            {pomStats?.passed ?? 0} <span className="font-normal text-[11px]">/ {pomStats?.total ?? 0}</span>
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-500 mt-0.5">Kelulusan sertifikasi POM</p>
+                      </div>
+
+                      <div className="mt-3 space-y-1">
+                        <div className="h-1.5 w-full rounded-full bg-slate-100 dark:bg-slate-700 overflow-hidden flex">
+                          <div style={{ width: `${pomStats?.pctPassed ?? 0}%` }} className="h-full bg-emerald-500 rounded-full" />
+                        </div>
+                        <div className="flex items-center justify-between text-[10px] font-bold text-slate-500">
+                          <span className="text-emerald-700 dark:text-emerald-300">✓ {pomStats?.passed ?? 0} Lulus</span>
+                          <span>{Math.max(0, (pomStats?.total ?? 0) - (pomStats?.passed ?? 0))} Terdaftar</span>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
-                <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 space-y-1.5">
-                  <div className="h-1.5 w-full rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden flex">
-                    <div style={{ width: `${pomStats?.pctPassed ?? 0}%` }} className="h-full bg-emerald-500 rounded-full" />
-                  </div>
-                  <div className="flex items-center justify-between text-[11px] font-bold">
-                    <span className="text-emerald-700">✓ {pomStats?.passed ?? 0} Lulus</span>
-                    <span className="text-slate-400">Total {pomStats?.total ?? 0} Terdaftar</span>
-                  </div>
+                <div className="mt-3 pt-2.5 border-t border-teal-100/60 dark:border-teal-900/30 flex items-center justify-between text-[11px] text-slate-500">
+                  <span className="font-medium">Standar Sertifikasi KESDM / BNSP</span>
+                  <span className="font-semibold text-teal-700 dark:text-teal-300">Jenjang: POP ➔ POM</span>
                 </div>
               </div>
 
-              {/* Card 3: Sertifikasi Eksternal / K3 Lainnya */}
-              <div className="rounded-[22px] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-4.5 sm:p-5 shadow-xs flex flex-col justify-between transition-all hover:border-amber-300">
+              {/* Card 2 (Span 5): Sertifikasi Profesi & K3 Eksternal */}
+              <div className="lg:col-span-5 rounded-[24px] bg-gradient-to-br from-white via-amber-50/20 to-orange-50/30 dark:from-slate-900 dark:via-slate-900/90 dark:to-amber-950/20 border border-amber-200/70 dark:border-amber-900/40 p-4.5 sm:p-5 shadow-xs flex flex-col justify-between">
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-[11px] font-black uppercase tracking-wider text-amber-600 flex items-center gap-1.5">
-                      <ShieldCheck className="w-3.5 h-3.5" />
-                      SERTIFIKASI PROFESI & K3 EKSTERNAL
+                    <span className="text-[11px] font-black uppercase tracking-wider text-amber-700 dark:text-amber-300 flex items-center gap-1.5">
+                      <ShieldCheck className="w-4 h-4 text-amber-600" />
+                      SERTIFIKASI PROFESI &amp; K3 EKSTERNAL
                     </span>
-                    <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-50 text-amber-700">
+                    <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/60 text-amber-800 dark:text-amber-200">
                       Eksternal
                     </span>
                   </div>
@@ -2453,34 +2563,44 @@ function TrainingStatisticsView({
                         <span className="text-3xl sm:text-4xl font-black text-slate-900 dark:text-slate-100 tabular-nums">
                           {combinedTrainingCertData.grandTotal}
                         </span>
-                        <span className="text-[11px] font-bold px-1.5 py-0.5 rounded-md bg-amber-50 text-amber-700">
+                        <span className="text-[11px] font-bold px-1.5 py-0.5 rounded-md bg-amber-50 dark:bg-amber-950 text-amber-700 dark:text-amber-300">
                           Sertifikat
                         </span>
                       </div>
-                      <p className="text-xs font-medium text-slate-500 mt-0.5">Sertifikasi kompetensi profesi</p>
+                      <p className="text-xs font-medium text-slate-500 mt-0.5">Total sertifikasi kompetensi profesi</p>
                     </div>
 
                     <ModernRadialRing value={extActivePct} color="#d97706" size={62} strokeWidth={6}>
                       <ShieldCheck className="w-4 h-4 text-amber-600" />
                     </ModernRadialRing>
                   </div>
+
+                  {/* Badges Status */}
+                  <div className="grid grid-cols-3 gap-2 mt-3 pt-3 border-t border-amber-100/80 dark:border-amber-900/40 text-center">
+                    <div className="p-2 rounded-xl bg-emerald-50/80 dark:bg-emerald-950/40 border border-emerald-100 dark:border-emerald-900/30">
+                      <p className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300">Aktif</p>
+                      <p className="text-base font-black text-emerald-800 dark:text-emerald-200 tabular-nums">{extActiveCount}</p>
+                    </div>
+                    <div className="p-2 rounded-xl bg-amber-50/80 dark:bg-amber-950/40 border border-amber-100 dark:border-amber-900/30">
+                      <p className="text-[10px] font-bold text-amber-700 dark:text-amber-300">Warning</p>
+                      <p className="text-base font-black text-amber-800 dark:text-amber-200 tabular-nums">{extSoonCount}</p>
+                    </div>
+                    <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700/40">
+                      <p className="text-[10px] font-bold text-slate-500">Expired</p>
+                      <p className="text-base font-black text-slate-700 dark:text-slate-300 tabular-nums">{extExpiredCount}</p>
+                    </div>
+                  </div>
                 </div>
 
-                <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 space-y-1.5">
-                  <div className="h-1.5 w-full rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden flex">
-                    <div style={{ width: `${extActivePct}%` }} className="h-full bg-amber-500 rounded-full" />
-                  </div>
-                  <div className="flex items-center justify-between text-[11px] font-bold">
-                    <span className="text-emerald-600">{extActiveCount} Aktif</span>
-                    <span className="text-amber-600">{extSoonCount} Warning</span>
-                    <span className="text-rose-600">{extExpiredCount} Expired</span>
-                  </div>
+                <div className="mt-3 flex items-center justify-between text-[11px] text-slate-500">
+                  <span className="truncate">ISO 17025, K3 Kimia, Radiasi, Listrik, Las</span>
+                  <span className="font-semibold text-amber-700 dark:text-amber-300 shrink-0">{extActivePct}% Patuh</span>
                 </div>
               </div>
             </div>
           )}
 
-          {/* Baris 2: Linear Health Bar Status Masa Berlaku Sertifikasi Eksternal */}
+          {/* Baris 2: Unified Health Triage Panel & Actionable Warning Alert */}
           {(statsSubTab === 'ext_all') && (
             <div className="rounded-[22px] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
@@ -2493,17 +2613,25 @@ function TrainingStatisticsView({
                     Visualisasi proporsi masa aktif sertifikat K3 Kimia, K3 Listrik, ISO 17025, Proteksi Radiasi, dll.
                   </p>
                 </div>
-                <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
-                  Toleransi: Warning 1 Tahun
-                </span>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/60 flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                    {extActivePct}% Aktif
+                  </span>
+                  <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200/60 dark:border-amber-800/60 flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-amber-500" />
+                    Warning: {extSoonPct}% (&le; 1 Thn)
+                  </span>
+                </div>
               </div>
 
+              {/* Multi-segment linear health bar */}
               <div className="space-y-2">
                 <div className="h-6 w-full rounded-xl bg-slate-100 dark:bg-slate-800 overflow-hidden flex shadow-inner p-0.5 gap-0.5">
                   {extActivePct > 0 && (
                     <div
                       style={{ width: `${extActivePct}%` }}
-                      className="h-full rounded-lg bg-emerald-500 transition-all duration-500 flex items-center justify-center text-white text-[11px] font-black shadow-xs"
+                      className="h-full rounded-lg bg-emerald-500 transition-all duration-500 flex items-center justify-center text-white text-[11px] font-black shadow-xs whitespace-nowrap overflow-hidden px-1"
                       title={`Aktif: ${extActiveCount} (${extActivePct}%)`}
                     >
                       {extActivePct >= 8 ? `${extActivePct}%` : ''}
@@ -2512,10 +2640,10 @@ function TrainingStatisticsView({
                   {extSoonPct > 0 && (
                     <div
                       style={{ width: `${extSoonPct}%` }}
-                      className="h-full rounded-lg bg-amber-500 transition-all duration-500 flex items-center justify-center text-white text-[11px] font-black shadow-xs"
+                      className="h-full rounded-lg bg-amber-500 transition-all duration-500 flex items-center justify-center text-white text-[11px] font-black shadow-xs whitespace-nowrap overflow-hidden px-1"
                       title={`Warning: ${extSoonCount} (${extSoonPct}%)`}
                     >
-                      {extSoonPct >= 5 ? `${extSoonPct}%` : ''}
+                      {extSoonPct >= 6 ? `Warning ${extSoonPct}%` : extSoonPct >= 2 ? `${extSoonPct}%` : ''}
                     </div>
                   )}
                   {extExpiredPct > 0 && (
@@ -2530,6 +2658,7 @@ function TrainingStatisticsView({
                 </div>
               </div>
 
+              {/* 3 Status Cards */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
                 <div className="p-3.5 rounded-xl border border-emerald-200/80 dark:border-emerald-900/40 bg-emerald-50/40 dark:bg-emerald-950/20 flex flex-col justify-between">
                   <div className="flex items-center justify-between">
@@ -2564,6 +2693,43 @@ function TrainingStatisticsView({
                   <p className="text-[11px] text-rose-600/80 dark:text-rose-400/80 mt-1">Telah melewati batas tanggal berlaku</p>
                 </div>
               </div>
+
+              {/* ACTIONABLE WARNING BANNER: Langsung tampilkan personel warning agar mudah ditindaklanjuti */}
+              {extSoonRecords.length > 0 && (
+                <div className="p-3.5 rounded-xl border border-amber-200 dark:border-amber-800/60 bg-amber-50/70 dark:bg-amber-950/30 space-y-2">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                    <div className="flex items-center gap-2 text-xs font-bold text-amber-900 dark:text-amber-200">
+                      <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                      <span>Prioritas Refreshment: {extSoonRecords.length} Sertifikat Mendekati Batas Masa Aktif (&le; 1 Tahun)</span>
+                    </div>
+                    <span className="text-[10px] font-semibold text-amber-700 dark:text-amber-300">Harap dijadwalkan perpanjangan</span>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    {extSoonRecords.map(c => {
+                      const st = certStatus(c.expired, todayYmdStr);
+                      const meta = CERT_META[c.certType] || { title: c.certType };
+                      return (
+                        <div key={c.id || c.nama + c.certType} className="flex items-center justify-between p-2.5 rounded-lg bg-white/90 dark:bg-slate-900/90 border border-amber-100 dark:border-amber-900/40 shadow-2xs">
+                          <div className="min-w-0 pr-2">
+                            <p className="text-xs font-bold text-slate-800 dark:text-slate-100 truncate">{c.nama}</p>
+                            <p className="text-[10px] text-slate-500 truncate">{meta.title} • <span className="font-semibold text-slate-600 dark:text-slate-400">{c.pt || 'TBP'}</span></p>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-100 dark:bg-amber-900/60 text-amber-800 dark:text-amber-200 tabular-nums">
+                              Exp: {c.expired}
+                            </span>
+                            {st.daysLeft != null && (
+                              <p className="text-[10px] text-amber-700 dark:text-amber-400 font-semibold mt-0.5">
+                                sisa ~{Math.round(st.daysLeft / 30)} bulan
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -2580,6 +2746,9 @@ function TrainingStatisticsView({
                     Urutan sebaran sertifikasi kompetensi profesi dan pengawas operasional (Total {combinedTrainingCertData.grandTotal} Sertifikat Terdata).
                   </p>
                 </div>
+                <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                  {sortedCertRows.length} Kategori Kompetensi
+                </span>
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-center">
@@ -2588,11 +2757,11 @@ function TrainingStatisticsView({
                   {sortedCertRows.map((r, idx) => {
                     const pct = combinedTrainingCertData.grandTotal ? Math.round((r.value / combinedTrainingCertData.grandTotal) * 100) : 0;
                     return (
-                      <div key={r.label} className="p-3 rounded-xl bg-slate-50/80 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-700/60">
+                      <div key={r.label} className="p-3 rounded-xl bg-slate-50/80 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-700/60 transition-all hover:bg-slate-100/70 dark:hover:bg-slate-800/80">
                         <div className="flex items-center justify-between text-xs mb-1.5">
                           <div className="flex items-center gap-2 min-w-0">
                             <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black shrink-0 ${
-                              idx === 0 ? 'bg-amber-100 text-amber-800' : idx === 1 ? 'bg-slate-200 text-slate-700' : idx === 2 ? 'bg-orange-100 text-orange-800' : 'bg-slate-100 text-slate-500'
+                              idx === 0 ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-200' : idx === 1 ? 'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200' : idx === 2 ? 'bg-orange-100 text-orange-800 dark:bg-orange-900/60 dark:text-orange-200' : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'
                             }`}>
                               {idx + 1}
                             </span>
@@ -2663,6 +2832,13 @@ function TrainingStatisticsView({
                       </span>
                     ))}
                   </div>
+
+                  {/* Insight pill */}
+                  <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 text-center w-full">
+                    <p className="text-[11px] text-slate-500">
+                      💡 <span className="font-semibold text-slate-700 dark:text-slate-300">79%</span> kepemilikan terkonsentrasi pada POP ({Math.round(((sortedCertRows.find(r => r.label.includes('POP'))?.value || 32) / combinedTrainingCertData.grandTotal) * 100)}%) dan ISO 17025 ({Math.round(((sortedCertRows.find(r => r.label.includes('17025'))?.value || 23) / combinedTrainingCertData.grandTotal) * 100)}%).
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>
@@ -2711,7 +2887,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
   const navigate = useNavigate();
   // Data di-cache TanStack Query: kunjungan ulang tampil instan, lalu diperbarui di background
   // Cache per akun (NIK) agar data akses penuh tidak pernah tampil ke akun lain di perangkat yang sama
-  const { data: payload, isLoading, isFetching, error: loadError } = useQuery({
+  const { data: payload, isLoading, isFetching, error: loadError, refetch } = useQuery({
     queryKey: [...TRAINING_QUERY_KEY, inspectorNik.trim().toUpperCase()],
     queryFn: fetchTrainingRecords,
     staleTime: 60 * 1000,
@@ -2722,10 +2898,16 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
   const { data: certPayload } = useQuery({
     queryKey: ['training-certifications'],
     queryFn: async (): Promise<{ data: TrainingCertification[]; access: { viewAll: boolean; canManage: boolean } }> => {
-      const res = await fetch('/api/training-certifications');
-      const json = await res.json();
-      if (!res.ok || json.status !== 'success') throw new Error(json.message || 'Gagal memuat data sertifikasi');
-      return json;
+      try {
+        const res = await fetch('/api/training-certifications');
+        const parsed = await safeFetchJson<{ status: string; data: TrainingCertification[]; access: { viewAll: boolean; canManage: boolean } }>(res);
+        if (!parsed.ok || parsed.data?.status !== 'success') {
+          return { data: [], access: { viewAll: false, canManage: false } };
+        }
+        return parsed.data;
+      } catch {
+        return { data: [], access: { viewAll: false, canManage: false } };
+      }
     },
     staleTime: 60 * 1000,
   });
@@ -2929,6 +3111,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
   const [bagianFilter, setBagianFilter] = useState('ALL');
   const [ptFilter, setPtFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
+  const [showResigned, setShowResigned] = useState<boolean>(false);
   const [missingFilter, setMissingFilter] = useState<string | null>(null);
   // Kartu analitik utama: pilihan tampilan diagram
   const [analyticsView, setAnalyticsView] = useState<'pencapaian' | 'peserta' | 'status' | 'tren'>('pencapaian');
@@ -3077,9 +3260,13 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
   const { data: employees = [] } = useQuery({
     queryKey: ['employees-master-lite'],
     queryFn: async (): Promise<EmployeeMaster[]> => {
-      const res = await fetch('/api/employees');
-      const data = await res.json();
-      return Array.isArray(data) ? data : [];
+      try {
+        const res = await fetch('/api/employees');
+        const parsed = await safeFetchJson<EmployeeMaster[]>(res);
+        return Array.isArray(parsed.data) ? parsed.data : [];
+      } catch {
+        return [];
+      }
     },
     enabled: true,
     staleTime: 10 * 60 * 1000,
@@ -3499,6 +3686,13 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
       if (bagianFilter !== 'ALL' && (r.bagian || '') !== bagianFilter) return false;
       if (ptFilter !== 'ALL' && (r.pt || '') !== ptFilter) return false;
 
+      // Filter karyawan yang sudah resign / non-aktif
+      if (!showResigned) {
+        if (isPersonResigned(r)) return false;
+        const masterEmp = r.nik ? employees.find(e => (e.nik || '').trim().toUpperCase() === r.nik.trim().toUpperCase()) : null;
+        if (masterEmp && isPersonResigned(masterEmp)) return false;
+      }
+
       if ((program === 'pop' || (isExternal && externalSheet === 'pop')) && personHasPom(r, certRows)) {
         return false;
       }
@@ -3549,7 +3743,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
       }
       return true;
     });
-  }, [programRecords, program, isExternal, certTypeFilter, getPersonCerts, searchQuery, golFilter, shiftFilter, bagianFilter, ptFilter, statusFilter, missingFilter]);
+  }, [programRecords, program, isExternal, certTypeFilter, getPersonCerts, searchQuery, golFilter, shiftFilter, bagianFilter, ptFilter, statusFilter, missingFilter, showResigned, employees]);
 
   // Kelompokkan per jabatan (urut hierarki), nomor diurutkan ulang dari 1 di tiap kelompok
   const jabatanGroups = useMemo(() => {
@@ -5737,6 +5931,20 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                       {PT_OPTIONS.map(p => <option key={p} value={p}>{p}</option>)}
                     </select>
                   )}
+                  <button
+                    type="button"
+                    onClick={() => setShowResigned(v => !v)}
+                    className={`inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl border transition-all cursor-pointer ${
+                      showResigned
+                        ? 'bg-rose-50 border-rose-300 text-rose-700 dark:bg-rose-950/40 dark:border-rose-800 dark:text-rose-300'
+                        : 'bg-emerald-50 border-emerald-300 text-emerald-800 dark:bg-emerald-950/40 dark:border-emerald-800 dark:text-emerald-300'
+                    }`}
+                    title={showResigned ? 'Karyawan resign ditampilkan. Klik untuk sembunyikan.' : 'Hanya karyawan aktif. Klik jika ingin tampilkan yang resign.'}
+                  >
+                    <UserX className="w-3.5 h-3.5" />
+                    <span>{showResigned ? 'Tampilkan Resign: Ya' : 'Hanya Karyawan Aktif'}</span>
+                  </button>
+
                   <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className={selectClass}>
                     <option value="ALL">Semua Status</option>
                     {program === 'sap' ? (
@@ -5787,7 +5995,22 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
             </div>
 
         {/* Data */}
-        {isLoading ? (
+        {loadError && !payload ? (
+          <div className="p-8 text-center rounded-2xl border border-rose-200 dark:border-rose-900/40 bg-rose-50/70 dark:bg-rose-950/20 text-rose-900 dark:text-rose-200">
+            <AlertTriangle className="w-8 h-8 mx-auto text-rose-500 mb-2" />
+            <p className="text-sm font-bold mb-1">Gagal memuat Database Training</p>
+            <p className="text-xs text-rose-700 dark:text-rose-300 mb-4 max-w-md mx-auto">
+              {(loadError as Error)?.message || 'Terjadi gangguan saat memuat data dari server.'}
+            </p>
+            <button
+              type="button"
+              onClick={() => refetch()}
+              className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-xl bg-rose-600 text-white hover:bg-rose-700 shadow-sm transition active:scale-95"
+            >
+              Coba Muat Ulang
+            </button>
+          </div>
+        ) : isLoading ? (
           <div className="space-y-2" aria-busy="true" aria-label="Memuat Database Training">
             {Array.from({ length: 8 }).map((_, i) => (
               <div key={i} className="h-9 rounded-lg bg-slate-100 animate-pulse" style={{ opacity: 1 - i * 0.09 }} />

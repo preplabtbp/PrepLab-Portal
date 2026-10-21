@@ -156,6 +156,28 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
   }
 }
 
+// Middleware: Optional Authenticated User (populates req.user if token valid, does not reject if absent/invalid)
+export function optionalAuth(req: Request, _res: Response, next: NextFunction) {
+  try {
+    let token = (req as any).cookies?.token;
+    if (!token && req.headers.authorization) {
+      const parts = req.headers.authorization.split(' ');
+      if (parts.length === 2 && parts[0].toLowerCase() === 'bearer') {
+        token = parts[1];
+      }
+    }
+    if (token) {
+      const decoded = jwt.verify(token, JWT_SECRET) as AuthUser;
+      if (decoded && decoded.nik) {
+        (req as any).user = decoded;
+      }
+    }
+  } catch {
+    // ignore invalid/expired tokens for optional auth
+  }
+  next();
+}
+
 // Middleware: Require specific role or Admin
 export function requireRole(allowedRoles: string[]) {
   return (req: Request, res: Response, next: NextFunction) => {

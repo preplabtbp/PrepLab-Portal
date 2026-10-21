@@ -3,7 +3,7 @@ import React, { useState, useEffect, Suspense, lazy, useRef, useMemo, useCallbac
 import { AnimatePresence, motion } from 'motion/react';
 import { registerPresence, pingPresence, unregisterPresence } from './lib/socketClient';
 
-import { Cloud, Activity, Settings, ShieldCheck, CheckCircle2, AlertTriangle, LogOut, FileSpreadsheet, Check, Wrench, ChevronRight, Image as ImageIcon, Camera, X, Code2, ChevronLeft, UploadCloud, Layers, Home, ClipboardList, CheckSquare, PlusCircle, ListTodo, ThermometerSun, LineChart, ClipboardCheck, User, Menu, Calendar, Utensils, FileText, Eye, EyeOff, BriefcaseMedical, Building2, LayoutDashboard, LayoutGrid, MessageCircle, Sparkles, Lock, KeyRound, FlaskConical, Shield, ArrowRight, Receipt, ShieldAlert, Users, BarChart2, MessageSquare, Trophy, Maximize2, Minimize2 } from 'lucide-react';
+import { Cloud, Activity, Settings, ShieldCheck, CheckCircle2, AlertTriangle, LogOut, FileSpreadsheet, Check, Wrench, ChevronRight, Image as ImageIcon, Camera, X, Code2, ChevronLeft, UploadCloud, Layers, Home, ClipboardList, CheckSquare, PlusCircle, ListTodo, ThermometerSun, LineChart, ClipboardCheck, User, Menu, Calendar, Utensils, FileText, Eye, EyeOff, BriefcaseMedical, Building2, LayoutDashboard, LayoutGrid, MessageCircle, Sparkles, Lock, KeyRound, FlaskConical, Shield, ArrowRight, Receipt, ShieldAlert, Users, BarChart2, MessageSquare, Trophy, Maximize2, Minimize2, Database } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom';
 import { appendRowsToSheet, getDowntimeRecords,updateDowntimeRepair, getEmployees, loginEmployee, getEquipments, ToolRecord, updateToolPhotoUrl, uploadPhotoToDrive } from './sheets-api';
@@ -492,11 +492,11 @@ export default function App() {
     return 'TBP';
   });
 
-  // Effective universe: if not dev or manager, strictly locked to defaultUserUniverse
-  const effectiveUniverse: 'TBP' | 'GTS' = isDevOrManager ? activeUniverse : defaultUserUniverse;
+  // Effective universe: strictly locked to defaultUserUniverse unless user is developer
+  const effectiveUniverse: 'TBP' | 'GTS' = isDeveloper ? activeUniverse : defaultUserUniverse;
 
   const handleSwitchUniverse = (targetUniv: 'TBP' | 'GTS') => {
-    if (!isDevOrManager) return;
+    if (!isDeveloper) return;
     setActiveUniverse(targetUniv);
     localStorage.setItem('portal_active_universe', targetUniv);
     localStorage.setItem('bulletin_active_universe', targetUniv);
@@ -797,6 +797,14 @@ export default function App() {
       return;
     }
 
+    // If navigating directly to root bulletin/labnote, clear remembered page so user always lands on initial dashboard
+    if (cleanTab.startsWith('bulletin') && !cleanTab.includes('?')) {
+      try {
+        localStorage.removeItem("preplab_active_bulletin_page");
+        sessionStorage.removeItem("preplab_cached_selected_post");
+      } catch {}
+    }
+
     // Role guard for Crew: restrict navigation to allowed modules only
     if (isCrewRole) {
       const allowedCrewTabs = ['home', '', 'quiz', 'clinic', 'kunjungan-klinik', 'employee-leaves', 'izin-karyawan', 'pelaporan-izin', 'settings', 'logbook'];
@@ -901,6 +909,8 @@ export default function App() {
   
   
   const [loginStep, setLoginStep] = useState<'nik' | 'password' | 'setup' | 'forgot'>('nik');
+  const [isDevLogin, setIsDevLogin] = useState(false);
+  const [loginUniverse, setLoginUniverse] = useState<'TBP' | 'GTS'>('TBP');
   const [passwordInput, setPasswordInput] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [requireSetup, setRequireSetup] = useState(false);
@@ -932,17 +942,32 @@ export default function App() {
          const data = await res.json();
          if (data.status === 'success') {
              const isCrew = data.employee?.jabatan?.toLowerCase().includes('crew');
-             const validNik = data.employee?.nik || inputNik;
-             const validUsername = data.employee?.username || '';
+             const validNik = data.employee?.nik || data.nik || inputNik;
+             const validUsername = data.employee?.username || data.username || '';
+             const cleanUpper = validNik.toUpperCase();
+             const inputUpper = inputNik.toUpperCase();
+             const isDev = Boolean(
+               data.isDeveloper ||
+               ['02D25000055', '02D24000043', '04D21001047', '04D24000042', 'M0403240177', 'PREPLABADMIN'].includes(cleanUpper) ||
+               ['02D25000055', '02D24000043', '04D21001047', '04D24000042', 'M0403240177', 'PREPLABADMIN', 'ALVIN'].includes(inputUpper) ||
+               developerList.some(d => d.nik?.toUpperCase() === cleanUpper || (d.username && d.username.toUpperCase() === inputUpper))
+             );
+             setIsDevLogin(isDev);
+             if (isDev) {
+               const initialUniv: 'TBP' | 'GTS' = (data.pt === 'GTS' || data.employee?.pt === 'GTS') 
+                 ? 'GTS' 
+                 : ((localStorage.getItem('portal_active_universe') === 'GTS') ? 'GTS' : 'TBP');
+               setLoginUniverse(initialUniv);
+             }
              
              if (isCrew) {
                  toast.success("Login otomatis sebagai Crew!");
                  setInspectorNik(validNik);
-                 setInspectorName(data.employee.name);
+                 setInspectorName(data.employee?.name || data.name);
                  localStorage.setItem('p2h_inspector_nik', validNik);
-                 localStorage.setItem('p2h_inspector_name', data.employee.name);
-                 localStorage.setItem('p2h_inspector_jabatan', data.employee.jabatan || 'Crew');
-                 localStorage.setItem('p2h_inspector_profile', JSON.stringify(data.employee));
+                 localStorage.setItem('p2h_inspector_name', data.employee?.name || data.name);
+                 localStorage.setItem('p2h_inspector_jabatan', data.employee?.jabatan || 'Crew');
+                 if (data.employee) localStorage.setItem('p2h_inspector_profile', JSON.stringify(data.employee));
                  if (validUsername) localStorage.setItem('p2h_inspector_username', validUsername);
                  setLoginStep('nik');
                  handleNav('quiz');
@@ -1032,17 +1057,16 @@ export default function App() {
                   localStorage.setItem('p2h_inspector_jabatan', data.employee.jabatan || 'Crew');
                   localStorage.setItem('p2h_inspector_profile', JSON.stringify(data.employee));
                   if (validUsername) localStorage.setItem('p2h_inspector_username', validUsername);
-                  if (data.employee?.pt === 'GTS') {
-                      localStorage.setItem('portal_active_universe', 'GTS');
-                      localStorage.setItem('bulletin_active_universe', 'GTS');
-                      setActiveUniverse('GTS');
-                  } else {
-                      localStorage.setItem('portal_active_universe', 'TBP');
-                      localStorage.setItem('bulletin_active_universe', 'TBP');
-                      setActiveUniverse('TBP');
-                  }
-                  toast.success("Login berhasil");
+                  const targetUniverse: 'TBP' | 'GTS' = isDevLogin
+                      ? loginUniverse
+                      : (data.employee?.pt === 'GTS' ? 'GTS' : 'TBP');
+                  localStorage.setItem('portal_active_universe', targetUniverse);
+                  localStorage.setItem('bulletin_active_universe', targetUniverse);
+                  setActiveUniverse(targetUniverse);
+                  window.dispatchEvent(new CustomEvent('portal-universe-changed', { detail: { universe: targetUniverse } }));
+                  toast.success(`Login berhasil (${targetUniverse === 'GTS' ? 'PT. GTS' : 'PT. TBP - GPS'})`);
                   setLoginStep('nik');
+                  setIsDevLogin(false);
                   setPasswordInput('');
                   setShowPassword(false);
 
@@ -1086,6 +1110,9 @@ export default function App() {
     localStorage.removeItem('p2h_inspector_profile');
     sessionStorage.removeItem('username_prompted');
     setMeetingRoomDevUnlocked(false);
+    setIsDevLogin(false);
+    setLoginStep('nik');
+    setPasswordInput('');
     toast.success('Sesi berhasil diakhiri.');
     handleNav('home');
   };
@@ -1221,12 +1248,17 @@ export default function App() {
                   </div>
                   <button
                     type="button"
-                    onClick={() => setLoginStep('nik')}
+                    onClick={() => {
+                      setLoginStep('nik');
+                      setIsDevLogin(false);
+                      setPasswordInput('');
+                    }}
                     className="text-xs font-bold text-[#22a7b8] hover:text-[#1b8f9e] underline cursor-pointer"
                   >
                     Ganti Akun
                   </button>
                 </div>
+
 
                 {/* Password Input Bar */}
                 <div className="relative group">
@@ -1432,33 +1464,125 @@ export default function App() {
           </form>
 
           {/* 3 Operating Entities Cards Row (TBP, GPS, GTS) */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 w-full max-w-xl mt-10">
-            {/* Card 1: TBP */}
-            <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-md hover:border-teal-300 p-3.5 flex flex-col items-center justify-center text-center transition-all duration-200 group">
-              <div className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-100 p-1.5 flex items-center justify-center mb-1.5 group-hover:scale-105 transition-transform">
-                <img src="/tbp-header-logo.png" alt="TBP" className="w-full h-full object-contain" />
+          <div className="w-full max-w-xl mt-8">
+            {isDevLogin && loginStep === 'password' && (
+              <div className="flex items-center justify-between mb-3 px-1 animate-in fade-in duration-200">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700">
+                  <Database className="w-3.5 h-3.5 text-[#22a7b8]" />
+                  <span>Pilih Database Operasional:</span>
+                </div>
+                <span className="text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-full bg-teal-50 text-teal-800 border border-teal-200">
+                  Target: <strong>{loginUniverse === 'TBP' ? 'PT TBP & GPS' : 'PT GTS'}</strong>
+                </span>
               </div>
-              <span className="text-xs font-bold text-slate-800">PT TBP</span>
-              <span className="text-[10px] text-slate-400 font-mono mt-0.5">Trimegah Bangun Persada</span>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+              {/* Card 1: TBP */}
+              <button
+                type="button"
+                onClick={() => {
+                  if (isDevLogin && loginStep === 'password') setLoginUniverse('TBP');
+                }}
+                disabled={!isDevLogin || loginStep !== 'password'}
+                className={`relative rounded-2xl p-3.5 flex flex-col items-center justify-center text-center transition-all duration-200 group text-left ${
+                  isDevLogin && loginStep === 'password'
+                    ? loginUniverse === 'TBP'
+                      ? 'bg-teal-50/50 border-2 border-[#22a7b8] ring-2 ring-[#22a7b8]/30 shadow-md cursor-pointer'
+                      : 'bg-white border border-slate-200/90 hover:border-teal-300 opacity-60 hover:opacity-100 cursor-pointer hover:shadow-sm'
+                    : 'bg-white border border-slate-200/80 shadow-xs hover:shadow-md hover:border-teal-300 cursor-default'
+                }`}
+              >
+                {isDevLogin && loginStep === 'password' && loginUniverse === 'TBP' && (
+                  <span className="absolute top-2 right-2 flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-[#22a7b8] text-white shadow-xs">
+                    <CheckCircle2 className="w-2.5 h-2.5" />
+                    Aktif
+                  </span>
+                )}
+                <div className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-100 p-1.5 flex items-center justify-center mb-1.5 group-hover:scale-105 transition-transform">
+                  <img src="/tbp-header-logo.png" alt="TBP" className="w-full h-full object-contain" />
+                </div>
+                <span className={`text-xs font-bold ${isDevLogin && loginStep === 'password' && loginUniverse === 'TBP' ? 'text-teal-900 font-extrabold' : 'text-slate-800'}`}>
+                  PT TBP
+                </span>
+                <span className="text-[10px] text-slate-400 font-mono mt-0.5">Trimegah Bangun Persada</span>
+                {isDevLogin && loginStep === 'password' && (
+                  <span className="text-[9px] text-[#1b8f9e] font-semibold mt-1">Database TBP-GPS</span>
+                )}
+              </button>
+
+              {/* Card 2: GPS */}
+              <button
+                type="button"
+                onClick={() => {
+                  if (isDevLogin && loginStep === 'password') setLoginUniverse('TBP');
+                }}
+                disabled={!isDevLogin || loginStep !== 'password'}
+                className={`relative rounded-2xl p-3.5 flex flex-col items-center justify-center text-center transition-all duration-200 group text-left ${
+                  isDevLogin && loginStep === 'password'
+                    ? loginUniverse === 'TBP'
+                      ? 'bg-teal-50/50 border-2 border-[#22a7b8] ring-2 ring-[#22a7b8]/30 shadow-md cursor-pointer'
+                      : 'bg-white border border-slate-200/90 hover:border-teal-300 opacity-60 hover:opacity-100 cursor-pointer hover:shadow-sm'
+                    : 'bg-white border border-slate-200/80 shadow-xs hover:shadow-md hover:border-blue-300 cursor-default'
+                }`}
+              >
+                {isDevLogin && loginStep === 'password' && loginUniverse === 'TBP' && (
+                  <span className="absolute top-2 right-2 flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-[#22a7b8] text-white shadow-xs">
+                    <CheckCircle2 className="w-2.5 h-2.5" />
+                    Aktif
+                  </span>
+                )}
+                <div className="w-10 h-10 rounded-xl bg-blue-50/60 border border-blue-100/80 p-1.5 flex items-center justify-center mb-1.5 group-hover:scale-105 transition-transform">
+                  <img src="/gps-logo.png" alt="GPS" className="w-full h-full object-contain" />
+                </div>
+                <span className={`text-xs font-bold ${isDevLogin && loginStep === 'password' && loginUniverse === 'TBP' ? 'text-teal-900 font-extrabold' : 'text-blue-700'}`}>
+                  PT GPS
+                </span>
+                <span className="text-[10px] text-slate-400 font-mono mt-0.5">Gane Permai Sentosa</span>
+                {isDevLogin && loginStep === 'password' && (
+                  <span className="text-[9px] text-[#1b8f9e] font-semibold mt-1">Database TBP-GPS</span>
+                )}
+              </button>
+
+              {/* Card 3: GTS */}
+              <button
+                type="button"
+                onClick={() => {
+                  if (isDevLogin && loginStep === 'password') setLoginUniverse('GTS');
+                }}
+                disabled={!isDevLogin || loginStep !== 'password'}
+                className={`relative rounded-2xl p-3.5 flex flex-col items-center justify-center text-center transition-all duration-200 group text-left ${
+                  isDevLogin && loginStep === 'password'
+                    ? loginUniverse === 'GTS'
+                      ? 'bg-teal-50/50 border-2 border-[#22a7b8] ring-2 ring-[#22a7b8]/30 shadow-md cursor-pointer'
+                      : 'bg-white border border-slate-200/90 hover:border-teal-300 opacity-60 hover:opacity-100 cursor-pointer hover:shadow-sm'
+                    : 'bg-white border border-slate-200/80 shadow-xs hover:shadow-md hover:border-blue-300 cursor-default'
+                }`}
+              >
+                {isDevLogin && loginStep === 'password' && loginUniverse === 'GTS' && (
+                  <span className="absolute top-2 right-2 flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-[#22a7b8] text-white shadow-xs">
+                    <CheckCircle2 className="w-2.5 h-2.5" />
+                    Aktif
+                  </span>
+                )}
+                <div className="w-10 h-10 rounded-xl bg-blue-50/60 border border-blue-100/80 p-1.5 flex items-center justify-center mb-1.5 group-hover:scale-105 transition-transform">
+                  <img src="/gts-logo.png" alt="GTS" className="w-full h-full object-contain" />
+                </div>
+                <span className={`text-xs font-bold ${isDevLogin && loginStep === 'password' && loginUniverse === 'GTS' ? 'text-teal-900 font-extrabold' : 'text-blue-700'}`}>
+                  PT GTS
+                </span>
+                <span className="text-[10px] text-slate-400 font-mono mt-0.5">Gane Tambang Sentosa</span>
+                {isDevLogin && loginStep === 'password' && (
+                  <span className="text-[9px] text-[#1b8f9e] font-semibold mt-1">Database GTS</span>
+                )}
+              </button>
             </div>
 
-            {/* Card 2: GPS */}
-            <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-md hover:border-blue-300 p-3.5 flex flex-col items-center justify-center text-center transition-all duration-200 group">
-              <div className="w-10 h-10 rounded-xl bg-blue-50/60 border border-blue-100/80 p-1.5 flex items-center justify-center mb-1.5 group-hover:scale-105 transition-transform">
-                <img src="/gps-logo.png" alt="GPS" className="w-full h-full object-contain" />
-              </div>
-              <span className="text-xs font-bold text-blue-700">PT GPS</span>
-              <span className="text-[10px] text-slate-400 font-mono mt-0.5">Gane Permai Sentosa</span>
-            </div>
-
-            {/* Card 3: GTS */}
-            <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-md hover:border-blue-300 p-3.5 flex flex-col items-center justify-center text-center transition-all duration-200 group">
-              <div className="w-10 h-10 rounded-xl bg-blue-50/60 border border-blue-100/80 p-1.5 flex items-center justify-center mb-1.5 group-hover:scale-105 transition-transform">
-                <img src="/gts-logo.png" alt="GTS" className="w-full h-full object-contain" />
-              </div>
-              <span className="text-xs font-bold text-blue-700">PT GTS</span>
-              <span className="text-[10px] text-slate-400 font-mono mt-0.5">Gane Tambang Sentosa</span>
-            </div>
+            {isDevLogin && loginStep === 'password' && (
+              <p className="text-[11px] text-slate-500 font-medium text-center mt-3 animate-in fade-in">
+                * Sesi login akan tersambung ke database <strong>{loginUniverse === 'TBP' ? 'PT. TBP & GPS' : 'PT. GTS'}</strong>. Klik logo perusahaan di atas untuk beralih.
+              </p>
+            )}
           </div>
 
           {/* Bottom Trust & Motto */}
@@ -1549,8 +1673,8 @@ export default function App() {
             <div className="w-6 h-0.5 bg-gradient-to-r from-teal-300 to-cyan-300 rounded-full mt-1.5 opacity-75" />
           </div>
 
-          {/* Universe Switcher (Dev & Manager Only) or Assigned Entity Badge */}
-          {isDevOrManager ? (
+          {/* Universe Switcher (Developer Only) or Assigned Entity Badge */}
+          {isDeveloper ? (
             <div className="w-full px-2 py-1 my-0.5 flex flex-col items-center">
               <div className="w-full bg-black/25 p-1 rounded-xl border border-white/15 flex flex-col items-center gap-1 shadow-xs">
                 <span className="text-[7px] font-black uppercase tracking-wider text-teal-100/80">

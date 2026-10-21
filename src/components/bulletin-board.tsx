@@ -155,13 +155,13 @@ export function BulletinBoard({
   const userUniverse = userPt === 'GTS' ? 'GTS' : 'TBP';
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  // Restore selected post immediately on initial render from sessionStorage to prevent flash of dashboard on refresh
+  // Restore selected post immediately on initial render from sessionStorage ONLY if URL explicitly specifies a post ID (prevents flash on refresh while keeping root URL on dashboard)
   const [selectedPost, setSelectedPost] = useState<any | null>(() => {
     try {
       const params = new URLSearchParams(window.location.search);
       const urlPostId = params.get("page") || params.get("postId") || params.get("id");
-      const savedPageId = localStorage.getItem("preplab_active_bulletin_page");
-      const targetId = urlPostId || savedPageId;
+      if (!urlPostId) return null;
+      const targetId = urlPostId;
       const cached = sessionStorage.getItem("preplab_cached_selected_post");
       if (cached && targetId) {
         const parsed = JSON.parse(cached);
@@ -606,13 +606,12 @@ export function BulletinBoard({
       setNavHistory([]);
       setSelectedPost(null);
       setIsEditing(false);
+      setIsLibraryActive(false);
       try {
-        const url = new URL(window.location.href);
-        url.searchParams.delete("page");
-        url.searchParams.delete("postId");
         localStorage.removeItem("preplab_active_bulletin_page");
         sessionStorage.removeItem("preplab_cached_selected_post");
-        window.history.replaceState({}, "", url.toString());
+        const targetPt = selectedPtFilter !== 'ALL' ? selectedPtFilter : (pt || userUniverse || 'TBP');
+        navigate(`/bulletin/${targetPt}`, { replace: true });
       } catch {}
       return;
     }
@@ -655,12 +654,11 @@ export function BulletinBoard({
     setIsEditing(false);
 
     try {
-      const url = new URL(window.location.href);
       if (freshPost?.id) {
-        url.searchParams.set("page", String(freshPost.id));
         localStorage.setItem("preplab_active_bulletin_page", String(freshPost.id));
+        const targetPt = selectedPtFilter !== 'ALL' ? selectedPtFilter : (freshPost.pt || pt || userUniverse || 'TBP');
+        navigate(`/bulletin/${targetPt}?page=${encodeURIComponent(String(freshPost.id))}`, { replace: true });
       }
-      window.history.replaceState({}, "", url.toString());
     } catch {}
   };
 
@@ -742,12 +740,27 @@ export function BulletinBoard({
     try {
       const params = new URLSearchParams(location.search || window.location.search);
       const urlPostId = params.get("page") || params.get("postId") || params.get("id");
-      const savedPageId = localStorage.getItem("preplab_active_bulletin_page");
-      const targetId = urlPostId || savedPageId;
+      const urlLogbook = params.get("logbook") || params.get("sectionLogbook");
       const urlTopic = params.get("topic");
       if (urlTopic) {
         setDeepLinkTopic(urlTopic);
       }
+
+      // If user accesses the root Labnote page with no parameters, always show the initial dashboard
+      if (!urlPostId && !urlLogbook) {
+        if (selectedPost !== null) {
+          setSelectedPost(null);
+          setNavHistory([]);
+          setIsLibraryActive(false);
+        }
+        try {
+          localStorage.removeItem("preplab_active_bulletin_page");
+          sessionStorage.removeItem("preplab_cached_selected_post");
+        } catch {}
+        return;
+      }
+
+      const targetId = urlPostId;
 
       // 1. Explicit Post ID from URL (e.g. from notification click ?postId=123&topic=...)
       // Always prioritize urlPostId even if another post was previously active
@@ -770,7 +783,6 @@ export function BulletinBoard({
         }
       }
 
-      const urlLogbook = params.get("logbook") || params.get("sectionLogbook");
       if (urlLogbook && !selectedPost) {
         const rawSec = urlLogbook === 'true' ? (userAllowedSections[0] || 'Preparasi') : urlLogbook;
         if (!canAccessAllSections && !isUserAllowedToAccessSection(rawSec, userProfile, canAccessAllSections)) {
@@ -781,16 +793,7 @@ export function BulletinBoard({
         openSectionLogbook(rawSec);
         return;
       }
-      if (savedPageId && String(savedPageId).startsWith('logbook-') && !selectedPost) {
-        const secPart = String(savedPageId).replace(/^logbook-/, '');
-        if (!canAccessAllSections && !isUserAllowedToAccessSection(secPart, userProfile, canAccessAllSections)) {
-          toast.error(`Akses ditolak: Anda hanya dapat mengakses Labnote seksi ${userAllowedSections.join(', ')}.`);
-          openSectionLogbook(userAllowedSections[0] || 'Preparasi');
-          return;
-        }
-        openSectionLogbook(secPart);
-        return;
-      }
+
       // Check if current selectedPost is a dummy fallback (e.g. doc-* or section-*) or not set
       const isDummySelectedPost = selectedPost && (String(selectedPost.id).startsWith('doc-') || String(selectedPost.id).startsWith('section-'));
       if (targetId && (!selectedPost || isDummySelectedPost)) {
@@ -923,15 +926,13 @@ export function BulletinBoard({
       setNavHistory([]);
       setSelectedPost(null);
       setIsEditing(false);
+      setIsLibraryActive(false);
       setDeepLinkTopic(undefined);
       try {
-        const url = new URL(window.location.href);
-        url.searchParams.delete("page");
-        url.searchParams.delete("postId");
-        url.searchParams.delete("topic");
         localStorage.removeItem("preplab_active_bulletin_page");
         sessionStorage.removeItem("preplab_cached_selected_post");
-        window.history.replaceState({}, "", url.toString());
+        const targetPt = selectedPtFilter !== 'ALL' ? selectedPtFilter : (pt || userUniverse || 'TBP');
+        navigate(`/bulletin/${targetPt}`, { replace: true });
       } catch {}
     }
   };
@@ -1322,6 +1323,11 @@ export function BulletinBoard({
       if (!cleanLine) return false;
       const normalizedLine = translateDisplayText(cleanLine).trim().toLowerCase();
 
+      // Strip stray Notion link_to_page artifacts
+      if (cleanLine.includes('link_to_page') || cleanLine.includes('notion.so/')) {
+        return false;
+      }
+
       // If line duplicates document/table title (either exact or through English/Indonesian normalization)
       const isDuplicate = 
         cleanLine === rawPostTitle ||
@@ -1332,6 +1338,26 @@ export function BulletinBoard({
       if (isDuplicate) {
         return false;
       }
+
+      // If this post is a periodic task document (daily, weekly, monthly, quarterly, biannual, yearly),
+      // strip stray sibling cadence headings that originated from Notion child_page blocks
+      const cadences = ['daily', 'weekly', 'monthly', 'quarterly', 'biannual', 'yearly'];
+      const currentCadence = cadences.find(c => rawPostTitle.includes(c));
+      if (currentCadence) {
+        const isSiblingCadenceHeading = cadences.some(
+          c => c !== currentCadence && cleanLine.includes(c) && (
+            cleanLine.includes('maintenance') || 
+            cleanLine.includes('lab') || 
+            cleanLine.includes('admin') || 
+            cleanLine.includes('prep') ||
+            cleanLine.includes('kegiatan')
+          )
+        );
+        if (isSiblingCadenceHeading) {
+          return false;
+        }
+      }
+
       return true;
     });
     return filteredLines.join('\n').trim();
@@ -2282,8 +2308,7 @@ ${aiMeetingNotes
               const params = new URLSearchParams(window.location.search);
               const hasTargetId = Boolean(
                 params.get("page") || params.get("postId") || params.get("id") ||
-                params.get("logbook") || params.get("sectionLogbook") ||
-                localStorage.getItem("preplab_active_bulletin_page")
+                params.get("logbook") || params.get("sectionLogbook")
               );
 
               // Jika sedang memuat data dan URL/localStorage menunjukkan target post tertentu, jangan flash dashboard utama
