@@ -102,6 +102,7 @@ interface ClusteredSapChartProps {
   exporting?: boolean;
   styleMode: ChartStyleMode;
   onStyleChange: (m: ChartStyleMode) => void;
+  onItemClick?: (item: DiagramItem) => void;
   year?: number;
 }
 
@@ -114,6 +115,7 @@ function ClusteredSapChart({
   exporting,
   styleMode,
   onStyleChange,
+  onItemClick,
   year = 2026
 }: ClusteredSapChartProps) {
   const [hoveredIdx, setHoveredIdx] = useState<{ itemIdx: number; type: 'inspeksi' | 'kta' } | null>(null);
@@ -339,7 +341,7 @@ function ClusteredSapChart({
               const depth3D = 8;
 
               return (
-                <g key={item.label + idx}>
+                <g key={item.label + idx} onClick={() => onItemClick?.(item)} className={onItemClick ? "cursor-pointer group" : ""}>
                   {/* Dotted separator antara bulan / periode seperti di foto referensi */}
                   {idx > 0 && (
                     <line
@@ -739,7 +741,9 @@ function ClusteredSapChart({
 export function SafetyRekapDiagram({ year = 2026, activeWeek, activeWeekSummary }: SafetyRekapDiagramProps) {
   const [selectedYear, setSelectedYear] = useState<number>(year);
   const [activeTab, setActiveTab] = useState<'monthly' | 'periodic' | 'yearly' | 'all'>('monthly');
+  const [selectedMonthFilter, setSelectedMonthFilter] = useState<string>('ALL');
   const [selectedWeekFilter, setSelectedWeekFilter] = useState<string>('ALL');
+  const [selectedYearFilter, setSelectedYearFilter] = useState<string>('ALL');
   const [chartStyle, setChartStyle] = useState<ChartStyleMode>('infographic-capsule');
   const [data, setData] = useState<DiagramStatsResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -748,6 +752,37 @@ export function SafetyRekapDiagram({ year = 2026, activeWeek, activeWeekSummary 
   const monthlyChartRef = useRef<HTMLDivElement>(null);
   const periodicChartRef = useRef<HTMLDivElement>(null);
   const yearlyChartRef = useRef<HTMLDivElement>(null);
+
+  const MONTH_NAMES = useMemo(() => [
+    'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+    'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+  ], []);
+
+  // Poin 1: Sinkronisasi data persentase riil dari Tabel Rekap (activeWeekSummary)
+  const activeStats = useMemo(() => {
+    if (!activeWeekSummary || typeof activeWeekSummary.total !== 'number') return null;
+    const total = activeWeekSummary.total;
+    const insp = activeWeekSummary.inspeksi ?? 0;
+    const kta = activeWeekSummary.kta ?? 0;
+    const inspPct = total > 0 ? Math.round((insp / total) * 1000) / 10 : 0;
+    const ktaPct = total > 0 ? Math.round((kta / total) * 1000) / 10 : 0;
+    return { total, insp, kta, inspPct, ktaPct };
+  }, [activeWeekSummary]);
+
+  // Bulan yang menaungi minggu aktif (misal W42 -> Oktober)
+  const activeMonthNum = useMemo(() => {
+    if (!activeWeek) return null;
+    if (data?.periods) {
+      const p = data.periods.find(x => x.week === activeWeek);
+      if (p) return p.month;
+    }
+    const wNum = parseInt(activeWeek.replace(/\D/g, ''), 10);
+    if (!isNaN(wNum)) {
+      const approx = new Date(selectedYear, 0, 3 + (wNum - 1) * 7);
+      return approx.getMonth() + 1;
+    }
+    return null;
+  }, [activeWeek, data?.periods, selectedYear]);
 
   // Ambil data statistik dari backend
   const fetchDiagramData = useCallback(async (yr: number) => {
@@ -907,7 +942,7 @@ export function SafetyRekapDiagram({ year = 2026, activeWeek, activeWeekSummary 
         <div className="flex flex-wrap items-center gap-1.5 p-1 rounded-2xl bg-[var(--input-bg)] border border-[var(--border-main)]">
           {[
             { id: 'monthly', label: 'Diagram Per Bulan', icon: <Calendar className="w-3.5 h-3.5" /> },
-            { id: 'periodic', label: 'Diagram Per Week', icon: <BarChart3 className="w-3.5 h-3.5" /> },
+            { id: 'periodic', label: 'Diagram Per Minggu', icon: <BarChart3 className="w-3.5 h-3.5" /> },
             { id: 'yearly', label: 'Diagram Per Tahun', icon: <TrendingUp className="w-3.5 h-3.5" /> },
             { id: 'all', label: 'Semua Diagram', icon: <Layers className="w-3.5 h-3.5" /> }
           ].map(t => (
@@ -964,10 +999,10 @@ export function SafetyRekapDiagram({ year = 2026, activeWeek, activeWeekSummary 
             </span>
           </div>
           <p className="text-2xl sm:text-3xl font-black text-[var(--text-main)] mt-2">
-            {formatIndoPct(data?.summary.avgInspeksiPct || 99.8)}
+            {activeStats ? formatIndoPct(activeStats.inspPct) : formatIndoPct(data?.summary.avgInspeksiPct || 99.8)}
           </p>
           <div className="flex items-center gap-1 text-[11px] font-semibold text-[#D68910] dark:text-[#FBBF24] mt-1">
-            <TrendingUp className="w-3 h-3" /> Target Perusahaan 100%
+            <TrendingUp className="w-3 h-3" /> {activeStats ? `Minggu ${activeWeek || 'Aktif'} (Tabel Rekap)` : 'Target Perusahaan 100%'}
           </div>
         </div>
 
@@ -980,10 +1015,10 @@ export function SafetyRekapDiagram({ year = 2026, activeWeek, activeWeekSummary 
             </span>
           </div>
           <p className="text-2xl sm:text-3xl font-black text-[var(--text-main)] mt-2">
-            {formatIndoPct(data?.summary.avgKtaPct || 99.6)}
+            {activeStats ? formatIndoPct(activeStats.ktaPct) : formatIndoPct(data?.summary.avgKtaPct || 99.6)}
           </p>
           <div className="flex items-center gap-1 text-[11px] font-semibold text-[#24A1B2] dark:text-[#80DEEA] mt-1">
-            <TrendingUp className="w-3 h-3" /> Observasi KTA / TTA
+            <TrendingUp className="w-3 h-3" /> {activeStats ? `Minggu ${activeWeek || 'Aktif'} (Tabel Rekap)` : 'Observasi KTA / TTA'}
           </div>
         </div>
 
@@ -1082,46 +1117,58 @@ export function SafetyRekapDiagram({ year = 2026, activeWeek, activeWeekSummary 
         </div>
       )}
 
-      {/* ── SECTION 2: DIAGRAM PER WEEK (MINGGUAN) ── */}
+      {/* ── SECTION 2: DIAGRAM PER MINGGU (MINGGUAN) ── */}
       {(activeTab === 'periodic' || activeTab === 'all') && (
         <div className="space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-3xl bg-[var(--card-bg)] border border-[var(--border-main)] shadow-xs">
             <div>
               <h3 className="text-sm font-bold text-[var(--text-main)] flex items-center gap-2">
-                <Calendar className="w-4 h-4 text-[#24A1B2]" />
-                Filter Minggu (Per Week)
+                <BarChart3 className="w-4 h-4 text-[#24A1B2]" />
+                Filter Minggu (Per Minggu)
               </h3>
-              <p className="text-xs text-[var(--text-muted)]">Pilih week tertentu atau tampilkan semua week</p>
+              <p className="text-xs text-[var(--text-muted)]">Pilih minggu tertentu atau tampilkan semua minggu (W1 - W52)</p>
             </div>
-            <div className="relative min-w-[240px] sm:w-80">
-              <select
-                value={selectedWeekFilter}
-                onChange={e => setSelectedWeekFilter(e.target.value)}
-                className="w-full h-10 pl-3.5 pr-10 rounded-2xl bg-[var(--input-bg)] border border-[var(--border-main)] text-xs font-bold text-[var(--text-main)] outline-none focus:ring-2 focus:ring-[#24A1B2]/30 cursor-pointer transition-all shadow-xs"
-              >
-                <option value="ALL">Semua Week (W1 - W52)</option>
-                {weekFilterOptions.map(opt => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
-              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3.5 text-[var(--text-muted)]">
-                <ChevronRight className="w-4 h-4 rotate-90" />
+            <div className="flex items-center gap-2">
+              <div className="relative min-w-[240px] sm:w-80">
+                <select
+                  value={selectedWeekFilter}
+                  onChange={e => setSelectedWeekFilter(e.target.value)}
+                  className="w-full h-10 pl-3.5 pr-10 rounded-2xl bg-[var(--input-bg)] border border-[var(--border-main)] text-xs font-bold text-[var(--text-main)] outline-none focus:ring-2 focus:ring-[#24A1B2]/30 cursor-pointer transition-all shadow-xs"
+                >
+                  <option value="ALL">Semua Minggu (W1 - W52)</option>
+                  {weekFilterOptions.map(opt => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3.5 text-[var(--text-muted)]">
+                  <ChevronRight className="w-4 h-4 rotate-90" />
+                </div>
               </div>
+              {selectedWeekFilter !== 'ALL' && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedWeekFilter('ALL')}
+                  className="h-10 px-3.5 rounded-2xl bg-[#24A1B2]/15 hover:bg-[#24A1B2]/25 text-[#24A1B2] text-xs font-bold transition-all whitespace-nowrap cursor-pointer"
+                >
+                  Reset Minggu
+                </button>
+              )}
             </div>
           </div>
 
           <ClusteredSapChart
             chartRef={periodicChartRef}
             year={selectedYear}
-            title={`Pencapaian SAP Per Week - Dept. Preparation & Laboratory ${selectedYear}`}
-            subtitle={`Tinjauan Kepatuhan Tiap Week (${selectedWeekFilter === 'ALL' ? 'Semua Week W1 - W52' : selectedWeekFilter})`}
+            title={`Pencapaian SAP Per Minggu - Dept. Preparation & Laboratory ${selectedYear}`}
+            subtitle={`Tinjauan Kepatuhan Tiap Minggu (${selectedWeekFilter === 'ALL' ? 'Semua Minggu W1 - W52' : selectedWeekFilter})`}
             items={periodicItems}
             exporting={exportingPng}
             styleMode={chartStyle}
             onStyleChange={setChartStyle}
-            onDownloadPng={() => handleExportPng(periodicChartRef, `Diagram_SAP_Per_Week_${selectedYear}_${selectedWeekFilter}.png`)}
+            onItemClick={(item) => setSelectedWeekFilter(item.label)}
+            onDownloadPng={() => handleExportPng(periodicChartRef, `Diagram_SAP_Perminggu_${selectedYear}_${selectedWeekFilter}.png`)}
           />
         </div>
       )}
@@ -1129,22 +1176,64 @@ export function SafetyRekapDiagram({ year = 2026, activeWeek, activeWeekSummary 
       {/* ── SECTION 3: DIAGRAM PER TAHUN ── */}
       {(activeTab === 'yearly' || activeTab === 'all') && (
         <div className="space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-3xl bg-[var(--card-bg)] border border-[var(--border-main)] shadow-xs">
+            <div>
+              <h3 className="text-sm font-bold text-[var(--text-main)] flex items-center gap-2">
+                <TrendingUp className="w-4 h-4 text-[#24A1B2]" />
+                Filter Tahun (Per Tahun)
+              </h3>
+              <p className="text-xs text-[var(--text-muted)]">Pilih tahun tertentu atau tampilkan perbandingan semua tahun</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="relative min-w-[200px] sm:w-64">
+                <select
+                  value={selectedYearFilter}
+                  onChange={e => setSelectedYearFilter(e.target.value)}
+                  className="w-full h-10 pl-3.5 pr-10 rounded-2xl bg-[var(--input-bg)] border border-[var(--border-main)] text-xs font-bold text-[var(--text-main)] outline-none focus:ring-2 focus:ring-[#24A1B2]/30 cursor-pointer transition-all shadow-xs"
+                >
+                  <option value="ALL">Semua Tahun (2024 - 2026)</option>
+                  <option value="2026">Tahun 2026</option>
+                  <option value="2025">Tahun 2025</option>
+                  <option value="2024">Tahun 2024</option>
+                </select>
+                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3.5 text-[var(--text-muted)]">
+                  <ChevronRight className="w-4 h-4 rotate-90" />
+                </div>
+              </div>
+              {selectedYearFilter !== 'ALL' && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedYearFilter('ALL')}
+                  className="h-10 px-3.5 rounded-2xl bg-[#24A1B2]/15 hover:bg-[#24A1B2]/25 text-[#24A1B2] text-xs font-bold transition-all whitespace-nowrap cursor-pointer"
+                >
+                  Reset Tahun
+                </button>
+              )}
+            </div>
+          </div>
+
           <ClusteredSapChart
             chartRef={yearlyChartRef}
             year={selectedYear}
             title="Tren & Komparasi Pencapaian SAP Antar Tahun - Dept. Preparation & Laboratory"
-            subtitle="Perbandingan Rata-rata Kepatuhan Inspeksi dan Hazard Report dari Tahun ke Tahun"
+            subtitle={selectedYearFilter === 'ALL' ? "Perbandingan Rata-rata Kepatuhan Inspeksi dan Hazard Report dari Tahun ke Tahun" : `Fokus Pencapaian Tahun ${selectedYearFilter}`}
             items={yearlyItems}
             exporting={exportingPng}
             styleMode={chartStyle}
             onStyleChange={setChartStyle}
-            onDownloadPng={() => handleExportPng(yearlyChartRef, `Diagram_SAP_Per_Tahun.png`)}
+            onItemClick={(item) => setSelectedYearFilter(item.label)}
+            onDownloadPng={() => handleExportPng(yearlyChartRef, `Diagram_SAP_Pertahun_${selectedYearFilter}.png`)}
           />
 
           {/* Kartu Ringkasan Kinerja Tahunan (Golden Amber & Teal) */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {yearlyItems.map(y => (
-              <div key={y.label} className="p-5 rounded-3xl bg-[var(--card-bg)] border border-[var(--border-main)] shadow-sm space-y-3">
+              <div
+                key={y.label}
+                onClick={() => setSelectedYearFilter(y.label)}
+                className="p-5 rounded-3xl bg-[var(--card-bg)] border border-[var(--border-main)] shadow-sm space-y-3 cursor-pointer hover:border-[#24A1B2]/50 transition-all"
+                title={`Klik untuk fokus diagram tahun ${y.label}`}
+              >
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold uppercase tracking-wider text-[var(--text-muted)]">Tahun Kinerja</span>
                   <span className="px-3 py-1 rounded-full text-xs font-black bg-[#24A1B2]/15 text-[#24A1B2] dark:text-[#80DEEA]">
