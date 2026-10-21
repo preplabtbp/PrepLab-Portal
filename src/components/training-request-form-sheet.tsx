@@ -1,4 +1,4 @@
-﻿import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import * as XLSX from 'xlsx';
 import {
   ArrowLeft,
@@ -1115,6 +1115,28 @@ export function TrainingRequestFormSheet({ employees = [], canManage = true }: T
                             </button>
                           )}
                         </div>
+
+                        {/* Tombol Tambah Karyawan Khusus Sesi Ini */}
+                        <div className="no-print mt-3 pt-2.5 border-t border-slate-200/90 flex flex-col items-center gap-1.5 w-full">
+                          <button
+                            type="button"
+                            onClick={() => openParticipantModal(session.id)}
+                            className="w-full inline-flex items-center justify-center gap-1.5 px-2 py-1.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded-lg text-[11px] font-bold shadow-xs hover:shadow transition-all"
+                            title={`Tambah Karyawan untuk ${session.trainingName}`}
+                          >
+                            <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+                            <span>+ Tambah Karyawan</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => openBatchModal(session.id)}
+                            className="w-full inline-flex items-center justify-center gap-1.5 px-2 py-1 bg-sky-50 hover:bg-sky-100 active:scale-95 text-sky-700 border border-sky-200/80 rounded-lg text-[10.5px] font-semibold transition-all"
+                            title={`Pilih Banyak Karyawan dari Database untuk ${session.trainingName}`}
+                          >
+                            <Users className="w-3.5 h-3.5 text-sky-600" />
+                            <span>Pilih dari Database</span>
+                          </button>
+                        </div>
                       </td>
                       {/* Date Merged */}
                       <td className="p-4 text-center border-r border-slate-300 align-middle bg-[#F8FAFC]">
@@ -1129,19 +1151,37 @@ export function TrainingRequestFormSheet({ employees = [], canManage = true }: T
                         />
                       </td>
                       <td colSpan={8} className="p-6 text-center text-slate-400 italic">
-                        Belum ada peserta terdaftar untuk sesi ini.
-                        <button
-                          type="button"
-                          onClick={() => openParticipantModal(session.id)}
-                          className="no-print ml-2 text-sky-600 font-bold hover:underline"
-                        >
-                          + Tambah Peserta
-                        </button>
+                        <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+                          <span>Belum ada peserta terdaftar untuk sesi ini.</span>
+                          <div className="no-print flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => openParticipantModal(session.id)}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-300 rounded-lg text-xs font-bold transition-all"
+                            >
+                              <Plus className="w-3.5 h-3.5 text-emerald-600" />
+                              <span>Tambah Peserta</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => openBatchModal(session.id)}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-300 rounded-lg text-xs font-bold transition-all"
+                            >
+                              <Users className="w-3.5 h-3.5 text-sky-600" />
+                              <span>Pilih Database</span>
+                            </button>
+                          </div>
+                        </div>
                       </td>
                     </tr>
                   ) : (
-                    session.participants.map((p, pIdx) => (
-                      <tr key={p.id} className="hover:bg-sky-50/40 transition-colors">
+                    session.participants.map((p, pIdx) => {
+                      const isLastInSession = pIdx === session.participants.length - 1;
+                      return (
+                      <tr
+                        key={p.id}
+                        className={`hover:bg-sky-50/40 transition-colors ${isLastInSession ? 'border-b-2 border-slate-300' : ''}`}
+                      >
                         {/* Merged Training Cell */}
                         {pIdx === 0 && (
                           <td
@@ -1168,6 +1208,28 @@ export function TrainingRequestFormSheet({ employees = [], canManage = true }: T
                                   <Trash2 className="w-3.5 h-3.5" />
                                 </button>
                               )}
+                            </div>
+
+                            {/* Tombol Tambahan Karyawan untuk Tiap Training */}
+                            <div className="no-print mt-3 pt-2.5 border-t border-slate-200/90 flex flex-col items-center gap-1.5 w-full">
+                              <button
+                                type="button"
+                                onClick={() => openParticipantModal(session.id)}
+                                className="w-full inline-flex items-center justify-center gap-1.5 px-2 py-1.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded-lg text-[11px] font-bold shadow-xs hover:shadow transition-all"
+                                title={`Tambah Karyawan untuk ${session.trainingName}`}
+                              >
+                                <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+                                <span>+ Tambah Karyawan</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => openBatchModal(session.id)}
+                                className="w-full inline-flex items-center justify-center gap-1.5 px-2 py-1 bg-sky-50 hover:bg-sky-100 active:scale-95 text-sky-700 border border-sky-200/80 rounded-lg text-[10.5px] font-semibold transition-all"
+                                title={`Pilih Banyak Karyawan dari Database untuk ${session.trainingName}`}
+                              >
+                                <Users className="w-3.5 h-3.5 text-sky-600" />
+                                <span>Pilih dari Database</span>
+                              </button>
                             </div>
                           </td>
                         )}
@@ -1233,37 +1295,11 @@ export function TrainingRequestFormSheet({ employees = [], canManage = true }: T
                           </div>
                         </td>
                       </tr>
-                    ))
+                    );
+                  })
                   );
                 })}
 
-                {/* Table Footer Actions */}
-                <tr className="no-print bg-slate-50/80 border-t-2 border-slate-200 font-medium">
-                  <td colSpan={2} className="py-3 px-3 border-r border-slate-300 text-center">
-                    <span className="text-[11px] text-slate-500 font-bold uppercase tracking-wider">Aksi Tabel</span>
-                  </td>
-                  <td colSpan={8} className="py-3 px-4">
-                    <div className="flex flex-wrap items-center gap-3">
-                      <button
-                        type="button"
-                        onClick={() => openParticipantModal(sheetData.sessions[0]?.id || '')}
-                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded-lg text-xs font-bold transition-all shadow-sm"
-                      >
-                        <Plus className="w-3.5 h-3.5 text-emerald-600" />
-                        <span>Tambah Kolom Peserta</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => openBatchModal(sheetData.sessions[0]?.id || '')}
-                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded-lg text-xs font-bold transition-all shadow-sm"
-                      >
-                        <Users className="w-3.5 h-3.5 text-sky-600" />
-                        <span>Pilih Banyak dari Database Karyawan</span>
-                      </button>
-                    </div>
-                  </td>
-                </tr>
               </tbody>
             </table>
           </div>
@@ -1433,7 +1469,13 @@ export function TrainingRequestFormSheet({ employees = [], canManage = true }: T
                   <h3 className="font-bold text-base leading-tight">
                     {editingParticipantId ? 'Edit Data Peserta' : 'Tambah Peserta Training'}
                   </h3>
-                  <p className="text-xs text-emerald-200">Ketik nama/NIK untuk autofill data karyawan</p>
+                  <p className="text-xs text-emerald-200">
+                    {sheetData.sessions.find(s => s.id === targetSessionIdForParticipant)?.trainingName ? (
+                      <>Untuk Sesi: <span className="font-bold underline text-white">{sheetData.sessions.find(s => s.id === targetSessionIdForParticipant)?.trainingName}</span></>
+                    ) : (
+                      'Ketik nama/NIK untuk autofill data karyawan'
+                    )}
+                  </p>
                 </div>
               </div>
               <button
@@ -1446,6 +1488,25 @@ export function TrainingRequestFormSheet({ employees = [], canManage = true }: T
             </div>
 
             <div className="p-6 space-y-4">
+              {/* Target Training Session Selection */}
+              {sheetData.sessions.length > 1 && (
+                <div className="bg-emerald-50/70 p-3 rounded-xl border border-emerald-200">
+                  <label className="block text-xs font-bold uppercase text-emerald-900 mb-1">
+                    Sesi Training Tujuan
+                  </label>
+                  <select
+                    value={targetSessionIdForParticipant || ''}
+                    onChange={(e) => setTargetSessionIdForParticipant(e.target.value)}
+                    className="w-full px-3 py-1.5 bg-white border border-emerald-300 rounded-lg text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  >
+                    {sheetData.sessions.map((sess) => (
+                      <option key={sess.id} value={sess.id}>
+                        {sess.trainingName} ({formatIndonesianDate(sess.date)})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
               {/* Autocomplete Search */}
               <div className="relative">
                 <label className="block text-xs font-bold uppercase text-slate-700 mb-1.5">
@@ -1589,7 +1650,13 @@ export function TrainingRequestFormSheet({ employees = [], canManage = true }: T
                   <h3 className="font-bold text-base leading-tight">
                     Pilih Peserta Sekaligus dari Database Karyawan
                   </h3>
-                  <p className="text-xs text-sky-200">Centang beberapa karyawan untuk didaftarkan langsung</p>
+                  <p className="text-xs text-sky-200">
+                    {sheetData.sessions.find(s => s.id === batchTargetSessionId)?.trainingName ? (
+                      <>Untuk Sesi: <span className="font-bold underline text-white">{sheetData.sessions.find(s => s.id === batchTargetSessionId)?.trainingName}</span></>
+                    ) : (
+                      'Centang beberapa karyawan untuk didaftarkan langsung'
+                    )}
+                  </p>
                 </div>
               </div>
               <button
@@ -1602,16 +1669,35 @@ export function TrainingRequestFormSheet({ employees = [], canManage = true }: T
             </div>
 
             {/* Filter & Batch Controls */}
-            <div className="p-4 bg-slate-50 border-b border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3">
-              <div className="relative w-full sm:w-72">
-                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
-                <input
-                  type="text"
-                  placeholder="Cari nama, NIK, seksi..."
-                  value={batchSearch}
-                  onChange={(e) => setBatchSearch(e.target.value)}
-                  className="w-full pl-9 pr-3 py-1.5 bg-white border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-sky-500"
-                />
+            <div className="p-4 bg-slate-50 border-b border-slate-200 flex flex-col md:flex-row items-center justify-between gap-3">
+              <div className="flex flex-col sm:flex-row items-center gap-2.5 w-full md:w-auto flex-1">
+                <div className="relative w-full sm:w-64">
+                  <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                  <input
+                    type="text"
+                    placeholder="Cari nama, NIK, seksi..."
+                    value={batchSearch}
+                    onChange={(e) => setBatchSearch(e.target.value)}
+                    className="w-full pl-9 pr-3 py-1.5 bg-white border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-sky-500"
+                  />
+                </div>
+
+                {sheetData.sessions.length > 1 && (
+                  <div className="w-full sm:w-auto flex items-center gap-1.5">
+                    <span className="text-[11px] font-bold text-slate-600 whitespace-nowrap">Training:</span>
+                    <select
+                      value={batchTargetSessionId || ''}
+                      onChange={(e) => setBatchTargetSessionId(e.target.value)}
+                      className="px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-500 max-w-[200px]"
+                    >
+                      {sheetData.sessions.map((sess) => (
+                        <option key={sess.id} value={sess.id}>
+                          {sess.trainingName}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
               </div>
 
               <div className="flex items-center gap-2 w-full sm:w-auto justify-end">

@@ -33,14 +33,15 @@ import {
   FileDown,
   Pencil,
   BarChart3,
-  AlertTriangle
+  AlertTriangle,
+  FileImage
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { toast } from 'sonner';
 import { EmployeeLeavesAnalyticsChart } from './employee-leaves-analytics-chart';
 
-export type DownloadScopeType = 'filtered' | 'today' | 'last_7_days' | 'this_month' | 'all';
+export type DownloadScopeType = 'filtered' | 'today' | 'last_4_days' | 'last_7_days' | 'this_month' | 'all';
 
 
 // Helper: Normalisasi Golongan ke angka 1 - 5
@@ -596,6 +597,7 @@ export function EmployeeLeavesScreen({
   const [isDownloadModalOpen, setIsDownloadModalOpen] = useState(false);
   const [isDownloadMenuOpen, setIsDownloadMenuOpen] = useState(false);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+  const [isGeneratingPng, setIsGeneratingPng] = useState(false);
   const [downloadScope, setDownloadScope] = useState<DownloadScopeType>('filtered');
   const [isDownloading, setIsDownloading] = useState(false);
   const downloadMenuRef = useRef<HTMLDivElement>(null);
@@ -739,6 +741,16 @@ export function EmployeeLeavesScreen({
         const s = l.awalAbsensi || l.createdAt?.slice(0, 10);
         const e = l.akhirAbsensi || s;
         return s <= nowStr && e >= nowStr;
+      });
+    }
+    if (scope === 'last_4_days') {
+      const d4 = new Date();
+      d4.setDate(d4.getDate() - 3);
+      const d4Str = d4.toLocaleDateString('en-CA', { timeZone: 'Asia/Jayapura' });
+      return allData.filter(l => {
+        const s = l.awalAbsensi || l.createdAt?.slice(0, 10);
+        const e = l.akhirAbsensi || s;
+        return s <= nowStr && e >= d4Str;
       });
     }
     if (scope === 'last_7_days') {
@@ -1069,6 +1081,297 @@ export function EmployeeLeavesScreen({
     }
   };
 
+  // 4. Ekspor ke Gambar Resolusi Tinggi (.png) untuk 4 Hari ke Belakang atau Sesuai Scope
+  const handleExportPng = async (scope: DownloadScopeType = 'last_4_days') => {
+    setIsGeneratingPng(true);
+    toast.info('Menyiapkan rekapan infografis gambar PNG...');
+
+    try {
+      const [{ default: html2canvas }] = await Promise.all([
+        import('html2canvas')
+      ]);
+
+      const dataset = await getLeavesForScope(scope);
+      if (dataset.length === 0) {
+        toast.info('Tidak ada data izin karyawan pada rentang waktu yang dipilih.');
+        setIsGeneratingPng(false);
+        return;
+      }
+
+      // Hitung rentang tanggal tampilan
+      const now = new Date();
+      const nowStr = now.toLocaleDateString('en-CA', { timeZone: 'Asia/Jayapura' });
+      
+      let periodLabel = 'Daftar Izin Terpilih';
+      let fileDateSuffix = nowStr;
+
+      if (scope === 'last_4_days') {
+        const d4 = new Date();
+        d4.setDate(d4.getDate() - 3);
+        const d4Str = d4.toLocaleDateString('en-CA', { timeZone: 'Asia/Jayapura' });
+        periodLabel = `${formatLeaveDateIndo(d4Str)} s/d ${formatLeaveDateIndo(nowStr)} (4 Hari Terakhir)`;
+        fileDateSuffix = `${d4Str}_sd_${nowStr}`;
+      } else if (scope === 'today') {
+        periodLabel = `Hari Ini (${formatLeaveDateIndo(nowStr)})`;
+      } else if (scope === 'last_7_days') {
+        const d7 = new Date();
+        d7.setDate(d7.getDate() - 7);
+        const d7Str = d7.toLocaleDateString('en-CA', { timeZone: 'Asia/Jayapura' });
+        periodLabel = `${formatLeaveDateIndo(d7Str)} s/d ${formatLeaveDateIndo(nowStr)} (7 Hari Terakhir)`;
+        fileDateSuffix = `${d7Str}_sd_${nowStr}`;
+      } else if (scope === 'this_month') {
+        periodLabel = `Bulan ${now.toLocaleDateString('id-ID', { month: 'long', year: 'numeric', timeZone: 'Asia/Jayapura' })}`;
+      } else if (scope === 'all') {
+        periodLabel = 'Seluruh Catatan Database';
+      } else {
+        periodLabel = 'Hasil Filter Saat Ini';
+      }
+
+      const printDateTimeStr = now.toLocaleDateString('id-ID', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        timeZone: 'Asia/Jayapura'
+      });
+
+      // Ringkasan Statistik
+      let sakitCount = 0;
+      let keluargaCount = 0;
+      let lainnyaCount = 0;
+      let shiftACount = 0;
+      let shiftBCount = 0;
+      let nonshiftCount = 0;
+      let accCount = 0;
+      let pendingCount = 0;
+
+      dataset.forEach(item => {
+        const a = (item.alasanAbsensi || '').toLowerCase();
+        if (a.includes('sakit') || a.includes('demam') || a.includes('klinik') || a.includes('obat') || a.includes('flu')) sakitCount++;
+        else if (a.includes('keluarga') || a.includes('istri') || a.includes('anak') || a.includes('ortu') || a.includes('orang tua')) keluargaCount++;
+        else lainnyaCount++;
+
+        const s = (item.shift || '').toUpperCase();
+        if (s.includes('A')) shiftACount++;
+        else if (s.includes('B')) shiftBCount++;
+        else nonshiftCount++;
+
+        if (item.acc === 'Disetujui') accCount++;
+        else pendingCount++;
+      });
+
+      // Tampilkan baris data
+      const displayRows = dataset.slice(0, 50);
+
+      // Buat container HTML gambar
+      const host = document.createElement('div');
+      host.style.cssText = 'position:fixed;top:0;left:0;width:1200px;background:#ffffff;z-index:-9999;pointer-events:none;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;color:#0f172a;';
+
+      host.innerHTML = `
+        <div style="padding: 28px 32px; background: #ffffff; border-top: 6px solid #2298A7;">
+          <!-- KOP SURAT RESMI -->
+          <div style="border-bottom: 2px solid #e2e8f0; padding-bottom: 16px; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: flex-start;">
+            <div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #2298A7;"></span>
+                <h2 style="font-size: 17px; font-weight: 900; color: #0f172a; margin: 0; letter-spacing: 0.5px; text-transform: uppercase;">
+                  PT TRIMEGAH BANGUN PERSADA Tbk
+                </h2>
+              </div>
+              <h3 style="font-size: 13.5px; font-weight: 800; color: #2298A7; margin: 4px 0 0 0; letter-spacing: 0.3px;">
+                DIVISI PREPARATION & LABORATORY &bull; PORTAL OPERASIONAL
+              </h3>
+              <p style="font-size: 10.5px; color: #64748b; margin: 3px 0 0 0;">
+                Site Kawasi, Pulau Obi, Halmahera Selatan, Maluku Utara
+              </p>
+            </div>
+            <div style="text-align: right;">
+              <span style="display: inline-block; padding: 4px 12px; background: #E8F6F8; border: 1.5px solid #2298A7; border-radius: 9999px; font-weight: 800; color: #0f766e; font-size: 11px; text-transform: uppercase;">
+                ${scope === 'last_4_days' ? 'REKAPAN 4 HARI TERAKHIR' : 'REKAPAN PERIZINAN'}
+              </span>
+              <div style="font-size: 10.5px; color: #64748b; margin-top: 5px; font-weight: 600;">
+                Digenerate: ${printDateTimeStr} WIT
+              </div>
+            </div>
+          </div>
+
+          <!-- BANNER JUDUL LAPORAN -->
+          <div style="background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%); border: 1px solid #cbd5e1; border-radius: 12px; padding: 14px 20px; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <h1 style="font-size: 16px; font-weight: 900; margin: 0; color: #0f172a; text-transform: uppercase; letter-spacing: 0.5px;">
+                DAFTAR REKAPITULASI IZIN KARYAWAN
+              </h1>
+              <p style="font-size: 11.5px; color: #334155; margin: 3px 0 0 0; font-weight: 600;">
+                Periode: <span style="color: #0f766e; font-weight: 800;">${periodLabel}</span>
+              </p>
+            </div>
+            <div style="text-align: right; background: #ffffff; padding: 6px 14px; border-radius: 8px; border: 1px solid #cbd5e1;">
+              <span style="font-size: 10px; color: #64748b; font-weight: 600; text-transform: uppercase;">Total Personil Izin</span>
+              <div style="font-size: 18px; font-weight: 900; color: #2298A7; line-height: 1.2;">
+                ${dataset.length} <span style="font-size: 11px; font-weight: 700; color: #64748b;">Orang</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- RINGKASAN METRIK / STATISTIK CEPAT -->
+          <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 16px;">
+            <div style="background: #ffffff; border: 1px solid #e2e8f0; border-left: 4px solid #ef4444; border-radius: 8px; padding: 8px 12px;">
+              <div style="font-size: 10px; color: #64748b; font-weight: 700; text-transform: uppercase;">Izin Sakit / Medis</div>
+              <div style="font-size: 16px; font-weight: 900; color: #dc2626; margin-top: 2px;">
+                ${sakitCount} <span style="font-size: 10px; font-weight: 600; color: #94a3b8;">orang</span>
+              </div>
+            </div>
+
+            <div style="background: #ffffff; border: 1px solid #e2e8f0; border-left: 4px solid #f59e0b; border-radius: 8px; padding: 8px 12px;">
+              <div style="font-size: 10px; color: #64748b; font-weight: 700; text-transform: uppercase;">Izin Keluarga / Pribadi</div>
+              <div style="font-size: 16px; font-weight: 900; color: #d97706; margin-top: 2px;">
+                ${keluargaCount + lainnyaCount} <span style="font-size: 10px; font-weight: 600; color: #94a3b8;">orang</span>
+              </div>
+            </div>
+
+            <div style="background: #ffffff; border: 1px solid #e2e8f0; border-left: 4px solid #0284c7; border-radius: 8px; padding: 8px 12px;">
+              <div style="font-size: 10px; color: #64748b; font-weight: 700; text-transform: uppercase;">Shift A / Shift B</div>
+              <div style="font-size: 15px; font-weight: 900; color: #0284c7; margin-top: 2px;">
+                ${shiftACount} <span style="font-size: 10px; font-weight: 700; color: #64748b;">(A)</span> &bull; ${shiftBCount} <span style="font-size: 10px; font-weight: 700; color: #64748b;">(B)</span>
+              </div>
+            </div>
+
+            <div style="background: #ffffff; border: 1px solid #e2e8f0; border-left: 4px solid #8b5cf6; border-radius: 8px; padding: 8px 12px;">
+              <div style="font-size: 10px; color: #64748b; font-weight: 700; text-transform: uppercase;">Nonshift / Staff</div>
+              <div style="font-size: 16px; font-weight: 900; color: #7c3aed; margin-top: 2px;">
+                ${nonshiftCount} <span style="font-size: 10px; font-weight: 600; color: #94a3b8;">orang</span>
+              </div>
+            </div>
+
+            <div style="background: #ffffff; border: 1px solid #e2e8f0; border-left: 4px solid #10b981; border-radius: 8px; padding: 8px 12px;">
+              <div style="font-size: 10px; color: #64748b; font-weight: 700; text-transform: uppercase;">Status Approval</div>
+              <div style="font-size: 14px; font-weight: 900; color: #15803d; margin-top: 2px;">
+                ${accCount} <span style="font-size: 10px; font-weight: 600; color: #16a34a;">ACC</span> &bull; ${pendingCount} <span style="font-size: 10px; font-weight: 600; color: #d97706;">Pending</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- TABEL DATA IZIN KARYAWAN -->
+          <table style="width: 100%; border-collapse: collapse; font-size: 10px;">
+            <thead>
+              <tr style="background: #2298A7; color: #ffffff; text-align: left;">
+                <th style="padding: 7px 5px; border: 1px solid #0f766e; text-align: center; width: 28px;">No</th>
+                <th style="padding: 7px 6px; border: 1px solid #0f766e; width: 80px;">NIK</th>
+                <th style="padding: 7px 6px; border: 1px solid #0f766e; width: 140px;">Nama Karyawan</th>
+                <th style="padding: 7px 6px; border: 1px solid #0f766e; width: 110px;">Bagian / Shift</th>
+                <th style="padding: 7px 6px; border: 1px solid #0f766e; width: 105px;">Tanggal Izin</th>
+                <th style="padding: 7px 5px; border: 1px solid #0f766e; width: 60px; text-align: center;">Durasi</th>
+                <th style="padding: 7px 6px; border: 1px solid #0f766e;">Alasan Izin</th>
+                <th style="padding: 7px 6px; border: 1px solid #0f766e; width: 115px;">Pengawas Mengetahui</th>
+                <th style="padding: 7px 6px; border: 1px solid #0f766e; width: 68px; text-align: center;">Status ACC</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${displayRows.map((r, i) => {
+                const isAcc = r.acc === 'Disetujui';
+                const isTolak = r.acc === 'Ditolak';
+                const badgeBg = isAcc ? '#dcfce7' : isTolak ? '#fee2e2' : '#fef3c7';
+                const badgeColor = isAcc ? '#15803d' : isTolak ? '#b91c1c' : '#b45309';
+
+                return `
+                  <tr style="background: ${i % 2 === 0 ? '#ffffff' : '#f8fafc'};">
+                    <td style="padding: 5px 4px; border: 1px solid #cbd5e1; text-align: center; font-weight: bold; color: #475569;">${i + 1}</td>
+                    <td style="padding: 5px 6px; border: 1px solid #cbd5e1; font-family: monospace; font-weight: 700; color: #0284c7;">${r.nik}</td>
+                    <td style="padding: 5px 6px; border: 1px solid #cbd5e1; font-weight: 800; color: #0f172a;">${r.name}</td>
+                    <td style="padding: 5px 6px; border: 1px solid #cbd5e1; color: #334155;">
+                      <div>${r.penempatan || r.section || '-'}</div>
+                      <div style="color: #64748b; font-size: 9px; font-weight: 600;">Shift: ${r.shift || '-'}</div>
+                    </td>
+                    <td style="padding: 5px 6px; border: 1px solid #cbd5e1; font-family: monospace; font-weight: 600; color: #334155;">
+                      ${formatLeaveDateIndo(r.awalAbsensi)}
+                    </td>
+                    <td style="padding: 5px 4px; border: 1px solid #cbd5e1; text-align: center; font-weight: 800; color: #0f172a;">
+                      ${r.lamanyaIzin || `${r.jumlah || 1} Hari`}
+                    </td>
+                    <td style="padding: 5px 6px; border: 1px solid #cbd5e1; color: #334155;">
+                      ${r.alasanAbsensi || '-'}
+                    </td>
+                    <td style="padding: 5px 6px; border: 1px solid #cbd5e1; font-weight: 600; color: #475569;">
+                      ${r.pengawasMengetahui || '-'}
+                    </td>
+                    <td style="padding: 5px 4px; border: 1px solid #cbd5e1; text-align: center;">
+                      <span style="display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 9px; font-weight: 800; background: ${badgeBg}; color: ${badgeColor};">
+                        ${r.acc || 'Pending'}
+                      </span>
+                    </td>
+                  </tr>
+                `;
+              }).join('')}
+            </tbody>
+          </table>
+
+          ${dataset.length > 50 ? `
+            <div style="font-size: 9.5px; color: #64748b; margin-top: 6px; font-style: italic; text-align: right;">
+              * Menampilkan 50 data teratas. Untuk data keseluruhan (${dataset.length} baris), unduh format Excel (.xlsx).
+            </div>
+          ` : ''}
+
+          <!-- PENGESAHAN TANDA TANGAN RESMI -->
+          <div style="margin-top: 24px; display: flex; justify-content: space-between; align-items: flex-end;">
+            <div style="text-align: center; width: 220px;">
+              <p style="font-size: 10.5px; margin: 0; color: #475569; font-weight: 600;">Dicatat & Diperiksa Oleh:</p>
+              <div style="height: 48px;"></div>
+              <p style="font-size: 11px; font-weight: 800; margin: 0; text-decoration: underline; color: #0f172a;">
+                ${inspectorName || 'Admin Preparation & Lab'}
+              </p>
+              <p style="font-size: 9.5px; color: #64748b; margin: 2px 0 0 0;">Staff Admin / HRD Preparation</p>
+            </div>
+
+            <div style="text-align: center; font-size: 9.5px; color: #94a3b8; font-style: italic;">
+              PrepLab Portal Operasional &bull; PT Trimegah Bangun Persada Tbk<br/>
+              Dokumen Resmi Laporan Ketidakhadiran & Perizinan Karyawan
+            </div>
+
+            <div style="text-align: center; width: 220px;">
+              <p style="font-size: 10.5px; margin: 0; color: #475569; font-weight: 600;">Mengetahui & Menyetujui:</p>
+              <div style="height: 48px;"></div>
+              <p style="font-size: 11px; font-weight: 800; margin: 0; text-decoration: underline; color: #0f172a;">
+                Supervisor / Superintendent
+              </p>
+              <p style="font-size: 9.5px; color: #64748b; margin: 2px 0 0 0;">Divisi Preparation & Laboratory</p>
+            </div>
+          </div>
+        </div>
+      `;
+
+      document.body.appendChild(host);
+
+      const canvas = await html2canvas(host.firstElementChild as HTMLElement, {
+        scale: 2,
+        backgroundColor: '#ffffff',
+        logging: false,
+        useCORS: true,
+        windowWidth: 1200
+      });
+
+      const pngUrl = canvas.toDataURL('image/png');
+      const filename = `Rekap_Izin_Karyawan_${scope === 'last_4_days' ? '4_Hari' : scope}_${fileDateSuffix}.png`;
+
+      const link = document.createElement('a');
+      link.href = pngUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      document.body.removeChild(host);
+      setIsDownloadMenuOpen(false);
+      setIsDownloadModalOpen(false);
+      toast.success(`Gambar PNG rekapan izin berhasil diunduh: ${filename}`);
+    } catch (err: any) {
+      console.error('Error creating PNG:', err);
+      toast.error('Gagal membuat gambar PNG rekapan izin.');
+    } finally {
+      setIsGeneratingPng(false);
+    }
+  };
+
   // Pagination calculation
   const totalPages = Math.ceil(leaves.length / itemsPerPage) || 1;
   const paginatedLeaves = useMemo(() => {
@@ -1195,6 +1498,23 @@ export function EmployeeLeavesScreen({
           </a>
 
           {/* ==================================================== */}
+          {/* TOMBOL CEPAT UNDUH PNG 4 HARI KE BELAKANG            */}
+          {/* ==================================================== */}
+          <button
+            type="button"
+            disabled={isGeneratingPng}
+            onClick={() => handleExportPng('last_4_days')}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold text-xs shadow-xs transition-all cursor-pointer disabled:opacity-60"
+            title="Unduh rekapan infografis gambar PNG daftar izin 4 hari ke belakang siap dibagikan ke WhatsApp"
+          >
+            <FileImage className={`w-4 h-4 ${isGeneratingPng ? 'animate-pulse' : ''}`} />
+            <span>{isGeneratingPng ? 'Menyusun PNG...' : 'Unduh PNG (4 Hari)'}</span>
+            <span className="hidden sm:inline-block px-1.5 py-0.5 text-[9px] bg-white/20 rounded-md font-black uppercase">
+              PNG
+            </span>
+          </button>
+
+          {/* ==================================================== */}
           {/* PUSAT UNDUHAN DAFTAR IZIN (DROPDOWN MENU LENGKAP)    */}
           {/* ==================================================== */}
           <div className="relative" ref={downloadMenuRef}>
@@ -1209,14 +1529,39 @@ export function EmployeeLeavesScreen({
             </button>
 
             {isDownloadMenuOpen && (
-              <div className="absolute right-0 mt-2 w-72 bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-800 p-2 z-50 text-xs animate-in fade-in zoom-in-95 duration-100">
-                <div className="px-3 py-1.5 border-b border-slate-100 dark:border-slate-800 mb-1">
+              <div className="absolute right-0 mt-2 w-76 bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-800 p-2 z-50 text-xs animate-in fade-in zoom-in-95 duration-100">
+                <div className="px-3 py-1.5 border-b border-slate-100 dark:border-slate-800 mb-1 flex items-center justify-between">
                   <span className="font-black text-slate-900 dark:text-white uppercase tracking-wider text-[10px]">
                     Pilih Format Unduhan Daftar Izin
                   </span>
                 </div>
 
-                {/* 1. Unduh Excel */}
+                {/* 1. Unduh PNG 4 Hari ke Belakang (Utama) */}
+                <button
+                  type="button"
+                  disabled={isGeneratingPng}
+                  onClick={() => handleExportPng('last_4_days')}
+                  className="w-full p-2.5 rounded-xl hover:bg-teal-50 dark:hover:bg-teal-950/40 text-left flex items-start gap-2.5 transition-colors cursor-pointer group disabled:opacity-60 bg-teal-50/50 dark:bg-teal-950/20 mb-1 border border-teal-200/50 dark:border-teal-800/40"
+                >
+                  <div className="w-7 h-7 rounded-lg bg-teal-500 text-white flex items-center justify-center shrink-0 shadow-2xs">
+                    <FileImage className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-1.5">
+                      <p className="font-bold text-teal-800 dark:text-teal-300 group-hover:text-teal-900 transition-colors">
+                        Unduh PNG (4 Hari Terakhir)
+                      </p>
+                      <span className="px-1.5 py-0.2 rounded text-[9px] font-black bg-teal-200 text-teal-800 dark:bg-teal-800 dark:text-teal-200">
+                        WA Ready
+                      </span>
+                    </div>
+                    <p className="text-[10.5px] text-slate-500 dark:text-slate-400">
+                      Infografis gambar tajam H-3 s/d Hari ini + statistik
+                    </p>
+                  </div>
+                </button>
+
+                {/* 2. Unduh Excel */}
                 <button
                   type="button"
                   onClick={() => handleExportExcel('filtered')}
@@ -1235,7 +1580,7 @@ export function EmployeeLeavesScreen({
                   </div>
                 </button>
 
-                {/* 2. Unduh PDF Resmi */}
+                {/* 3. Unduh PDF Resmi */}
                 <button
                   type="button"
                   disabled={isGeneratingPdf}
@@ -1255,7 +1600,27 @@ export function EmployeeLeavesScreen({
                   </div>
                 </button>
 
-                {/* 3. Unduh CSV */}
+                {/* 4. Unduh PNG Hasil Filter */}
+                <button
+                  type="button"
+                  disabled={isGeneratingPng}
+                  onClick={() => handleExportPng('filtered')}
+                  className="w-full p-2.5 rounded-xl hover:bg-purple-50 dark:hover:bg-purple-950/40 text-left flex items-start gap-2.5 transition-colors cursor-pointer group disabled:opacity-60"
+                >
+                  <div className="w-7 h-7 rounded-lg bg-purple-100 dark:bg-purple-950 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0">
+                    <FileImage className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <p className="font-bold text-slate-900 dark:text-white group-hover:text-purple-600 transition-colors">
+                      Unduh PNG (Hasil Filter)
+                    </p>
+                    <p className="text-[10.5px] text-slate-500">
+                      Gambar tabel sesuai pencarian & filter aktif
+                    </p>
+                  </div>
+                </button>
+
+                {/* 5. Unduh CSV */}
                 <button
                   type="button"
                   onClick={() => handleExportCsv('filtered')}
@@ -1556,8 +1921,18 @@ export function EmployeeLeavesScreen({
           </div>
 
           <div className="flex items-center gap-1.5">
-            <span className="text-[11px] font-semibold text-slate-400 hidden md:inline mr-1">Unduh Cepat:</span>
-            
+            {/* Quick PNG 4 Hari */}
+            <button
+              type="button"
+              disabled={isGeneratingPng}
+              onClick={() => handleExportPng('last_4_days')}
+              title="Unduh rekapan infografis gambar PNG daftar izin 4 hari ke belakang"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-teal-300 dark:border-teal-700 bg-teal-50 hover:bg-teal-100 dark:bg-teal-950/50 dark:hover:bg-teal-900/60 text-teal-800 dark:text-teal-200 font-bold text-xs transition-colors cursor-pointer disabled:opacity-60"
+            >
+              <FileImage className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
+              <span>{isGeneratingPng ? 'PNG...' : 'PNG (4 Hari)'}</span>
+            </button>
+
             {/* Quick Excel */}
             <button
               type="button"
@@ -2046,6 +2421,68 @@ export function EmployeeLeavesScreen({
                     </div>
                   </div>
 
+                  {/* Item 2: 4 Hari Terakhir (Fitur Unggulan PNG) */}
+                  <div className="p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 hover:bg-white dark:hover:bg-slate-800 transition-colors bg-teal-50/20 dark:bg-teal-950/10 border-t border-b border-teal-100 dark:border-teal-900/30">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-300">
+                          4 Hari
+                        </span>
+                        <p className="font-bold text-slate-900 dark:text-white text-xs">
+                          Rekapan Izin 4 Hari Terakhir (H-3 s/d Hari Ini)
+                        </p>
+                        <span className="px-1.5 py-0.2 rounded text-[9px] font-extrabold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                          PNG WhatsApp
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        Infografis gambar tajam dengan KOP surat dan statistik ketidakhadiran, siap dibagikan ke WhatsApp Group.
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
+                      <button
+                        type="button"
+                        disabled={isGeneratingPng}
+                        onClick={() => handleExportPng('last_4_days')}
+                        className="px-2.5 py-1.5 rounded-lg border border-teal-400 bg-teal-50 hover:bg-teal-100 text-teal-800 dark:bg-teal-950/70 dark:text-teal-200 font-bold text-[11px] flex items-center gap-1 transition-colors cursor-pointer disabled:opacity-50 shadow-2xs"
+                        title="Unduh Gambar PNG Rekapan 4 Hari"
+                      >
+                        <FileImage className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
+                        <span>{isGeneratingPng ? 'Menyusun...' : 'PNG (4 Hari)'}</span>
+                      </button>
+                      <button
+                        type="button"
+                        disabled={isDownloading}
+                        onClick={() => handleExportExcel('last_4_days')}
+                        className="px-2.5 py-1.5 rounded-lg border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 font-bold text-[11px] flex items-center gap-1 transition-colors cursor-pointer disabled:opacity-50"
+                        title="Unduh Excel 4 Hari Terakhir"
+                      >
+                        <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>Excel</span>
+                      </button>
+                      <button
+                        type="button"
+                        disabled={isGeneratingPdf}
+                        onClick={() => handleExportPdf('last_4_days')}
+                        className="px-2.5 py-1.5 rounded-lg border border-rose-300 bg-rose-50 hover:bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300 font-bold text-[11px] flex items-center gap-1 transition-colors cursor-pointer disabled:opacity-50"
+                        title="Unduh PDF 4 Hari Terakhir"
+                      >
+                        <Printer className="w-3.5 h-3.5 text-rose-600" />
+                        <span>PDF</span>
+                      </button>
+                      <button
+                        type="button"
+                        disabled={isDownloading}
+                        onClick={() => handleExportCsv('last_4_days')}
+                        className="px-2.5 py-1.5 rounded-lg border border-sky-300 bg-sky-50 hover:bg-sky-100 text-sky-800 dark:bg-sky-950/60 dark:text-sky-300 font-bold text-[11px] flex items-center gap-1 transition-colors cursor-pointer disabled:opacity-50"
+                        title="Unduh CSV 4 Hari Terakhir"
+                      >
+                        <FileDown className="w-3.5 h-3.5 text-sky-600" />
+                        <span>CSV</span>
+                      </button>
+                    </div>
+                  </div>
+
                   {/* Item 2: 7 Hari Terakhir */}
                   <div className="p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 hover:bg-white dark:hover:bg-slate-800 transition-colors">
                     <div>
@@ -2283,6 +2720,22 @@ export function EmployeeLeavesScreen({
                   </label>
 
                   <label className={`p-2.5 rounded-xl border cursor-pointer text-center transition-all ${
+                    downloadScope === 'last_4_days' 
+                      ? 'border-[#2298A7] bg-[#E8F6F8] dark:bg-teal-950/40 font-bold text-[#2298A7]' 
+                      : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300'
+                  }`}>
+                    <input 
+                      type="radio" 
+                      name="scope" 
+                      checked={downloadScope === 'last_4_days'} 
+                      onChange={() => setDownloadScope('last_4_days')} 
+                      className="sr-only"
+                    />
+                    <div className="text-[11px] font-bold">4 Hari Terakhir</div>
+                    <div className="text-[10px] text-slate-400">H-3 s/d Hari Ini</div>
+                  </label>
+
+                  <label className={`p-2.5 rounded-xl border cursor-pointer text-center transition-all ${
                     downloadScope === 'last_7_days' 
                       ? 'border-[#2298A7] bg-[#E8F6F8] dark:bg-teal-950/40 font-bold text-[#2298A7]' 
                       : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300'
@@ -2331,7 +2784,17 @@ export function EmployeeLeavesScreen({
                   </label>
                 </div>
 
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  <button
+                    type="button"
+                    disabled={isGeneratingPng}
+                    onClick={() => handleExportPng(downloadScope)}
+                    className="p-3 rounded-2xl border border-teal-300 bg-teal-50/70 dark:bg-teal-950/40 hover:bg-teal-100 dark:hover:bg-teal-900/60 text-teal-800 dark:text-teal-300 flex flex-col items-center justify-center gap-1.5 transition-all cursor-pointer font-bold disabled:opacity-50 shadow-2xs"
+                  >
+                    <FileImage className="w-5 h-5 text-teal-600 dark:text-teal-400" />
+                    <span>{isGeneratingPng ? 'Menyusun...' : 'Unduh PNG (.png)'}</span>
+                  </button>
+
                   <button
                     type="button"
                     disabled={isDownloading}
