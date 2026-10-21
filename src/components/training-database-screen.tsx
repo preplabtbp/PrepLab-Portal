@@ -1090,7 +1090,65 @@ interface TrainingStatisticsViewProps {
 
 type StatsSubTab = 'all' | 'barchart' | 'sap_modules' | 'dept_analysis' | 'ext_all' | 'ext_ranks' | 'ext_dist';
 type BarChartMode = 'compliance' | 'status_stacked' | 'target_vs_done';
-type ModuleViewMode = 'grid' | 'chart' | 'table';
+type ModuleViewMode = 'grid' | 'table' | 'chart';
+type ModuleProgramFilter = 'all' | 'sap' | 'k3';
+
+// Helper Modern Bento Radial Ring dengan Icon di Tengah (tidak duplikasi angka)
+function ModernRadialRing({
+  value,
+  color,
+  size = 64,
+  strokeWidth = 6,
+  children,
+}: {
+  value: number;
+  color: string;
+  size?: number;
+  strokeWidth?: number;
+  children?: React.ReactNode;
+}) {
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const clamped = Math.min(100, Math.max(0, value));
+  const offset = circumference * (1 - clamped / 100);
+
+  return (
+    <div className="relative flex items-center justify-center shrink-0 select-none" style={{ width: size, height: size }}>
+      <svg className="w-full h-full -rotate-90 transform" viewBox={`0 0 ${size} ${size}`}>
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={strokeWidth}
+          className="text-slate-100 dark:text-slate-800"
+        />
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          fill="none"
+          stroke={color}
+          strokeWidth={strokeWidth}
+          strokeLinecap="round"
+          strokeDasharray={circumference}
+          strokeDashoffset={offset}
+          className="transition-all duration-700 ease-out"
+        />
+      </svg>
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+        {children ? (
+          children
+        ) : (
+          <span className="text-xs font-black tracking-tight text-slate-800 dark:text-slate-200 tabular-nums">
+            {clamped}%
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function TrainingStatisticsView({
   records,
@@ -1108,13 +1166,14 @@ function TrainingStatisticsView({
   const [statsSubTab, setStatsSubTab] = useState<StatsSubTab>(initialScope === 'external' ? 'ext_all' : 'all');
   const [barChartMode, setBarChartMode] = useState<BarChartMode>('compliance');
   const [moduleViewMode, setModuleViewMode] = useState<ModuleViewMode>('grid');
+  const [moduleProgramFilter, setModuleProgramFilter] = useState<ModuleProgramFilter>('all');
 
   const todayYmdStr = useMemo(() => {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
   }, []);
 
-  // --- Data Training Internal ---
+  // --- Data Distribusi Masa Aktif Internal ---
   const berlakuItem = summaryPieRows.find(r => r.label.toLowerCase().includes('berlaku')) || { value: 506, color: '#10b981' };
   const warningItem = summaryPieRows.find(r => r.label.toLowerCase().includes('warning')) || { value: 18, color: '#f59e0b' };
   const expiredItem = summaryPieRows.find(r => r.label.toLowerCase().includes('expired')) || { value: 38, color: '#ef4444' };
@@ -1124,33 +1183,93 @@ function TrainingStatisticsView({
   const warningPct = Math.round((warningItem.value / totalStatus) * 100);
   const expiredPct = Math.max(0, 100 - berlakuPct - warningPct);
 
-  // Modul coverage data (Internal)
-  const coverageData = useMemo(() => {
-    return (stats.coverage || []).map((c: any) => {
-      const target = c.target || 0;
-      const done = c.done || 0;
-      const warning = c.warning || 0;
-      const expired = c.expired || 0;
+  // --- 1. Perhitungan Cakupan Modul SAP (Internal) dari records ---
+  const sapCoverage = useMemo(() => {
+    const sapPeople = records.filter(r => r.inSap);
+    return SAP_TRAININGS.map(t => {
+      const states = sapPeople
+        .filter(r => sapRequiredKeys(r).includes(t.key))
+        .map(r => sapState(r, t.key, t.statusKey));
+      const done = states.filter(sapIsValid).length;
+      const warning = states.filter(s => s === 'warning').length;
+      const expired = states.filter(s => s === 'expired' || s === 'failed').length;
+      const target = states.length;
       const pct = target > 0 ? Math.round((done / target) * 100) : 0;
       return {
-        key: c.key,
-        label: c.label,
-        desc: c.desc || '',
-        target,
+        program: 'SAP' as const,
+        programLabel: 'Training SAP',
+        key: t.key as string,
+        label: t.label,
+        desc: t.desc || '',
         done,
         warning,
         expired,
+        pending: 0,
+        target,
         pct,
         berlakuMurni: Math.max(0, done - warning),
       };
     });
-  }, [stats.coverage]);
+  }, [records]);
+
+  // --- 2. Perhitungan Cakupan Modul K3 Operasional (Internal) dari records ---
+  const k3Coverage = useMemo(() => {
+    return K3_TRAININGS.map(t => {
+      const states = records
+        .filter(r => k3RequiredFor(r).includes(t.key))
+        .map(r => k3State(r, t.key, t.statusKey));
+      const done = states.filter(k3IsValid).length;
+      const warning = 0;
+      const expired = states.filter(s => s === 'FAIL').length;
+      const pending = states.filter(s => s === 'Pending').length;
+      const target = states.length;
+      const pct = target > 0 ? Math.round((done / target) * 100) : 0;
+      return {
+        program: 'K3' as const,
+        programLabel: 'K3 Operasional',
+        key: t.key as string,
+        label: t.label,
+        desc: `${t.desc || ''} (Wajib: ${K3_RULES[t.key] || 'Karyawan Terkait'})`,
+        done,
+        warning,
+        expired,
+        pending,
+        target,
+        pct,
+        berlakuMurni: done,
+      };
+    });
+  }, [records]);
+
+  // Gabungan cakupan modul sesuai filter yang dipilih pengguna
+  const filteredCoverageList = useMemo(() => {
+    if (moduleProgramFilter === 'sap') return sapCoverage;
+    if (moduleProgramFilter === 'k3') return k3Coverage;
+    return [...sapCoverage, ...k3Coverage];
+  }, [moduleProgramFilter, sapCoverage, k3Coverage]);
+
+  // Urutkan modul yang butuh perhatian/tindakan (pct < 100 atau ada warning/expired/pending) di atas
+  const sortedCoverageData = useMemo(() => {
+    return [...filteredCoverageList].sort((a, b) => {
+      const aUrgent = a.pct < 100 || a.warning > 0 || a.expired > 0 || (a.pending || 0) > 0;
+      const bUrgent = b.pct < 100 || b.warning > 0 || b.expired > 0 || (b.pending || 0) > 0;
+      if (aUrgent && !bUrgent) return -1;
+      if (!aUrgent && bUrgent) return 1;
+      if (a.pct !== b.pct) return a.pct - b.pct;
+      return (b.warning + b.expired) - (a.warning + a.expired);
+    });
+  }, [filteredCoverageList]);
+
+  const urgentCount = useMemo(() => {
+    return filteredCoverageList.filter(c => c.pct < 100 || c.warning > 0 || c.expired > 0 || (c.pending || 0) > 0).length;
+  }, [filteredCoverageList]);
+  const perfectCount = filteredCoverageList.length - urgentCount;
 
   // Bar Chart 1: Kepatuhan per Modul (%)
   const moduleComplianceChartData = useMemo(() => {
-    const labels = coverageData.map(c => c.label);
-    const data = coverageData.map(c => c.pct);
-    const bgColors = coverageData.map(c => (c.pct >= 90 ? '#10b981' : c.pct >= 70 ? '#f59e0b' : '#ef4444'));
+    const labels = sortedCoverageData.map(c => `${c.label} (${c.program})`);
+    const data = sortedCoverageData.map(c => c.pct);
+    const bgColors = sortedCoverageData.map(c => (c.pct >= 90 ? '#10b981' : c.pct >= 70 ? '#f59e0b' : '#ef4444'));
 
     return {
       labels,
@@ -1160,36 +1279,36 @@ function TrainingStatisticsView({
           data,
           backgroundColor: bgColors,
           borderRadius: 8,
-          barThickness: 24,
+          barThickness: 22,
         },
       ],
     };
-  }, [coverageData]);
+  }, [sortedCoverageData]);
 
   // Bar Chart 2: Stacked Status per Modul (Berlaku, Warning, Expired)
   const moduleStackedStatusChartData = useMemo(() => {
-    const labels = coverageData.map(c => c.label);
+    const labels = sortedCoverageData.map(c => `${c.label} (${c.program})`);
     return {
       labels,
       datasets: [
-        { label: 'Berlaku (PASS)', data: coverageData.map(c => c.berlakuMurni), backgroundColor: '#10b981', borderRadius: 4, stack: 'Stack 0' },
-        { label: 'Warning (≤ 3 Bln)', data: coverageData.map(c => c.warning), backgroundColor: '#f59e0b', borderRadius: 4, stack: 'Stack 0' },
-        { label: 'Expired / Perlu Refresh', data: coverageData.map(c => c.expired), backgroundColor: '#ef4444', borderRadius: 4, stack: 'Stack 0' },
+        { label: 'Berlaku (PASS)', data: sortedCoverageData.map(c => c.berlakuMurni), backgroundColor: '#10b981', borderRadius: 4, stack: 'Stack 0' },
+        { label: 'Warning (≤ 3 Bln)', data: sortedCoverageData.map(c => c.warning), backgroundColor: '#f59e0b', borderRadius: 4, stack: 'Stack 0' },
+        { label: 'Expired / FAIL', data: sortedCoverageData.map(c => c.expired), backgroundColor: '#ef4444', borderRadius: 4, stack: 'Stack 0' },
       ],
     };
-  }, [coverageData]);
+  }, [sortedCoverageData]);
 
   // Bar Chart 3: Target Peserta vs Realisasi (Orang)
   const moduleTargetVsDoneChartData = useMemo(() => {
-    const labels = coverageData.map(c => c.label);
+    const labels = sortedCoverageData.map(c => `${c.label} (${c.program})`);
     return {
       labels,
       datasets: [
-        { label: 'Peserta Selesai (PASS)', data: coverageData.map(c => c.done), backgroundColor: '#0d9488', borderRadius: 6, barThickness: 18 },
-        { label: 'Target Wajib', data: coverageData.map(c => c.target), backgroundColor: '#cbd5e1', borderRadius: 6, barThickness: 18 },
+        { label: 'Peserta Selesai (PASS)', data: sortedCoverageData.map(c => c.done), backgroundColor: '#0d9488', borderRadius: 6, barThickness: 18 },
+        { label: 'Target Wajib', data: sortedCoverageData.map(c => c.target), backgroundColor: '#cbd5e1', borderRadius: 6, barThickness: 18 },
       ],
     };
-  }, [coverageData]);
+  }, [sortedCoverageData]);
 
   // Analisis Departemen / Bagian (Internal)
   const bagianStats = useMemo(() => {
@@ -1329,44 +1448,21 @@ function TrainingStatisticsView({
             </div>
             <p className="text-xs text-slate-500 mt-0.5">
               {statsScope === 'internal'
-                ? 'Analisis kepatuhan, matriks modul, dan sebaran peserta training wajib internal (SAP & K3).'
+                ? 'Analisis kepatuhan, pemenuhan modul wajib, dan sebaran masa aktif training internal (SAP & K3).'
                 : 'Analisis kualifikasi pengawas operasional (POP/POM) serta peringkat sertifikasi kompetensi eksternal.'}
             </p>
           </div>
         </div>
 
-        {/* Pemisah Pilihan: Training Internal vs Training External */}
+        {/* Tombol Navigasi Cepat Kembali ke Database */}
         <div className="flex items-center gap-2">
-          <div className="inline-flex items-center p-1 rounded-2xl bg-slate-100 dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 shadow-2xs">
-            <button
-              type="button"
-              onClick={() => {
-                setStatsScope('internal');
-                setStatsSubTab('all');
-              }}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
-                statsScope === 'internal'
-                  ? 'bg-teal-600 text-white shadow-xs'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
-              }`}
-            >
-              Training Internal
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setStatsScope('external');
-                setStatsSubTab('ext_all');
-              }}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
-                statsScope === 'external'
-                  ? 'bg-teal-600 text-white shadow-xs'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
-              }`}
-            >
-              Training External
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() => onOpenDatabaseWithFilter(statsScope === 'internal' ? 'sap' : ('pop' as any))}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-all cursor-pointer shadow-2xs"
+          >
+            ← Kembali ke Database
+          </button>
         </div>
       </div>
 
@@ -1374,9 +1470,9 @@ function TrainingStatisticsView({
       <div className="flex items-center gap-1.5 p-1.5 rounded-2xl bg-slate-100 dark:bg-slate-800 border border-slate-200/60 dark:border-slate-700 overflow-x-auto">
         {statsScope === 'internal' ? (
           [
-            { id: 'all' as const, label: '🎯 Ringkasan Internal' },
-            { id: 'barchart' as const, label: '📊 Bar Chart Modul' },
-            { id: 'sap_modules' as const, label: '📋 Matriks Modul SAP' },
+            { id: 'all' as const, label: '🎯 Ringkasan Terpadu' },
+            { id: 'sap_modules' as const, label: '📋 Matriks Modul' },
+            { id: 'barchart' as const, label: '📊 Grafik Batang' },
             { id: 'dept_analysis' as const, label: '🏢 Bagian & GOL' },
           ].map(t => (
             <button
@@ -1419,193 +1515,610 @@ function TrainingStatisticsView({
       {/* ============================================================ */}
       {statsScope === 'internal' && (
         <div className="space-y-4">
-          {/* Baris 1: 3 Program Utama Ringkas (SAP, K3 Operasional, Persiapan Pra POP) */}
+          {/* Baris 1: 3 Bento Ring Cards (Kompak, Rapi, Seimbang) */}
           {(statsSubTab === 'all') && (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4">
-              {/* Card Program SAP */}
-              <div className="rounded-[24px] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs flex flex-col justify-between">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 sm:gap-4">
+              {/* Card 1: Training SAP */}
+              <div className="rounded-[22px] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-4.5 sm:p-5 shadow-xs flex flex-col justify-between transition-all hover:border-teal-300 dark:hover:border-teal-700">
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-black uppercase tracking-wider text-teal-600 flex items-center gap-1.5">
-                      <ClipboardCheck className="w-4 h-4" />
+                    <span className="text-[11px] font-black uppercase tracking-wider text-teal-600 dark:text-teal-400 flex items-center gap-1.5">
+                      <ClipboardCheck className="w-3.5 h-3.5" />
                       TRAINING SAP (WAJIB)
                     </span>
-                    <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-teal-50 text-teal-700 dark:bg-teal-950 dark:text-teal-300">
+                    <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-teal-50 text-teal-700 dark:bg-teal-950 dark:text-teal-300">
                       6 Modul
                     </span>
                   </div>
-                  <div className="flex items-baseline gap-2 mt-2">
-                    <span className="text-4xl font-black text-slate-900 dark:text-slate-100 tabular-nums">
-                      {dashboard.sap?.pct ?? 0}%
-                    </span>
-                    <span className="text-xs font-semibold text-slate-500">Kepatuhan Keseluruhan</span>
-                  </div>
-                  <div className="mt-3 h-2.5 w-full rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
-                    <div className="h-full rounded-full bg-teal-600 transition-all duration-500" style={{ width: `${dashboard.sap?.pct ?? 0}%` }} />
+
+                  {/* Hero Metric: Number on left, sleek ring icon on right */}
+                  <div className="flex items-center justify-between mt-1">
+                    <div>
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-3xl sm:text-4xl font-black text-slate-900 dark:text-slate-100 tabular-nums">
+                          {dashboard.sap?.pct ?? 0}%
+                        </span>
+                        <span className="text-[11px] font-bold px-1.5 py-0.5 rounded-md bg-teal-50 text-teal-700 dark:bg-teal-950 dark:text-teal-300">
+                          Kepatuhan
+                        </span>
+                      </div>
+                      <p className="text-xs font-medium text-slate-500 mt-0.5">Tingkat kepatuhan personel SAP</p>
+                    </div>
+
+                    <ModernRadialRing value={dashboard.sap?.pct ?? 0} color="#0d9488" size={62} strokeWidth={6}>
+                      <ClipboardCheck className="w-4 h-4 text-teal-600 dark:text-teal-400" />
+                    </ModernRadialRing>
                   </div>
                 </div>
-                <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs">
-                  <span className="text-slate-500 font-medium">Status Personel:</span>
-                  <span className="font-bold text-slate-900 dark:text-slate-100">
-                    <span className="text-emerald-600">{dashboard.sap?.complete ?? 0} Lengkap</span> • <span className="text-rose-600">{dashboard.sap?.expired ?? 0} Expired</span>
-                  </span>
+
+                {/* Progress bar + micro status */}
+                <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 space-y-1.5">
+                  <div className="h-1.5 w-full rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden flex">
+                    <div style={{ width: `${dashboard.sap?.pct ?? 0}%` }} className="h-full bg-teal-600 rounded-full" />
+                  </div>
+                  <div className="flex items-center justify-between text-[11px] font-bold">
+                    <span className="text-emerald-600 dark:text-emerald-400">✓ {dashboard.sap?.complete ?? 0} Lengkap</span>
+                    <span className="text-rose-600 dark:text-rose-400">⚠️ {dashboard.sap?.expired ?? 0} Expired</span>
+                  </div>
                 </div>
               </div>
 
-              {/* Card Program K3 */}
-              <div className="rounded-[24px] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs flex flex-col justify-between">
+              {/* Card 2: Training K3 Operasional */}
+              <div className="rounded-[22px] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-4.5 sm:p-5 shadow-xs flex flex-col justify-between transition-all hover:border-blue-300 dark:hover:border-blue-700">
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-black uppercase tracking-wider text-blue-600 flex items-center gap-1.5">
-                      <HardHat className="w-4 h-4" />
+                    <span className="text-[11px] font-black uppercase tracking-wider text-blue-600 dark:text-blue-400 flex items-center gap-1.5">
+                      <HardHat className="w-3.5 h-3.5" />
                       TRAINING K3 OPERASIONAL
                     </span>
-                    <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300">
+                    <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300">
                       WAH, LOTO, CS
                     </span>
                   </div>
-                  <div className="flex items-baseline gap-2 mt-2">
-                    <span className="text-4xl font-black text-slate-900 dark:text-slate-100 tabular-nums">
-                      {dashboard.k3?.pct ?? 0}%
-                    </span>
-                    <span className="text-xs font-semibold text-slate-500">Tingkat Pemenuhan</span>
-                  </div>
-                  <div className="mt-3 h-2.5 w-full rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
-                    <div className="h-full rounded-full bg-blue-600 transition-all duration-500" style={{ width: `${dashboard.k3?.pct ?? 0}%` }} />
+
+                  <div className="flex items-center justify-between mt-1">
+                    <div>
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-3xl sm:text-4xl font-black text-slate-900 dark:text-slate-100 tabular-nums">
+                          {dashboard.k3?.pct ?? 0}%
+                        </span>
+                        <span className="text-[11px] font-bold px-1.5 py-0.5 rounded-md bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300">
+                          Pemenuhan
+                        </span>
+                      </div>
+                      <p className="text-xs font-medium text-slate-500 mt-0.5">Pemenuhan standar operasional K3</p>
+                    </div>
+
+                    <ModernRadialRing value={dashboard.k3?.pct ?? 0} color="#2563eb" size={62} strokeWidth={6}>
+                      <HardHat className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                    </ModernRadialRing>
                   </div>
                 </div>
-                <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs">
-                  <span className="text-slate-500 font-medium">Kelengkapan:</span>
-                  <span className="font-bold text-slate-900 dark:text-slate-100">
-                    {dashboard.k3?.complete ?? 0} Lengkap dari {dashboard.k3?.total ?? 0} Personel
-                  </span>
+
+                <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 space-y-1.5">
+                  <div className="h-1.5 w-full rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden flex">
+                    <div style={{ width: `${dashboard.k3?.pct ?? 0}%` }} className="h-full bg-blue-600 rounded-full" />
+                  </div>
+                  <div className="flex items-center justify-between text-[11px] font-bold">
+                    <span className="text-blue-700 dark:text-blue-300">✓ {dashboard.k3?.complete ?? 0} Lengkap</span>
+                    <span className="text-slate-400">Total {dashboard.k3?.total ?? 0} Personel</span>
+                  </div>
                 </div>
               </div>
 
-              {/* Card Program Pra POP */}
-              <div className="rounded-[24px] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs flex flex-col justify-between">
+              {/* Card 3: Persiapan Pra POP (K3) */}
+              <div className="rounded-[22px] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-4.5 sm:p-5 shadow-xs flex flex-col justify-between transition-all hover:border-amber-300 dark:hover:border-amber-700">
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-black uppercase tracking-wider text-amber-600 flex items-center gap-1.5">
-                      <Award className="w-4 h-4" />
-                      PERSIAPAN PRA POP
+                    <span className="text-[11px] font-black uppercase tracking-wider text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
+                      <Award className="w-3.5 h-3.5" />
+                      PERSIAPAN PRA POP (K3)
                     </span>
-                    <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300">
+                    <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300">
                       Pengawas
                     </span>
                   </div>
-                  <div className="flex items-baseline gap-2 mt-2">
-                    <span className="text-4xl font-black text-slate-900 dark:text-slate-100 tabular-nums">
-                      {dashboard.pop?.pct ?? 0}%
-                    </span>
-                    <span className="text-xs font-semibold text-slate-500">Realisasi Kandidat</span>
-                  </div>
-                  <div className="mt-3 h-2.5 w-full rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
-                    <div className="h-full rounded-full bg-amber-500 transition-all duration-500" style={{ width: `${dashboard.pop?.pct ?? 0}%` }} />
+
+                  <div className="flex items-center justify-between mt-1">
+                    <div>
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-3xl sm:text-4xl font-black text-slate-900 dark:text-slate-100 tabular-nums">
+                          {dashboard.pop?.pct ?? 0}%
+                        </span>
+                        <span className="text-[11px] font-bold px-1.5 py-0.5 rounded-md bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300">
+                          Kesiapan
+                        </span>
+                      </div>
+                      <p className="text-xs font-medium text-slate-500 mt-0.5">Kesiapan kandidat sertifikasi POP</p>
+                    </div>
+
+                    <ModernRadialRing value={dashboard.pop?.pct ?? 0} color="#d97706" size={62} strokeWidth={6}>
+                      <Award className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                    </ModernRadialRing>
                   </div>
                 </div>
-                <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs">
-                  <span className="text-slate-500 font-medium">Total Kandidat:</span>
-                  <span className="font-bold text-slate-900 dark:text-slate-100">
-                    {dashboard.pop?.stages?.[0]?.count ?? 0} dari {dashboard.pop?.total ?? 0} Terlaksana
-                  </span>
+
+                <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 space-y-1.5">
+                  <div className="h-1.5 w-full rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden flex">
+                    <div style={{ width: `${dashboard.pop?.pct ?? 0}%` }} className="h-full bg-amber-500 rounded-full" />
+                  </div>
+                  <div className="flex items-center justify-between text-[11px] font-bold">
+                    <span className="text-amber-700 dark:text-amber-400">✓ {dashboard.pop?.stages?.[0]?.count ?? 0} Siap</span>
+                    <span className="text-slate-400">Target {dashboard.pop?.total ?? 0} Kandidat</span>
+                  </div>
                 </div>
               </div>
             </div>
           )}
 
-          {/* Baris 2: Linear Stacked Health Bar (Distribusi Masa Aktif Training Wajib Internal) */}
+          {/* Baris 2: Unified Health Triage Panel (Distribusi Masa Aktif Rapi & Seimbang) */}
           {(statsSubTab === 'all') && (
-            <div className="rounded-[24px] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-5 sm:p-6 shadow-xs space-y-4">
+            <div className="rounded-[22px] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
                 <div>
                   <h4 className="text-sm sm:text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
                     <Activity className="w-4 h-4 text-teal-600" />
-                    Distribusi Masa Aktif Training Wajib Internal ({totalStatus} Status Tercatat)
+                    Distribusi Masa Aktif Training Internal ({totalStatus} Status Tercatat)
                   </h4>
                   <p className="text-xs text-slate-500 mt-0.5">
-                    Visualisasi proporsi masa berlaku seluruh training wajib dihitung dari batas waktu kadaluarsa.
+                    Monitoring proporsi validitas seluruh sertifikasi training: status aman vs kebutuhan refreshment berkala.
                   </p>
                 </div>
-                <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
-                  Toleransi: Warning 3 Bln
-                </span>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/60 flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                    {berlakuPct}% Status Valid & Patuh
+                  </span>
+                  <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500">
+                    Warning: ≤ 3 Bulan
+                  </span>
+                </div>
               </div>
 
-              {/* Single Linear Progress Bar */}
-              <div className="space-y-2">
-                <div className="h-7 w-full rounded-2xl bg-slate-100 dark:bg-slate-800 overflow-hidden flex shadow-inner p-1 gap-1">
+              {/* Visual Multi-Segment Health Strip */}
+              <div className="space-y-1.5">
+                <div className="h-6 w-full rounded-xl bg-slate-100 dark:bg-slate-800 overflow-hidden flex shadow-inner p-0.5 gap-0.5">
                   {berlakuPct > 0 && (
                     <div
                       style={{ width: `${berlakuPct}%` }}
-                      className="h-full rounded-xl bg-emerald-500 transition-all duration-500 flex items-center justify-center text-white text-[11px] font-black shadow-xs"
+                      className="h-full rounded-lg bg-emerald-500 transition-all duration-500 flex items-center justify-center text-white text-[11px] font-black shadow-xs"
                       title={`Berlaku: ${berlakuItem.value} (${berlakuPct}%)`}
                     >
-                      {berlakuPct >= 8 ? `${berlakuPct}%` : ''}
+                      {berlakuPct >= 10 ? `Berlaku ${berlakuPct}%` : ''}
                     </div>
                   )}
                   {warningPct > 0 && (
                     <div
                       style={{ width: `${warningPct}%` }}
-                      className="h-full rounded-xl bg-amber-500 transition-all duration-500 flex items-center justify-center text-white text-[11px] font-black shadow-xs"
+                      className="h-full rounded-lg bg-amber-500 transition-all duration-500 flex items-center justify-center text-white text-[11px] font-black shadow-xs"
                       title={`Warning: ${warningItem.value} (${warningPct}%)`}
                     >
-                      {warningPct >= 5 ? `${warningPct}%` : ''}
+                      {warningPct >= 4 ? `Warning ${warningPct}%` : ''}
                     </div>
                   )}
                   {expiredPct > 0 && (
                     <div
                       style={{ width: `${expiredPct}%` }}
-                      className="h-full rounded-xl bg-rose-500 transition-all duration-500 flex items-center justify-center text-white text-[11px] font-black shadow-xs"
+                      className="h-full rounded-lg bg-rose-500 transition-all duration-500 flex items-center justify-center text-white text-[11px] font-black shadow-xs"
                       title={`Expired: ${expiredItem.value} (${expiredPct}%)`}
                     >
-                      {expiredPct >= 5 ? `${expiredPct}%` : ''}
+                      {expiredPct >= 4 ? `Expired ${expiredPct}%` : ''}
                     </div>
                   )}
                 </div>
               </div>
 
-              {/* 3 Kotak Detail Status Interaktif */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
-                <div className="p-3.5 rounded-2xl border border-emerald-200/80 dark:border-emerald-900/40 bg-emerald-50/50 dark:bg-emerald-950/20 flex flex-col justify-between">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
-                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
-                      Status Berlaku / Aktif
-                    </span>
-                    <span className="text-sm font-black text-emerald-700 dark:text-emerald-300 tabular-nums">{berlakuItem.value}</span>
+              {/* 3 Kartu Aksi Berimbang (Equal Height, Rapi) */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+                {/* 1. Berlaku / Aman */}
+                <div className="p-3.5 rounded-xl border border-emerald-200/80 dark:border-emerald-900/40 bg-emerald-50/30 dark:bg-emerald-950/20 flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-black uppercase tracking-wider text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                        Aktif & Valid
+                      </span>
+                      <span className="text-[10px] font-black px-1.5 py-0.2 rounded-md bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200">
+                        {berlakuPct}%
+                      </span>
+                    </div>
+                    <div className="mt-2 flex items-baseline gap-1.5">
+                      <span className="text-2xl sm:text-3xl font-black text-emerald-700 dark:text-emerald-300 tabular-nums">
+                        {berlakuItem.value}
+                      </span>
+                      <span className="text-xs font-semibold text-emerald-600/80">Status</span>
+                    </div>
+                    <p className="text-[11px] text-emerald-700/80 dark:text-emerald-400/80 mt-0.5">
+                      Masa aktif aman (&gt; 3 bulan ke depan)
+                    </p>
                   </div>
-                  <p className="text-[11px] text-emerald-600/80 dark:text-emerald-400/80 mt-1">Masa aktif aman &gt; 1 tahun</p>
+                  <div className="mt-3 pt-2 border-t border-emerald-200/60 dark:border-emerald-900/40 text-[11px] font-bold text-emerald-700 dark:text-emerald-400 flex items-center gap-1">
+                    ✓ Kondisi Bebas Risiko
+                  </div>
                 </div>
 
-                <div className="p-3.5 rounded-2xl border border-amber-200/80 dark:border-amber-900/40 bg-amber-50/50 dark:bg-amber-950/20 flex flex-col justify-between">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
-                      <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
-                      Warning (Segera Expired)
-                    </span>
-                    <span className="text-sm font-black text-amber-700 dark:text-amber-300 tabular-nums">{warningItem.value}</span>
+                {/* 2. Warning Segera Expired */}
+                <div className="p-3.5 rounded-xl border border-amber-300/80 dark:border-amber-900/50 bg-amber-50/35 dark:bg-amber-950/20 flex flex-col justify-between shadow-2xs">
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-black uppercase tracking-wider text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
+                        <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+                        Segera Expired
+                      </span>
+                      <span className="text-[10px] font-black px-1.5 py-0.2 rounded-md bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200">
+                        {warningPct}%
+                      </span>
+                    </div>
+                    <div className="mt-2 flex items-baseline gap-1.5">
+                      <span className="text-2xl sm:text-3xl font-black text-amber-700 dark:text-amber-300 tabular-nums">
+                        {warningItem.value}
+                      </span>
+                      <span className="text-xs font-semibold text-amber-600/80">Personel</span>
+                    </div>
+                    <p className="text-[11px] text-amber-700/80 dark:text-amber-400/80 mt-0.5">
+                      Kedaluwarsa dalam 1–3 bulan lagi
+                    </p>
                   </div>
-                  <p className="text-[11px] text-amber-600/80 dark:text-amber-400/80 mt-1">Habis dalam 1–3 bulan lagi</p>
+                  <div className="mt-3 pt-2 border-t border-amber-200/60 dark:border-amber-900/40">
+                    <button
+                      type="button"
+                      onClick={() => onOpenDatabaseWithFilter('sap')}
+                      className="text-[11px] font-bold text-amber-800 dark:text-amber-300 hover:underline flex items-center gap-1 cursor-pointer"
+                    >
+                      Tinjau {warningItem.value} Personel →
+                    </button>
+                  </div>
                 </div>
 
-                <div className="p-3.5 rounded-2xl border border-rose-200/80 dark:border-rose-900/40 bg-rose-50/50 dark:bg-rose-950/20 flex flex-col justify-between">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-rose-800 dark:text-rose-300 flex items-center gap-1.5">
-                      <span className="w-2.5 h-2.5 rounded-full bg-rose-500" />
-                      Expired / Perlu Diperpanjang
-                    </span>
-                    <span className="text-sm font-black text-rose-700 dark:text-rose-300 tabular-nums">{expiredItem.value}</span>
+                {/* 3. Expired / Kritis */}
+                <div className="p-3.5 rounded-xl border border-rose-300/80 dark:border-rose-900/50 bg-rose-50/35 dark:bg-rose-950/20 flex flex-col justify-between shadow-2xs">
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-black uppercase tracking-wider text-rose-800 dark:text-rose-300 flex items-center gap-1.5">
+                        <AlertCircle className="w-3.5 h-3.5 text-rose-600" />
+                        Expired / Kritis
+                      </span>
+                      <span className="text-[10px] font-black px-1.5 py-0.2 rounded-md bg-rose-100 text-rose-800 dark:bg-rose-900 dark:text-rose-200">
+                        {expiredPct}%
+                      </span>
+                    </div>
+                    <div className="mt-2 flex items-baseline gap-1.5">
+                      <span className="text-2xl sm:text-3xl font-black text-rose-700 dark:text-rose-300 tabular-nums">
+                        {expiredItem.value}
+                      </span>
+                      <span className="text-xs font-semibold text-rose-600/80">Personel</span>
+                    </div>
+                    <p className="text-[11px] text-rose-700/80 dark:text-rose-400/80 mt-0.5">
+                      Sudah melewati batas masa berlaku
+                    </p>
                   </div>
-                  <p className="text-[11px] text-rose-600/80 dark:text-rose-400/80 mt-1">Sudah lewat batas waktu</p>
+                  <div className="mt-3 pt-2 border-t border-rose-200/60 dark:border-rose-900/40">
+                    <button
+                      type="button"
+                      onClick={() => onOpenDatabaseWithFilter('sap')}
+                      className="text-[11px] font-bold text-rose-800 dark:text-rose-300 hover:underline flex items-center gap-1 cursor-pointer"
+                    >
+                      Perbarui {expiredItem.value} Personel Segera →
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
           )}
 
+          {/* Baris 3: Matriks Kepatuhan per Modul (Desain Sederhana & Efisien - Fokus Tindakan) */}
+          {(statsSubTab === 'all' || statsSubTab === 'sap_modules') && (
+            <div className="rounded-[22px] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-4.5 sm:p-5 shadow-xs space-y-4">
+              {/* Header Matriks: Ringkas & Elegan */}
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-3">
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h4 className="text-sm sm:text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                      <Grid3X3 className="w-4 h-4 text-teal-600" />
+                      {moduleProgramFilter === 'sap'
+                        ? 'Matriks Kepatuhan Modul SAP (Wajib)'
+                        : moduleProgramFilter === 'k3'
+                        ? 'Matriks Kepatuhan Modul K3 Operasional'
+                        : 'Matriks Kepatuhan Training Internal (SAP & K3)'}
+                    </h4>
+                    {urgentCount > 0 && (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-300 flex items-center gap-1 border border-amber-300/80 dark:border-amber-800">
+                        <AlertTriangle className="w-3 h-3 text-amber-600" />
+                        {urgentCount} Modul Perlu Tindakan
+                      </span>
+                    )}
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                      ✓ {perfectCount} Modul 100% Patuh
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Modul yang memerlukan pembaruan atau refreshment diprioritaskan agar efisien ditinjau.
+                  </p>
+                </div>
+
+                {/* Filter & View Mode Controls */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  {/* Filter Kategori: Semua vs SAP vs K3 */}
+                  <div className="inline-flex items-center p-1 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200/60 dark:border-slate-700">
+                    {[
+                      { id: 'all' as const, label: 'Semua (10)' },
+                      { id: 'sap' as const, label: 'SAP (6)' },
+                      { id: 'k3' as const, label: 'K3 (4)' },
+                    ].map(f => (
+                      <button
+                        key={f.id}
+                        type="button"
+                        onClick={() => setModuleProgramFilter(f.id)}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                          moduleProgramFilter === f.id
+                            ? 'bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-300 shadow-xs'
+                            : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                        }`}
+                      >
+                        {f.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Mode Tampilan: Kartu Tindakan vs Tabel Rapi vs Bar Chart */}
+                  <div className="inline-flex items-center p-1 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200/60 dark:border-slate-700">
+                    {[
+                      { id: 'grid' as const, label: 'Fokus Tindakan' },
+                      { id: 'table' as const, label: 'Tabel Rapi' },
+                      { id: 'chart' as const, label: 'Grafik' },
+                    ].map(v => (
+                      <button
+                        key={v.id}
+                        type="button"
+                        onClick={() => setModuleViewMode(v.id)}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                          moduleViewMode === v.id
+                            ? 'bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-300 shadow-xs'
+                            : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                        }`}
+                      >
+                        {v.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* TAMPILAN 1: FOKUS TINDAKAN (SIMPLE & EFISIEN) */}
+              {moduleViewMode === 'grid' && (
+                <div className="space-y-4">
+                  {/* BAGIAN A: Modul yang Perlu Tindakan (Ditampilkan sebagai Kartu Prioritas) */}
+                  {urgentCount > 0 ? (
+                    <div>
+                      <div className="flex items-center justify-between mb-2.5">
+                        <span className="text-xs font-black uppercase tracking-wider text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                          Modul Memerlukan Perhatian &amp; Tindakan ({urgentCount} Modul)
+                        </span>
+                        <span className="text-[11px] text-slate-400 font-medium">Prioritas tindak lanjut peserta</span>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                        {sortedCoverageData
+                          .filter((c: any) => c.pct < 100 || c.warning > 0 || c.expired > 0 || (c.pending || 0) > 0)
+                          .map((c: any) => (
+                            <div
+                              key={`urgent-${c.program}-${c.key}`}
+                              className="p-3.5 rounded-xl border border-amber-300 dark:border-amber-700/80 bg-amber-50/25 dark:bg-amber-950/20 shadow-xs ring-1 ring-amber-300/30 flex flex-col justify-between"
+                            >
+                              <div>
+                                <div className="flex items-start justify-between gap-1.5">
+                                  <div className="flex items-center gap-1.5 min-w-0">
+                                    <span className={`text-[9px] font-black px-1.5 py-0.5 rounded uppercase shrink-0 ${
+                                      c.program === 'SAP' ? 'bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-300' : 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300'
+                                    }`}>
+                                      {c.program}
+                                    </span>
+                                    <span className="text-xs font-black text-slate-900 dark:text-slate-100 truncate">
+                                      {c.label}
+                                    </span>
+                                  </div>
+                                  <span className="px-1.5 py-0.5 rounded-md text-[10px] font-black bg-amber-100 text-amber-900 dark:bg-amber-900 dark:text-amber-200 shrink-0">
+                                    {c.pct}%
+                                  </span>
+                                </div>
+                                <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 line-clamp-1" title={c.desc}>
+                                  {c.desc}
+                                </p>
+
+                                {/* Mini Progress & Stats */}
+                                <div className="mt-2.5 p-2 rounded-lg bg-white/80 dark:bg-slate-800/80 border border-amber-200/60 dark:border-amber-900/40 space-y-1">
+                                  <div className="flex items-center justify-between text-[11px] font-bold">
+                                    <span className="text-slate-500">Cakupan:</span>
+                                    <span className="text-slate-900 dark:text-slate-100">
+                                      {c.done} / {c.target} ({c.pct}%)
+                                    </span>
+                                  </div>
+                                  <div className="h-1.5 w-full rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden flex">
+                                    <div
+                                      className={`h-full rounded-full ${c.pct >= 70 ? 'bg-amber-500' : 'bg-rose-500'}`}
+                                      style={{ width: `${c.pct}%` }}
+                                    />
+                                  </div>
+                                </div>
+
+                                {/* Status pills */}
+                                <div className="mt-2 flex items-center gap-1 text-[9px] font-bold flex-wrap">
+                                  {c.warning > 0 && <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">⚠️ {c.warning} warning</span>}
+                                  {c.expired > 0 && <span className="px-1.5 py-0.5 rounded bg-rose-100 text-rose-800">❌ {c.expired} expired</span>}
+                                  {c.target - c.done > 0 && <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">{c.target - c.done} belum</span>}
+                                </div>
+                              </div>
+
+                              <div className="mt-3 pt-2 border-t border-amber-200/60 dark:border-amber-900/40 flex items-center justify-end">
+                                <button
+                                  type="button"
+                                  onClick={() => onOpenDatabaseWithFilter(c.program === 'SAP' ? 'sap' : 'k3', c.key)}
+                                  className="text-xs font-bold text-amber-800 dark:text-amber-300 hover:underline cursor-pointer"
+                                >
+                                  Tindak Lanjut →
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {/* BAGIAN B: Modul 100% Patuh (Disajikan Sangat Ringkas & Efisien Tanpa Menghabiskan Layar) */}
+                  {perfectCount > 0 && (
+                    <div className="p-3.5 rounded-xl border border-emerald-200/80 dark:border-emerald-900/40 bg-emerald-50/20 dark:bg-emerald-950/15">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
+                        <div className="flex items-center gap-2">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                          <span className="text-xs font-black uppercase tracking-wider text-emerald-800 dark:text-emerald-300">
+                            Modul 100% Tuntas &amp; Patuh ({perfectCount} Modul)
+                          </span>
+                        </div>
+                        <span className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-400">
+                          ✓ Seluruh personel telah memenuhi standar
+                        </span>
+                      </div>
+
+                      {/* Pill Bar Modul Selesai (1 baris rapi & hemat ruang) */}
+                      <div className="flex flex-wrap items-center gap-2 pt-1">
+                        {sortedCoverageData
+                          .filter((c: any) => c.pct === 100 && c.warning === 0 && c.expired === 0 && (c.pending || 0) === 0)
+                          .map((c: any) => (
+                            <button
+                              key={`perfect-${c.program}-${c.key}`}
+                              type="button"
+                              onClick={() => onOpenDatabaseWithFilter(c.program === 'SAP' ? 'sap' : 'k3', c.key)}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white dark:bg-slate-800 border border-emerald-200 dark:border-emerald-800/80 hover:border-emerald-400 text-xs transition-all cursor-pointer shadow-2xs group"
+                            >
+                              <span className={`text-[9px] font-black px-1 py-0.2 rounded ${
+                                c.program === 'SAP' ? 'bg-teal-50 text-teal-700' : 'bg-blue-50 text-blue-700'
+                              }`}>
+                                {c.program}
+                              </span>
+                              <span className="font-bold text-slate-800 dark:text-slate-200 group-hover:text-emerald-700">
+                                {c.label}
+                              </span>
+                              <span className="text-[10px] font-black text-emerald-600 dark:text-emerald-400">
+                                ✓ {c.done}/{c.target}
+                              </span>
+                            </button>
+                          ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* TAMPILAN 2: TABEL RAPI (SANGAT EFISIEN UNTUK AUDIT & PENINJAUAN) */}
+              {moduleViewMode === 'table' && (
+                <div className="overflow-x-auto rounded-xl border border-slate-200/80 dark:border-slate-800">
+                  <table className="w-full text-xs text-left">
+                    <thead className="bg-slate-50 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 font-bold uppercase tracking-wider">
+                      <tr>
+                        <th className="px-3.5 py-2.5">Program</th>
+                        <th className="px-3.5 py-2.5">Modul Training</th>
+                        <th className="px-3 py-2.5 text-center">Target Wajib</th>
+                        <th className="px-3 py-2.5 text-center">Lengkap (PASS)</th>
+                        <th className="px-3 py-2.5 text-center">Warning</th>
+                        <th className="px-3 py-2.5 text-center">Expired / Belum</th>
+                        <th className="px-4 py-2.5">Kepatuhan</th>
+                        <th className="px-3.5 py-2.5 text-center">Status</th>
+                        <th className="px-3 py-2.5 text-center">Aksi</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                      {sortedCoverageData.map((c: any) => {
+                        const isUrgent = c.pct < 100 || c.warning > 0 || c.expired > 0;
+                        return (
+                          <tr key={`table-${c.program}-${c.key}`} className={`hover:bg-slate-50/60 dark:hover:bg-slate-800/40 ${isUrgent ? 'bg-amber-50/15 dark:bg-amber-950/10' : ''}`}>
+                            <td className="px-3.5 py-2.5 font-bold">
+                              <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${
+                                c.program === 'SAP' ? 'bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-300' : 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300'
+                              }`}>
+                                {c.program}
+                              </span>
+                            </td>
+                            <td className="px-3.5 py-2.5 font-bold text-slate-900 dark:text-slate-100">
+                              <div className="flex flex-col">
+                                <span className="font-bold">{c.label} ({c.key.toUpperCase()})</span>
+                                <span className="text-[10px] text-slate-400 font-normal truncate max-w-xs">{c.desc}</span>
+                              </div>
+                            </td>
+                            <td className="px-3 py-2.5 text-center font-semibold">{c.target}</td>
+                            <td className="px-3 py-2.5 text-center font-bold text-emerald-600">{c.done}</td>
+                            <td className="px-3 py-2.5 text-center font-bold text-amber-600">{c.warning}</td>
+                            <td className="px-3 py-2.5 text-center font-bold text-rose-600">{c.expired + (c.target - c.done)}</td>
+                            <td className="px-4 py-2.5">
+                              <div className="flex items-center gap-2">
+                                <div className="w-20 h-2 rounded-full bg-slate-100 dark:bg-slate-700 overflow-hidden">
+                                  <div
+                                    className={`h-full rounded-full ${c.pct >= 90 ? 'bg-emerald-500' : c.pct >= 70 ? 'bg-amber-500' : 'bg-rose-500'}`}
+                                    style={{ width: `${c.pct}%` }}
+                                  />
+                                </div>
+                                <span className="font-black text-[11px] tabular-nums">{c.pct}%</span>
+                              </div>
+                            </td>
+                            <td className="px-3.5 py-2.5 text-center">
+                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                                c.pct === 100
+                                  ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                                  : 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
+                              }`}>
+                                {c.pct === 100 ? '✓ 100% Patuh' : 'Perlu Tindakan'}
+                              </span>
+                            </td>
+                            <td className="px-3 py-2.5 text-center">
+                              <button
+                                type="button"
+                                onClick={() => onOpenDatabaseWithFilter(c.program === 'SAP' ? 'sap' : 'k3', c.key)}
+                                className={`text-xs font-bold hover:underline cursor-pointer ${isUrgent ? 'text-amber-800 dark:text-amber-300 font-black' : 'text-teal-600'}`}
+                              >
+                                {isUrgent ? 'Tindak Lanjut →' : 'Lihat'}
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {/* TAMPILAN 3: GRAFIK BATANG */}
+              {moduleViewMode === 'chart' && (
+                <div className="h-[280px] w-full p-2">
+                  <Bar
+                    data={moduleComplianceChartData}
+                    options={{
+                      responsive: true,
+                      maintainAspectRatio: false,
+                      scales: {
+                        x: { grid: { display: false } },
+                        y: { min: 0, max: 100, ticks: { callback: v => `${v}%` } },
+                      },
+                      plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                          callbacks: {
+                            label: ctx => {
+                              const c = sortedCoverageData[ctx.dataIndex];
+                              return ` Kepatuhan: ${c.pct}% (${c.done} / ${c.target} Orang)`;
+                            },
+                          },
+                        },
+                      },
+                    }}
+                  />
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Bar Chart Modul (Tab 'barchart') */}
           {(statsSubTab === 'barchart') && (
-            <div className="rounded-[24px] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-5 sm:p-6 shadow-xs space-y-4">
+            <div className="rounded-[22px] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-5 sm:p-6 shadow-xs space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-3">
                 <div>
                   <h4 className="text-sm sm:text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
@@ -1640,7 +2153,6 @@ function TrainingStatisticsView({
                 </div>
               </div>
 
-              {/* Visualisasi Bar Chart Sesuai Mode */}
               {barChartMode === 'compliance' && (
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
@@ -1677,8 +2189,8 @@ function TrainingStatisticsView({
                           tooltip: {
                             callbacks: {
                               label: ctx => {
-                                const c = coverageData[ctx.dataIndex];
-                                return ` Kepatuhan: ${c.pct}% (${c.done} dari ${c.target} peserta wajib)`;
+                                const c = sortedCoverageData[ctx.dataIndex];
+                                return ` Kepatuhan: ${ctx.parsed.x}% (${c.done} / ${c.target} Orang)`;
                               },
                             },
                           },
@@ -1693,7 +2205,7 @@ function TrainingStatisticsView({
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                      Komposisi Status Masa Berlaku per Modul (Jumlah Orang)
+                      Rincian Jumlah Personel Berdasarkan Masa Aktif
                     </span>
                   </div>
                   <div className="h-[340px] w-full p-2">
@@ -1702,13 +2214,20 @@ function TrainingStatisticsView({
                       options={{
                         responsive: true,
                         maintainAspectRatio: false,
-                        indexAxis: 'y',
                         scales: {
-                          x: { stacked: true, grid: { color: 'rgba(0,0,0,0.05)' } },
-                          y: { stacked: true, grid: { display: false } },
+                          x: { stacked: true, ticks: { font: { size: 11, weight: 'bold' } }, grid: { display: false } },
+                          y: { stacked: true, ticks: { precision: 0 }, grid: { color: 'rgba(0,0,0,0.05)' } },
                         },
                         plugins: {
                           legend: { position: 'top', labels: { boxWidth: 12, font: { weight: 'bold', size: 11 } } },
+                          tooltip: {
+                            callbacks: {
+                              afterBody: ctx => {
+                                const c = sortedCoverageData[ctx[0].dataIndex];
+                                return `Target Peserta: ${c.target} Orang`;
+                              },
+                            },
+                          },
                         },
                       }}
                     />
@@ -1720,7 +2239,7 @@ function TrainingStatisticsView({
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                      Target Wajib vs Realisasi Personel Selesai Training
+                      Realisasi Peserta Lulus vs Target Wajib
                     </span>
                   </div>
                   <div className="h-[340px] w-full p-2">
@@ -1730,7 +2249,7 @@ function TrainingStatisticsView({
                         responsive: true,
                         maintainAspectRatio: false,
                         scales: {
-                          x: { grid: { display: false }, ticks: { font: { size: 11, weight: 'bold' } } },
+                          x: { ticks: { font: { size: 11, weight: 'bold' } }, grid: { display: false } },
                           y: { grid: { color: 'rgba(0,0,0,0.05)' } },
                         },
                         plugins: {
@@ -1744,213 +2263,11 @@ function TrainingStatisticsView({
             </div>
           )}
 
-          {/* Matriks Kepatuhan per Modul Training SAP (Tab 'sap_modules' atau 'all') */}
-          {(statsSubTab === 'all' || statsSubTab === 'sap_modules') && (
-            <div className="rounded-[24px] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-5 sm:p-6 shadow-xs space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-3">
-                <div>
-                  <h4 className="text-sm sm:text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                    <Grid3X3 className="w-4 h-4 text-teal-600" />
-                    Matriks Kepatuhan per Modul Training SAP
-                  </h4>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    Kartu status modul terpadu. Memisahkan modul yang 100% tuntas vs modul yang membutuhkan tindakan perpanjangan.
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <div className="flex items-center gap-1 p-1 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200/60 dark:border-slate-700">
-                    {[
-                      { id: 'grid' as const, label: 'Kartu' },
-                      { id: 'chart' as const, label: 'Bar Chart' },
-                      { id: 'table' as const, label: 'Tabel' },
-                    ].map(v => (
-                      <button
-                        key={v.id}
-                        type="button"
-                        onClick={() => setModuleViewMode(v.id)}
-                        className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                          moduleViewMode === v.id
-                            ? 'bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-300 shadow-xs'
-                            : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-                        }`}
-                      >
-                        {v.label}
-                      </button>
-                    ))}
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => onOpenDatabaseWithFilter('sap')}
-                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl border border-teal-200 dark:border-teal-800 text-teal-700 dark:text-teal-300 text-xs font-bold hover:bg-teal-50 dark:hover:bg-teal-950/60 cursor-pointer transition-colors"
-                  >
-                    Buka Database SAP →
-                  </button>
-                </div>
-              </div>
-
-              {moduleViewMode === 'grid' && (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
-                  {coverageData.map((c: any) => {
-                    const isPerfect = c.pct === 100;
-                    return (
-                      <div
-                        key={c.key}
-                        className={`p-4 rounded-2xl border transition-all flex flex-col justify-between ${
-                          isPerfect
-                            ? 'border-emerald-200/80 bg-emerald-50/20 dark:bg-emerald-950/10 hover:border-emerald-300'
-                            : c.pct >= 70
-                            ? 'border-amber-200/80 bg-amber-50/20 dark:bg-amber-950/10 hover:border-amber-300'
-                            : 'border-rose-200/80 bg-rose-50/20 dark:bg-rose-950/10 hover:border-rose-300'
-                        }`}
-                      >
-                        <div>
-                          <div className="flex items-start justify-between gap-2">
-                            <div>
-                              <span className="text-xs font-black uppercase tracking-wider text-slate-800 dark:text-slate-100">
-                                {c.key.toUpperCase()}
-                              </span>
-                              <h5 className="text-xs font-semibold text-slate-600 dark:text-slate-400 mt-0.5 line-clamp-1">
-                                {c.desc || c.label}
-                              </h5>
-                            </div>
-                            <span
-                              className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
-                                isPerfect
-                                  ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
-                                  : c.pct >= 70
-                                  ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
-                                  : 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300'
-                              }`}
-                            >
-                              {isPerfect ? '✓ 100% Lengkap' : `⚠️ ${c.pct}% Perlu Tindakan`}
-                            </span>
-                          </div>
-
-                          <div className="mt-3">
-                            <div className="flex items-center justify-between text-xs font-bold mb-1">
-                              <span className="text-slate-500">Cakupan Peserta:</span>
-                              <span className="text-slate-800 dark:text-slate-100">
-                                {c.done} / {c.target} Orang ({c.pct}%)
-                              </span>
-                            </div>
-                            <div className="h-2 w-full rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
-                              <div
-                                className={`h-full rounded-full transition-all ${
-                                  isPerfect ? 'bg-emerald-500' : c.pct >= 70 ? 'bg-amber-500' : 'bg-rose-500'
-                                }`}
-                                style={{ width: `${c.pct}%` }}
-                              />
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between text-[11px]">
-                          {isPerfect ? (
-                            <span className="text-emerald-700 font-bold flex items-center gap-1">
-                              <CheckCircle2 className="w-3.5 h-3.5" /> Seluruh personel patuh
-                            </span>
-                          ) : (
-                            <div className="flex items-center gap-2 text-[10px] font-semibold text-slate-600 dark:text-slate-400">
-                              {c.warning > 0 && <span className="text-amber-700">⚠️ {c.warning} warning</span>}
-                              {c.expired > 0 && <span className="text-rose-700">❌ {c.expired} expired</span>}
-                              {c.target - c.done > 0 && <span>{c.target - c.done} belum ikut</span>}
-                            </div>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => onOpenDatabaseWithFilter('sap', c.key)}
-                            className="text-teal-600 font-bold hover:underline text-xs cursor-pointer"
-                          >
-                            Filter Modul →
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-
-              {moduleViewMode === 'chart' && (
-                <div className="h-[280px] w-full p-2">
-                  <Bar
-                    data={moduleComplianceChartData}
-                    options={{
-                      responsive: true,
-                      maintainAspectRatio: false,
-                      scales: {
-                        x: { grid: { display: false } },
-                        y: { min: 0, max: 100, ticks: { callback: v => `${v}%` } },
-                      },
-                      plugins: {
-                        legend: { display: false },
-                        tooltip: {
-                          callbacks: {
-                            label: ctx => {
-                              const c = coverageData[ctx.dataIndex];
-                              return ` Kepatuhan: ${c.pct}% (${c.done} / ${c.target} Orang)`;
-                            },
-                          },
-                        },
-                      },
-                    }}
-                  />
-                </div>
-              )}
-
-              {moduleViewMode === 'table' && (
-                <div className="overflow-x-auto rounded-xl border border-slate-100 dark:border-slate-800">
-                  <table className="w-full text-xs text-left">
-                    <thead className="bg-slate-50 dark:bg-slate-800 text-slate-700 font-bold uppercase tracking-wider">
-                      <tr>
-                        <th className="px-4 py-2.5">Modul</th>
-                        <th className="px-4 py-2.5 text-center">Wajib</th>
-                        <th className="px-4 py-2.5 text-center">Selesai</th>
-                        <th className="px-4 py-2.5 text-center">Warning</th>
-                        <th className="px-4 py-2.5 text-center">Expired</th>
-                        <th className="px-4 py-2.5 text-center">Kepatuhan</th>
-                        <th className="px-4 py-2.5 text-center">Aksi</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                      {coverageData.map((c: any) => (
-                        <tr key={c.key} className="hover:bg-slate-50/50">
-                          <td className="px-4 py-2.5 font-bold text-slate-900 dark:text-slate-100">{c.label} ({c.key.toUpperCase()})</td>
-                          <td className="px-4 py-2.5 text-center font-semibold">{c.target}</td>
-                          <td className="px-4 py-2.5 text-center font-bold text-emerald-600">{c.done}</td>
-                          <td className="px-4 py-2.5 text-center font-bold text-amber-600">{c.warning}</td>
-                          <td className="px-4 py-2.5 text-center font-bold text-rose-600">{c.expired}</td>
-                          <td className="px-4 py-2.5 text-center">
-                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
-                              c.pct >= 90 ? 'bg-emerald-100 text-emerald-800' : c.pct >= 70 ? 'bg-amber-100 text-amber-800' : 'bg-rose-100 text-rose-800'
-                            }`}>
-                              {c.pct}%
-                            </span>
-                          </td>
-                          <td className="px-4 py-2.5 text-center">
-                            <button
-                              type="button"
-                              onClick={() => onOpenDatabaseWithFilter('sap', c.key)}
-                              className="text-teal-600 hover:underline font-bold"
-                            >
-                              Lihat
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          )}
-
           {/* Analisis Bagian & GOL (Tab 'dept_analysis') */}
           {(statsSubTab === 'dept_analysis') && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               {/* Box 1: Kepatuhan Bagian Kerja */}
-              <div className="rounded-[24px] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs space-y-3">
+              <div className="rounded-[22px] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs space-y-3">
                 <div>
                   <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
                     <Building2 className="w-4 h-4 text-teal-600" />
@@ -1985,7 +2302,7 @@ function TrainingStatisticsView({
               </div>
 
               {/* Box 2: Kepatuhan Golongan (GOL) */}
-              <div className="rounded-[24px] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs space-y-3">
+              <div className="rounded-[22px] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs space-y-3">
                 <div>
                   <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
                     <Users className="w-4 h-4 text-blue-600" />
@@ -2030,94 +2347,134 @@ function TrainingStatisticsView({
         <div className="space-y-4">
           {/* Baris 1: 3 Kartu Ringkasan Training External */}
           {(statsSubTab === 'ext_all') && (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 sm:gap-4">
               {/* Card 1: POP */}
-              <div className="rounded-[24px] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs flex flex-col justify-between">
+              <div className="rounded-[22px] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-4.5 sm:p-5 shadow-xs flex flex-col justify-between transition-all hover:border-teal-300">
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-black uppercase tracking-wider text-teal-600 flex items-center gap-1.5">
-                      <Award className="w-4 h-4" />
+                    <span className="text-[11px] font-black uppercase tracking-wider text-teal-600 flex items-center gap-1.5">
+                      <Award className="w-3.5 h-3.5" />
                       SERTIFIKASI POP (PENGAWAS OPERASIONAL PERTAMA)
                     </span>
-                    <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-teal-50 text-teal-700 dark:bg-teal-950 dark:text-teal-300">
+                    <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-teal-50 text-teal-700">
                       Operasional
                     </span>
                   </div>
-                  <div className="flex items-baseline gap-2 mt-2">
-                    <span className="text-4xl font-black text-slate-900 dark:text-slate-100 tabular-nums">
-                      {dashboard.pop?.pct ?? 0}%
-                    </span>
-                    <span className="text-xs font-semibold text-slate-500">Realisasi Kandidat</span>
-                  </div>
-                  <div className="mt-3 h-2.5 w-full rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
-                    <div className="h-full rounded-full bg-teal-600 transition-all duration-500" style={{ width: `${dashboard.pop?.pct ?? 0}%` }} />
+
+                  <div className="flex items-center justify-between mt-1">
+                    <div>
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-3xl sm:text-4xl font-black text-slate-900 dark:text-slate-100 tabular-nums">
+                          {dashboard.pop?.pct ?? 0}%
+                        </span>
+                        <span className="text-[11px] font-bold px-1.5 py-0.5 rounded-md bg-teal-50 text-teal-700">
+                          Realisasi
+                        </span>
+                      </div>
+                      <p className="text-xs font-medium text-slate-500 mt-0.5">Kandidat POP terlaksana</p>
+                    </div>
+
+                    <ModernRadialRing value={dashboard.pop?.pct ?? 0} color="#0d9488" size={62} strokeWidth={6}>
+                      <Award className="w-4 h-4 text-teal-600" />
+                    </ModernRadialRing>
                   </div>
                 </div>
-                <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs">
-                  <span className="text-slate-500 font-medium">Status POP:</span>
-                  <span className="font-bold text-slate-900 dark:text-slate-100">
-                    {dashboard.pop?.stages?.[0]?.count ?? 0} dari {dashboard.pop?.total ?? 0} Kandidat Terlaksana
-                  </span>
+
+                <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 space-y-1.5">
+                  <div className="h-1.5 w-full rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden flex">
+                    <div style={{ width: `${dashboard.pop?.pct ?? 0}%` }} className="h-full bg-teal-600 rounded-full" />
+                  </div>
+                  <div className="flex items-center justify-between text-[11px] font-bold">
+                    <span className="text-teal-700">✓ {dashboard.pop?.stages?.[0]?.count ?? 0} Terlaksana</span>
+                    <span className="text-slate-400">Total {dashboard.pop?.total ?? 0} Kandidat</span>
+                  </div>
                 </div>
               </div>
 
               {/* Card 2: POM */}
-              <div className="rounded-[24px] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs flex flex-col justify-between">
+              <div className="rounded-[22px] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-4.5 sm:p-5 shadow-xs flex flex-col justify-between transition-all hover:border-emerald-300">
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-black uppercase tracking-wider text-emerald-600 flex items-center gap-1.5">
-                      <CheckCircle2 className="w-4 h-4" />
+                    <span className="text-[11px] font-black uppercase tracking-wider text-emerald-600 flex items-center gap-1.5">
+                      <CheckCircle2 className="w-3.5 h-3.5" />
                       SERTIFIKASI POM (PENGAWAS OPERASIONAL MADYA)
                     </span>
-                    <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
+                    <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">
                       Madya
                     </span>
                   </div>
-                  <div className="flex items-baseline gap-2 mt-2">
-                    <span className="text-4xl font-black text-slate-900 dark:text-slate-100 tabular-nums">
-                      {pomStats?.pctPassed ?? 0}%
-                    </span>
-                    <span className="text-xs font-semibold text-slate-500">Kelulusan POM</span>
-                  </div>
-                  <div className="mt-3 h-2.5 w-full rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
-                    <div className="h-full rounded-full bg-emerald-600 transition-all duration-500" style={{ width: `${pomStats?.pctPassed ?? 0}%` }} />
+
+                  <div className="flex items-center justify-between mt-1">
+                    <div>
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-3xl sm:text-4xl font-black text-slate-900 dark:text-slate-100 tabular-nums">
+                          {pomStats?.pctPassed ?? 0}%
+                        </span>
+                        <span className="text-[11px] font-bold px-1.5 py-0.5 rounded-md bg-emerald-50 text-emerald-700">
+                          Kelulusan
+                        </span>
+                      </div>
+                      <p className="text-xs font-medium text-slate-500 mt-0.5">Kelulusan sertifikasi POM</p>
+                    </div>
+
+                    <ModernRadialRing value={pomStats?.pctPassed ?? 0} color="#10b981" size={62} strokeWidth={6}>
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                    </ModernRadialRing>
                   </div>
                 </div>
-                <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs">
-                  <span className="text-slate-500 font-medium">Realisasi POM:</span>
-                  <span className="font-bold text-emerald-700 dark:text-emerald-400">
-                    {pomStats?.passed ?? 0} Lulus dari {pomStats?.total ?? 0} Terdaftar
-                  </span>
+
+                <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 space-y-1.5">
+                  <div className="h-1.5 w-full rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden flex">
+                    <div style={{ width: `${pomStats?.pctPassed ?? 0}%` }} className="h-full bg-emerald-500 rounded-full" />
+                  </div>
+                  <div className="flex items-center justify-between text-[11px] font-bold">
+                    <span className="text-emerald-700">✓ {pomStats?.passed ?? 0} Lulus</span>
+                    <span className="text-slate-400">Total {pomStats?.total ?? 0} Terdaftar</span>
+                  </div>
                 </div>
               </div>
 
               {/* Card 3: Sertifikasi Eksternal / K3 Lainnya */}
-              <div className="rounded-[24px] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs flex flex-col justify-between">
+              <div className="rounded-[22px] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-4.5 sm:p-5 shadow-xs flex flex-col justify-between transition-all hover:border-amber-300">
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-black uppercase tracking-wider text-amber-600 flex items-center gap-1.5">
-                      <ShieldCheck className="w-4 h-4" />
+                    <span className="text-[11px] font-black uppercase tracking-wider text-amber-600 flex items-center gap-1.5">
+                      <ShieldCheck className="w-3.5 h-3.5" />
                       SERTIFIKASI PROFESI & K3 EKSTERNAL
                     </span>
-                    <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300">
+                    <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-50 text-amber-700">
                       Eksternal
                     </span>
                   </div>
-                  <div className="flex items-baseline gap-2 mt-2">
-                    <span className="text-4xl font-black text-slate-900 dark:text-slate-100 tabular-nums">
-                      {combinedTrainingCertData.grandTotal}
-                    </span>
-                    <span className="text-xs font-semibold text-slate-500">Sertifikat Terdata</span>
-                  </div>
-                  <div className="mt-3 h-2.5 w-full rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
-                    <div className="h-full rounded-full bg-amber-500 transition-all duration-500" style={{ width: `${extActivePct}%` }} />
+
+                  <div className="flex items-center justify-between mt-1">
+                    <div>
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-3xl sm:text-4xl font-black text-slate-900 dark:text-slate-100 tabular-nums">
+                          {combinedTrainingCertData.grandTotal}
+                        </span>
+                        <span className="text-[11px] font-bold px-1.5 py-0.5 rounded-md bg-amber-50 text-amber-700">
+                          Sertifikat
+                        </span>
+                      </div>
+                      <p className="text-xs font-medium text-slate-500 mt-0.5">Sertifikasi kompetensi profesi</p>
+                    </div>
+
+                    <ModernRadialRing value={extActivePct} color="#d97706" size={62} strokeWidth={6}>
+                      <ShieldCheck className="w-4 h-4 text-amber-600" />
+                    </ModernRadialRing>
                   </div>
                 </div>
-                <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs">
-                  <span className="text-slate-500 font-medium">Masa Berlaku:</span>
-                  <span className="font-bold text-slate-900 dark:text-slate-100">
-                    <span className="text-emerald-600">{extActiveCount} Aktif</span> • <span className="text-amber-600">{extSoonCount} Warning</span> • <span className="text-rose-600">{extExpiredCount} Expired</span>
-                  </span>
+
+                <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 space-y-1.5">
+                  <div className="h-1.5 w-full rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden flex">
+                    <div style={{ width: `${extActivePct}%` }} className="h-full bg-amber-500 rounded-full" />
+                  </div>
+                  <div className="flex items-center justify-between text-[11px] font-bold">
+                    <span className="text-emerald-600">{extActiveCount} Aktif</span>
+                    <span className="text-amber-600">{extSoonCount} Warning</span>
+                    <span className="text-rose-600">{extExpiredCount} Expired</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -2125,7 +2482,7 @@ function TrainingStatisticsView({
 
           {/* Baris 2: Linear Health Bar Status Masa Berlaku Sertifikasi Eksternal */}
           {(statsSubTab === 'ext_all') && (
-            <div className="rounded-[24px] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-5 sm:p-6 shadow-xs space-y-4">
+            <div className="rounded-[22px] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
                 <div>
                   <h4 className="text-sm sm:text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
@@ -2141,13 +2498,12 @@ function TrainingStatisticsView({
                 </span>
               </div>
 
-              {/* Progress bar */}
               <div className="space-y-2">
-                <div className="h-7 w-full rounded-2xl bg-slate-100 dark:bg-slate-800 overflow-hidden flex shadow-inner p-1 gap-1">
+                <div className="h-6 w-full rounded-xl bg-slate-100 dark:bg-slate-800 overflow-hidden flex shadow-inner p-0.5 gap-0.5">
                   {extActivePct > 0 && (
                     <div
                       style={{ width: `${extActivePct}%` }}
-                      className="h-full rounded-xl bg-emerald-500 transition-all duration-500 flex items-center justify-center text-white text-[11px] font-black shadow-xs"
+                      className="h-full rounded-lg bg-emerald-500 transition-all duration-500 flex items-center justify-center text-white text-[11px] font-black shadow-xs"
                       title={`Aktif: ${extActiveCount} (${extActivePct}%)`}
                     >
                       {extActivePct >= 8 ? `${extActivePct}%` : ''}
@@ -2156,7 +2512,7 @@ function TrainingStatisticsView({
                   {extSoonPct > 0 && (
                     <div
                       style={{ width: `${extSoonPct}%` }}
-                      className="h-full rounded-xl bg-amber-500 transition-all duration-500 flex items-center justify-center text-white text-[11px] font-black shadow-xs"
+                      className="h-full rounded-lg bg-amber-500 transition-all duration-500 flex items-center justify-center text-white text-[11px] font-black shadow-xs"
                       title={`Warning: ${extSoonCount} (${extSoonPct}%)`}
                     >
                       {extSoonPct >= 5 ? `${extSoonPct}%` : ''}
@@ -2165,7 +2521,7 @@ function TrainingStatisticsView({
                   {extExpiredPct > 0 && (
                     <div
                       style={{ width: `${extExpiredPct}%` }}
-                      className="h-full rounded-xl bg-rose-500 transition-all duration-500 flex items-center justify-center text-white text-[11px] font-black shadow-xs"
+                      className="h-full rounded-lg bg-rose-500 transition-all duration-500 flex items-center justify-center text-white text-[11px] font-black shadow-xs"
                       title={`Expired: ${extExpiredCount} (${extExpiredPct}%)`}
                     >
                       {extExpiredPct >= 5 ? `${extExpiredPct}%` : ''}
@@ -2174,9 +2530,8 @@ function TrainingStatisticsView({
                 </div>
               </div>
 
-              {/* 3 Detail Boxes */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
-                <div className="p-3.5 rounded-2xl border border-emerald-200/80 dark:border-emerald-900/40 bg-emerald-50/50 dark:bg-emerald-950/20 flex flex-col justify-between">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+                <div className="p-3.5 rounded-xl border border-emerald-200/80 dark:border-emerald-900/40 bg-emerald-50/40 dark:bg-emerald-950/20 flex flex-col justify-between">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
                       <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
@@ -2187,7 +2542,7 @@ function TrainingStatisticsView({
                   <p className="text-[11px] text-emerald-600/80 dark:text-emerald-400/80 mt-1">Masa aktif aman &gt; 1 tahun</p>
                 </div>
 
-                <div className="p-3.5 rounded-2xl border border-amber-200/80 dark:border-amber-900/40 bg-amber-50/50 dark:bg-amber-950/20 flex flex-col justify-between">
+                <div className="p-3.5 rounded-xl border border-amber-200/80 dark:border-amber-900/40 bg-amber-50/40 dark:bg-amber-950/20 flex flex-col justify-between">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
                       <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
@@ -2198,7 +2553,7 @@ function TrainingStatisticsView({
                   <p className="text-[11px] text-amber-600/80 dark:text-amber-400/80 mt-1">Sisa masa aktif ≤ 1 tahun</p>
                 </div>
 
-                <div className="p-3.5 rounded-2xl border border-rose-200/80 dark:border-rose-900/40 bg-rose-50/50 dark:bg-rose-950/20 flex flex-col justify-between">
+                <div className="p-3.5 rounded-xl border border-rose-200/80 dark:border-rose-900/40 bg-rose-50/40 dark:bg-rose-950/20 flex flex-col justify-between">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold text-rose-800 dark:text-rose-300 flex items-center gap-1.5">
                       <span className="w-2.5 h-2.5 rounded-full bg-rose-500" />
@@ -2212,9 +2567,9 @@ function TrainingStatisticsView({
             </div>
           )}
 
-          {/* Baris 3: Peringkat Kepemilikan Sertifikasi & Kualifikasi Personel (Tab 'ext_ranks' atau 'ext_all') */}
+          {/* Baris 3: Peringkat Kepemilikan Sertifikasi & Kualifikasi Personel */}
           {(statsSubTab === 'ext_all' || statsSubTab === 'ext_ranks') && (
-            <div className="rounded-[24px] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-5 sm:p-6 shadow-xs space-y-4">
+            <div className="rounded-[22px] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-5 sm:p-6 shadow-xs space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
                 <div>
                   <h4 className="text-sm sm:text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
@@ -2222,20 +2577,20 @@ function TrainingStatisticsView({
                     Peringkat Kepemilikan Sertifikasi &amp; Kualifikasi Personel Eksternal
                   </h4>
                   <p className="text-xs text-slate-500 mt-0.5">
-                    Urutan sebaran sertifikasi kompetensi profesi dan pengawas operasional (Total `${combinedTrainingCertData.grandTotal}` Sertifikat Terdata).
+                    Urutan sebaran sertifikasi kompetensi profesi dan pengawas operasional (Total {combinedTrainingCertData.grandTotal} Sertifikat Terdata).
                   </p>
                 </div>
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-center">
                 {/* Kolom 1: Leaderboard Bar Horizontal */}
-                <div className="lg:col-span-7 space-y-3">
+                <div className="lg:col-span-7 space-y-2.5">
                   {sortedCertRows.map((r, idx) => {
                     const pct = combinedTrainingCertData.grandTotal ? Math.round((r.value / combinedTrainingCertData.grandTotal) * 100) : 0;
                     return (
-                      <div key={r.label} className="p-3.5 rounded-2xl bg-slate-50/80 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-700/60">
+                      <div key={r.label} className="p-3 rounded-xl bg-slate-50/80 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-700/60">
                         <div className="flex items-center justify-between text-xs mb-1.5">
-                          <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="flex items-center gap-2 min-w-0">
                             <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black shrink-0 ${
                               idx === 0 ? 'bg-amber-100 text-amber-800' : idx === 1 ? 'bg-slate-200 text-slate-700' : idx === 2 ? 'bg-orange-100 text-orange-800' : 'bg-slate-100 text-slate-500'
                             }`}>
@@ -2250,7 +2605,7 @@ function TrainingStatisticsView({
                             {r.value} Personel <span className="text-slate-400 font-normal">({pct}%)</span>
                           </span>
                         </div>
-                        <div className="h-2 w-full rounded-full bg-slate-200/70 dark:bg-slate-700 overflow-hidden">
+                        <div className="h-1.5 w-full rounded-full bg-slate-200/70 dark:bg-slate-700 overflow-hidden">
                           <div
                             className="h-full rounded-full transition-all duration-500"
                             style={{ width: `${pct}%`, backgroundColor: r.color }}
@@ -2262,8 +2617,8 @@ function TrainingStatisticsView({
                 </div>
 
                 {/* Kolom 2: Diagram Donat Proporsi Sertifikasi */}
-                <div className="lg:col-span-5 flex flex-col items-center justify-center p-4 rounded-2xl bg-slate-50/50 dark:bg-slate-800/20 border border-slate-100 dark:border-slate-800">
-                  <div className="w-56 h-56 relative flex items-center justify-center">
+                <div className="lg:col-span-5 flex flex-col items-center justify-center p-4 rounded-xl bg-slate-50/50 dark:bg-slate-800/20 border border-slate-100 dark:border-slate-800">
+                  <div className="w-52 h-52 relative flex items-center justify-center">
                     <Doughnut
                       data={{
                         labels: sortedCertRows.map(r => r.label),
@@ -2300,7 +2655,7 @@ function TrainingStatisticsView({
                     </div>
                   </div>
 
-                  <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+                  <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
                     {sortedCertRows.slice(0, 5).map(r => (
                       <span key={r.label} className="inline-flex items-center gap-1.5 text-[10px] font-semibold text-slate-600 dark:text-slate-400">
                         <span className="w-2 h-2 rounded-full" style={{ backgroundColor: r.color }} />
@@ -2313,9 +2668,9 @@ function TrainingStatisticsView({
             </div>
           )}
 
-          {/* Baris 4: Sebaran Sertifikasi per PT & Bagian (Tab 'ext_dist') */}
+          {/* Baris 4: Sebaran Sertifikasi per PT & Bagian */}
           {(statsSubTab === 'ext_dist') && (
-            <div className="rounded-[24px] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-5 sm:p-6 shadow-xs space-y-3">
+            <div className="rounded-[22px] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs space-y-3">
               <div>
                 <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
                   <Building2 className="w-4 h-4 text-teal-600" />
@@ -2351,7 +2706,6 @@ function TrainingStatisticsView({
     </div>
   );
 }
-
 export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', onBack, scope = 'internal' }: TrainingDatabaseScreenProps) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -4107,22 +4461,22 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
           </div>
         </div>
 
-        {/* ===== Sheet Selector Training Internal ===== */}
+        {/* ===== Sheet / Menu Selector Training Internal (Satu-satunya Navigasi Utama) ===== */}
         {!isExternal && (
           <div className="rounded-[24px] bg-white dark:bg-slate-900 p-3.5 shadow-sm border border-slate-200/80 dark:border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-3">
             <div className="flex flex-col sm:flex-row sm:items-center gap-3 flex-1">
               <div className="flex items-center gap-2 shrink-0">
                 <FileSpreadsheet className="w-4 h-4" style={{ color: DASH.brand }} />
                 <span className="text-xs font-black uppercase tracking-wider text-slate-800 dark:text-slate-100">
-                  Pilih Sheet / Menu:
+                  Pilih Menu:
                 </span>
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 flex-1">
                 {[
-                  { id: 'sap', label: 'Database Training SAP' },
-                  { id: 'k3', label: 'Database Training K3' },
+                  { id: 'sap', label: 'Database Training SAP', count: programCounts['sap'] },
+                  { id: 'k3', label: 'Database Training K3', count: programCounts['k3'] },
                   { id: 'statistik', label: '📊 Statistik & Analisis' },
-                  { id: 'form_permintaan', label: 'Form Permintaan Training' },
+                  { id: 'form_permintaan', label: 'Form Permintaan Training', badge: 'Form' },
                 ].map(s => {
                   const active = activeInternalTab === s.id;
                   return (
@@ -4137,13 +4491,23 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                           try { localStorage.setItem(TAB_STORAGE_KEY, 'form_permintaan'); } catch {}
                         }
                       }}
-                      className={`px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer text-center truncate ${
+                      className={`flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer text-center truncate ${
                         active
                           ? 'bg-teal-600 text-white shadow-xs'
                           : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
                       }`}
                     >
-                      {s.label}
+                      <span className="truncate">{s.label}</span>
+                      {s.count !== undefined && (
+                        <span className={`text-[10px] font-black px-1.5 py-0.2 rounded-full ${active ? 'bg-white/25 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'}`}>
+                          {s.count}
+                        </span>
+                      )}
+                      {s.badge && (
+                        <span className={`text-[10px] font-black px-1.5 py-0.2 rounded-full ${active ? 'bg-white/25 text-white' : 'bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-300'}`}>
+                          {s.badge}
+                        </span>
+                      )}
                     </button>
                   );
                 })}
@@ -4152,46 +4516,77 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
           </div>
         )}
 
-        {/* ===== Dropdown List Jenis Training External (Requirement 2) ===== */}
+        {/* ===== Menu & Sheet Selector Training External (Langsung dengan Menu Statistik) ===== */}
         {isExternal && (
           <div className="rounded-[24px] bg-white dark:bg-slate-900 p-3.5 shadow-sm border border-slate-200/80 dark:border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-3">
             <div className="flex flex-col sm:flex-row sm:items-center gap-3 flex-1">
-              <div className="flex items-center gap-2 shrink-0">
-                <SlidersHorizontal className="w-4 h-4" style={{ color: DASH.brand }} />
-                <span className="text-xs font-black uppercase tracking-wider text-slate-800 dark:text-slate-100">
-                  Jenis Training External:
-                </span>
-              </div>
-              <div className="relative flex-1 max-w-md">
-                <select
-                  value={externalSheet}
-                  onChange={e => {
-                    const val = e.target.value;
-                    if (val === '__ADD_TRAINING__') {
-                      openAddCertModal();
-                    } else {
-                      setExternalSheet(val as any);
-                      setSelectedNik(null);
-                      setSearchQuery('');
-                      setStatusFilter('ALL');
-                    }
+              {/* Menu Utama External: Database vs Statistik */}
+              <div className="inline-flex items-center p-1 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200/60 dark:border-slate-700 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (externalSheet === 'statistik') setExternalSheet('pop');
                   }}
-                  className="w-full h-11 pl-3.5 pr-9 rounded-xl font-black text-xs bg-slate-50 dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 cursor-pointer focus:outline-none focus:border-teal-500 shadow-xs appearance-none transition-colors"
+                  className={`px-3 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                    externalSheet !== 'statistik'
+                      ? 'bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-300 shadow-xs'
+                      : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                  }`}
                 >
-                  <option value="pop">POP (Pengawas Operasional Pertama)</option>
-                  <option value="pom">POM (Pengawas Operasional Madya)</option>
-                  <option value="statistik">📊 Statistik &amp; Analisis External</option>
-                  <option value="all">Semua Sertifikasi Eksternal ({totalExternalCerts} Sertifikat)</option>
-                  <option value="iso_17025">ISO 17025 : 2017 ({iso17025Count} Peserta)</option>
-                  <option value="k3_kimia">K3 Kimia - Ahli &amp; Petugas ({k3KimiaCount} Peserta)</option>
-                  <option value="k3_listrik">Teknisi K3 Listrik ({k3ListrikCount} Peserta)</option>
-                  <option value="proteksi_radiasi">Petugas Proteksi Radiasi ({radiasiCount} Peserta)</option>
-                  <option value="juru_las_3">Juru Las Kelas III ({juruLasCount} Peserta)</option>
-                  <option value="dll">Dll (Sertifikasi Lainnya)</option>
-                  <option value="__ADD_TRAINING__">+ Tambahkan Training External...</option>
-                </select>
-                <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <FileSpreadsheet className="w-3.5 h-3.5" />
+                  Database Sertifikasi
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setExternalSheet('statistik')}
+                  className={`px-3 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                    externalSheet === 'statistik'
+                      ? 'bg-teal-600 text-white shadow-xs'
+                      : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                  }`}
+                >
+                  <BarChart3 className="w-3.5 h-3.5" />
+                  📊 Statistik &amp; Analisis External
+                </button>
               </div>
+
+              {/* Jika berada di tab Database Sertifikasi: Tampilkan Dropdown Program Sertifikasi */}
+              {externalSheet !== 'statistik' && (
+                <div className="flex items-center gap-2 flex-1">
+                  <span className="text-[11px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 shrink-0 hidden lg:inline">
+                    Program:
+                  </span>
+                  <div className="relative flex-1 max-w-md">
+                    <select
+                      value={externalSheet}
+                      onChange={e => {
+                        const val = e.target.value;
+                        if (val === '__ADD_TRAINING__') {
+                          openAddCertModal();
+                        } else {
+                          setExternalSheet(val as any);
+                          setSelectedNik(null);
+                          setSearchQuery('');
+                          setStatusFilter('ALL');
+                        }
+                      }}
+                      className="w-full h-10 pl-3.5 pr-9 rounded-xl font-bold text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 cursor-pointer focus:outline-none focus:border-teal-500 shadow-xs appearance-none transition-colors"
+                    >
+                      <option value="pop">POP (Pengawas Operasional Pertama)</option>
+                      <option value="pom">POM (Pengawas Operasional Madya)</option>
+                      <option value="all">Semua Sertifikasi Eksternal ({totalExternalCerts} Sertifikat)</option>
+                      <option value="iso_17025">ISO 17025 : 2017 ({iso17025Count} Peserta)</option>
+                      <option value="k3_kimia">K3 Kimia - Ahli &amp; Petugas ({k3KimiaCount} Peserta)</option>
+                      <option value="k3_listrik">Teknisi K3 Listrik ({k3ListrikCount} Peserta)</option>
+                      <option value="proteksi_radiasi">Petugas Proteksi Radiasi ({radiasiCount} Peserta)</option>
+                      <option value="juru_las_3">Juru Las Kelas III ({juruLasCount} Peserta)</option>
+                      <option value="dll">Dll (Sertifikasi Lainnya)</option>
+                      <option value="__ADD_TRAINING__">+ Tambahkan Training External...</option>
+                    </select>
+                    <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="flex items-center gap-2">
@@ -4199,7 +4594,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                 <button
                   type="button"
                   onClick={openAddCertModal}
-                  className="inline-flex items-center justify-center gap-1.5 h-11 px-4 rounded-xl text-white font-black text-xs transition-all cursor-pointer shadow-sm hover:opacity-95 active:scale-95"
+                  className="inline-flex items-center justify-center gap-1.5 h-10 px-4 rounded-xl text-white font-black text-xs transition-all cursor-pointer shadow-sm hover:opacity-95 active:scale-95"
                   style={{ backgroundColor: DASH.brand }}
                 >
                   <Plus className="w-4 h-4" />
@@ -5317,46 +5712,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                 </div>
               </div>
 
-              {/* Tab program (Training Internal: SAP, K3, Pra POP, Form Permintaan Training) */}
-              {!isExternal && (
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 p-1.5 rounded-2xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200/60 dark:border-slate-700">
-                {([
-                  { id: 'sap' as const, label: 'Training SAP', short: 'SAP' },
-                  { id: 'k3' as const, label: 'Training K3', short: 'K3' },
-                  { id: 'statistik' as const, label: 'Statistik & Analisis', short: 'Statistik' },
-                  { id: 'form_permintaan' as const, label: 'Form Permintaan Training', short: 'Permintaan' },
-                ]).map(tab => {
-                  const active = activeInternalTab === tab.id;
-                  return (
-                    <button
-                      key={tab.id}
-                      type="button"
-                      onClick={() => {
-                        setActiveInternalTab(tab.id as any);
-                        if (tab.id !== 'form_permintaan') {
-                          switchProgram(tab.id as any);
-                        } else {
-                          try { localStorage.setItem(TAB_STORAGE_KEY, 'form_permintaan'); } catch {}
-                        }
-                      }}
-                      className={`flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${active ? 'bg-white dark:bg-slate-900 shadow-xs text-slate-950 dark:text-slate-100' : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-200'}`}
-                    >
-                      <span className="sm:hidden">{tab.short}</span>
-                      <span className="hidden sm:inline">{tab.label}</span>
-                      {tab.id !== 'form_permintaan' ? (
-                        <span className="text-[10px] font-black px-2 py-0.5 rounded-full" style={active ? { backgroundColor: DASH.brandSoft, color: DASH.brand } : { backgroundColor: 'rgba(0,0,0,0.06)', color: '#64748b' }}>
-                          {programCounts[tab.id]}
-                        </span>
-                      ) : (
-                        <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-teal-100 text-teal-700 dark:bg-teal-950 dark:text-teal-400">
-                          Form
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-              )}
+
 
               {/* Filter lanjutan */}
               {showFilters && (
