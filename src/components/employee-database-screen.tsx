@@ -1573,10 +1573,11 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
 
     const parseSanctionDate = (val?: any): Date | null => {
       if (!val) return null;
-      const str = String(val).trim().split(/[\r\n,;]+/)[0].trim();
-      if (!str || str === '-' || str === '#N/A' || str === '0') return null;
+      if (val instanceof Date) return isNaN(val.getTime()) ? null : val;
+      const str = String(val).trim();
+      if (!str || str === '-' || str === '#N/A' || str === '0' || /^\d{1,2}$/.test(str) || /^(ya|tidak|ok|v|x|true|false)$/i.test(str)) return null;
 
-      const dMmmY = str.match(/^(\d{1,2})[-\s/]([a-zA-Z]+)[-\s/](\d{2,4})$/);
+      const dMmmY = str.match(/(\d{1,2})[-\s/]([a-zA-Z]+)[-\s/](\d{2,4})/);
       if (dMmmY) {
         const day = parseInt(dMmmY[1], 10);
         const mStr = dMmmY[2].toLowerCase();
@@ -1588,7 +1589,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
         }
       }
 
-      const ymd = str.match(/^(\d{4})[-\s/](\d{1,2})[-\s/](\d{1,2})$/);
+      const ymd = str.match(/(\d{4})[-\s/](\d{1,2})[-\s/](\d{1,2})/);
       if (ymd) {
         const year = parseInt(ymd[1], 10);
         const month = parseInt(ymd[2], 10) - 1;
@@ -1596,7 +1597,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
         return new Date(year, month, day);
       }
 
-      const dmy = str.match(/^(\d{1,2})[-\s/](\d{1,2})[-\s/](\d{2,4})$/);
+      const dmy = str.match(/(\d{1,2})[-\s/](\d{1,2})[-\s/](\d{2,4})/);
       if (dmy) {
         const day = parseInt(dmy[1], 10);
         const month = parseInt(dmy[2], 10) - 1;
@@ -6664,10 +6665,11 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
 
                 const parseSanctionDate = (val?: any): Date | null => {
                   if (!val) return null;
-                  const str = String(val).trim().split(/[\r\n,;]+/)[0].trim();
+                  if (val instanceof Date) return isNaN(val.getTime()) ? null : val;
+                  const str = String(val).trim();
                   if (!isDateLike(str)) return null;
 
-                  const dMmmY = str.match(/^(\d{1,2})[-\s/]([a-zA-Z]+)[-\s/](\d{2,4})$/);
+                  const dMmmY = str.match(/(\d{1,2})[-\s/]([a-zA-Z]+)[-\s/](\d{2,4})/);
                   if (dMmmY) {
                     const day = parseInt(dMmmY[1], 10);
                     const mStr = dMmmY[2].toLowerCase();
@@ -6679,7 +6681,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                     }
                   }
 
-                  const ymd = str.match(/^(\d{4})[-\s/](\d{1,2})[-\s/](\d{1,2})$/);
+                  const ymd = str.match(/(\d{4})[-\s/](\d{1,2})[-\s/](\d{1,2})/);
                   if (ymd) {
                     const year = parseInt(ymd[1], 10);
                     const month = parseInt(ymd[2], 10) - 1;
@@ -6687,7 +6689,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                     return new Date(year, month, day);
                   }
 
-                  const dmy = str.match(/^(\d{1,2})[-\s/](\d{1,2})[-\s/](\d{2,4})$/);
+                  const dmy = str.match(/(\d{1,2})[-\s/](\d{1,2})[-\s/](\d{2,4})/);
                   if (dmy) {
                     const day = parseInt(dmy[1], 10);
                     const month = parseInt(dmy[2], 10) - 1;
@@ -6696,7 +6698,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                     return new Date(year, month, day);
                   }
 
-                  const mY = str.match(/^([a-zA-Z]+)[-\s/](\d{4})$/);
+                  const mY = str.match(/([a-zA-Z]+)[-\s/](\d{4})/);
                   if (mY) {
                     const month = MONTH_MAP[mY[1].toLowerCase()];
                     const year = parseInt(mY[2], 10);
@@ -6999,10 +7001,27 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                     {(() => {
                       const parseSanctionDateList = (val?: any): string[] => {
                         if (!val) return [];
-                        const rawList = Array.isArray(val) ? val : String(val).split(/[\r\n,;]+/);
-                        return rawList
-                          .map(s => String(s).trim())
-                          .filter(s => s && s !== '-' && s !== '0' && s !== '#N/A');
+                        const str = String(val).trim();
+                        if (!str || str === '-' || str === '0' || str === '#N/A' || /^(ya|tidak|ok|v|x|true|false)$/i.test(str)) return [];
+
+                        // Ekstrak semua token tanggal yang valid (misal: 21-Mei-2025 10-Des-2025 06-Jul-2026)
+                        const matches = str.match(/\b(?:\d{1,2}[-\s/][a-zA-Z]+[-\s/]\d{2,4}|\d{4}[-\s/]\d{1,2}[-\s/]\d{1,2}|\d{1,2}[-\s/]\d{1,2}[-\s/]\d{2,4})\b/g);
+                        if (matches && matches.length > 0) {
+                          const parsed = matches.map(s => ({ raw: s.trim(), date: parseSanctionDate(s.trim()) }));
+                          // Susun kembali urutan tanggal secara kronologis (terlama ke terbaru)
+                          parsed.sort((a, b) => {
+                            if (!a.date) return -1;
+                            if (!b.date) return 1;
+                            return a.date.getTime() - b.date.getTime();
+                          });
+                          return parsed.map(p => p.raw);
+                        }
+
+                        // Fallback jika format terpisah newline/koma/spasi
+                        return str
+                          .split(/[\r\n,;]+|\s+/)
+                          .map(s => s.trim())
+                          .filter(s => s && s !== '-' && s !== '0' && s !== '#N/A' && !/^(ya|tidak|ok|v|x|true|false)$/i.test(s));
                       };
 
                       // Jangka waktu: Konseling & ST = 3 bulan, SP I - SPPT = 6 bulan (dihitung dari tanggal terbit)
