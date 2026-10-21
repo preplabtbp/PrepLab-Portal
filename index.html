@@ -8,15 +8,15 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-    <link rel="icon" type="image/x-icon" href="/favicon.ico?v=2" />
-    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png?v=2" />
-    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png?v=2" />
-    <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png?v=2" />
-    <link rel="icon" type="image/png" sizes="512x512" href="/icon-512.png?v=2" />
-    <link rel="icon" type="image/png" href="/logo.png?v=2" />
-    <link rel="apple-touch-icon" sizes="180x180" href="/icon-192.png?v=2" />
-    <link rel="apple-touch-icon" href="/logo.png?v=2" />
-    <link rel="manifest" href="/manifest.json?v=2" />
+    <link rel="icon" type="image/x-icon" href="/favicon.ico?v=3" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png?v=3" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png?v=3" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png?v=3" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/icon-512.png?v=3" />
+    <link rel="icon" type="image/png" href="/logo.png?v=3" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/icon-192.png?v=3" />
+    <link rel="apple-touch-icon" href="/logo.png?v=3" />
+    <link rel="manifest" href="/manifest.json?v=3" />
     <title>Prep & Lab All in One Portal</title>
     <script>
       (function() {
@@ -62,7 +62,7 @@
         muted
         playsinline
         preload="auto"
-        style="max-width:720px;max-height:85vh;width:90vw;height:auto;object-fit:contain;display:block;pointer-events:none;filter:brightness(1.025) contrast(1.015);mix-blend-mode:multiply;-webkit-mask-image:linear-gradient(to right,rgba(0,0,0,0) 0%,rgba(0,0,0,1) 12%,rgba(0,0,0,1) 88%,rgba(0,0,0,0) 100%),linear-gradient(to bottom,rgba(0,0,0,0) 0%,rgba(0,0,0,1) 12%,rgba(0,0,0,1) 88%,rgba(0,0,0,0) 100%);-webkit-mask-composite:destination-in;mask-image:linear-gradient(to right,rgba(0,0,0,0) 0%,rgba(0,0,0,1) 12%,rgba(0,0,0,1) 88%,rgba(0,0,0,0) 100%),linear-gradient(to bottom,rgba(0,0,0,0) 0%,rgba(0,0,0,1) 12%,rgba(0,0,0,1) 88%,rgba(0,0,0,0) 100%);mask-composite:intersect;"
+        style="opacity:0;transition:opacity 0.2s ease-in;background:transparent;max-width:720px;max-height:85vh;width:90vw;height:auto;object-fit:contain;display:block;pointer-events:none;filter:brightness(1.025) contrast(1.015);mix-blend-mode:multiply;-webkit-mask-image:linear-gradient(to right,rgba(0,0,0,0) 0%,rgba(0,0,0,1) 12%,rgba(0,0,0,1) 88%,rgba(0,0,0,0) 100%),linear-gradient(to bottom,rgba(0,0,0,0) 0%,rgba(0,0,0,1) 12%,rgba(0,0,0,1) 88%,rgba(0,0,0,0) 100%);-webkit-mask-composite:destination-in;mask-image:linear-gradient(to right,rgba(0,0,0,0) 0%,rgba(0,0,0,1) 12%,rgba(0,0,0,1) 88%,rgba(0,0,0,0) 100%),linear-gradient(to bottom,rgba(0,0,0,0) 0%,rgba(0,0,0,1) 12%,rgba(0,0,0,1) 88%,rgba(0,0,0,0) 100%);mask-composite:intersect;"
       >
         <source src="/Animasi_Splash_Screen_PrepLab.mp4" type="video/mp4" />
       </video>
@@ -90,6 +90,10 @@
           var SHINE_SPEED = 1.05;
           var SHINE_START = 5.2;
 
+          function showVideo() {
+            video.style.opacity = '1';
+          }
+
           function dismissSplash() {
             if (isEnded) return;
             isEnded = true;
@@ -110,6 +114,9 @@
           }
 
           video.playbackRate = ANIM_SPEED;
+          // Hanya tampilkan video saat frame video sudah benar-benar siap berputar (menghilangkan flicker kotak hitam)
+          video.addEventListener('playing', showVideo);
+          video.addEventListener('canplay', showVideo);
           video.addEventListener('timeupdate', onTimeUpdate);
           video.addEventListener('ended', dismissSplash);
           splash.addEventListener('click', dismissSplash);
@@ -117,7 +124,9 @@
 
           var playPromise = video.play();
           if (playPromise !== undefined) {
-            playPromise.catch(function() {
+            playPromise.then(function() {
+              showVideo();
+            }).catch(function() {
               setTimeout(dismissSplash, 4000);
             });
           }
