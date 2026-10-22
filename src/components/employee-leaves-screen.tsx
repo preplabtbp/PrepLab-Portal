@@ -2652,6 +2652,31 @@ export function EmployeeLeavesScreen({
                               <Check className="w-3.5 h-3.5" />
                             </button>
                           )}
+
+                          {/* Hapus Catatan Izin */}
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              if (window.confirm(`Hapus catatan izin karyawan "${item.name}" dari rekapan?`)) {
+                                try {
+                                  const delRes = await fetch(`/api/employee-leaves/${item.id}`, { method: 'DELETE' });
+                                  const delJson = await delRes.json();
+                                  if (delRes.ok && delJson.status === 'success') {
+                                    toast.success(delJson.message || 'Catatan izin berhasil dihapus.');
+                                    fetchLeaves(true);
+                                  } else {
+                                    toast.error(delJson.message || 'Gagal menghapus catatan izin.');
+                                  }
+                                } catch (e) {
+                                  toast.error('Gagal menghubungi server untuk menghapus catatan izin.');
+                                }
+                              }
+                            }}
+                            className="p-1.5 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/60 text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
+                            title="Hapus Catatan Izin"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
                         </div>
                       </td>
                     </tr>
