@@ -1,0 +1,1410 @@
+import React, { useState, useEffect, useMemo } from 'react';
+import { 
+  ArrowLeft, Calendar, Users, Layers, Flame, Cpu, 
+  FileCheck, FileSpreadsheet, Save, Sparkles, Building2, 
+  CheckSquare, Square, Plus, AlertCircle, Stethoscope, 
+  Send, X, CheckCircle2, ChevronRight, BarChart3, RefreshCw,
+  Clock, Shield, Beaker, Check, HelpCircle
+} from 'lucide-react';
+import { toast } from 'sonner';
+import { getRosterData } from '../../sheets-api';
+import { 
+  DailyPerformanceRecord, 
+  ShiftType, 
+  ReguType 
+} from '../daily-performance/daily-performance-types';
+import { 
+  getStoredRecords, 
+  saveStoredRecords 
+} from '../daily-performance/daily-performance-utils';
+import { 
+  getStoredSampleBatches, 
+  saveStoredSampleBatches 
+} from '../daily-performance-v2/daily-performance-v2-utils';
+import { SampleBatchRecord } from '../daily-performance-v2/daily-performance-v2-types';
+
+export type LabReportSubMenu = 'weighing_fuse_loi' | 'press_edxrf' | 'wdxrf' | 'qc_data' | 'reporting';
+
+interface DailyReportLaboratoryScreenProps {
+  inspectorName?: string;
+  inspectorNik?: string;
+  userPt?: string;
+  onBack: () => void;
+  onNavigateToDailyPerformance?: () => void;
+}
+
+export const DailyReportLaboratoryScreen: React.FC<DailyReportLaboratoryScreenProps> = ({
+  inspectorName = 'Foreman On Duty',
+  inspectorNik = 'guest',
+  userPt = 'TBP',
+  onBack,
+  onNavigateToDailyPerformance
+}) => {
+  // Navigation Sub-menu
+  const [activeSubMenu, setActiveSubMenu] = useState<LabReportSubMenu>('weighing_fuse_loi');
+
+  // Header Shift State
+  const [date, setDate] = useState(() => {
+    const d = new Date();
+    return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+  });
+  const [week, setWeek] = useState(43);
+  const [regu, setRegu] = useState<ReguType>('A');
+  const [shiftType, setShiftType] = useState<ShiftType>('DAY');
+
+  // Existing Records Store
+  const [allRecords, setAllRecords] = useState<DailyPerformanceRecord[]>(() => getStoredRecords([]));
+
+  // Manpower State
+  const [rosterRaw, setRosterRaw] = useState<any[]>([]);
+  const [isRosterLoading, setIsRosterLoading] = useState(false);
+  const [staffShift, setStaffShift] = useState(5);
+  const [staffCuti, setStaffCuti] = useState(3);
+  const [crewShift, setCrewShift] = useState(10);
+  const [crewBantn, setCrewBantn] = useState(2);
+  const [crewCuti, setCrewCuti] = useState(2);
+  const [crewIzin, setCrewIzin] = useState(0);
+  const [crewSakit, setCrewSakit] = useState(0);
+  const [manpowerNotes, setManpowerNotes] = useState('');
+
+  // Quick Absence Dialog
+  const [showAbsenceDialog, setShowAbsenceDialog] = useState(false);
+  const [selectedEmpNik, setSelectedEmpNik] = useState('');
+  const [absenceCategory, setAbsenceCategory] = useState<'SAKIT' | 'IZIN'>('SAKIT');
+  const [absenceReason, setAbsenceReason] = useState('');
+  const [isSubmittingAbsence, setIsSubmittingAbsence] = useState(false);
+  const [reportedAbsences, setReportedAbsences] = useState<Array<{
+    nik: string;
+    name: string;
+    category: string;
+    reason: string;
+    status: string;
+  }>>([]);
+
+  // ==================== SUB-MENU 1: WEIGHING, FUSE & LOI ====================
+  // Batch Management di Weighing
+  const [batches, setBatches] = useState<SampleBatchRecord[]>(() => getStoredSampleBatches());
+  const [newBatchPt, setNewBatchPt] = useState('TBP');
+  const [newBatchCount, setNewBatchCount] = useState<number>(3);
+  const [newBatchUniformSize, setNewBatchUniformSize] = useState<boolean>(true);
+  const [newBatchSplPerBatch, setNewBatchSplPerBatch] = useState<number>(24);
+  const [newBatchCustomSizes, setNewBatchCustomSizes] = useState<number[]>([24, 24, 24]);
+
+  // Intake Eksplorasi / Smelter
+  const [expShift, setExpShift] = useState(120);
+  const [prodShift, setProdShift] = useState(25);
+  const [smelterShift, setSmelterShift] = useState(0);
+
+  // LOI
+  const [loiOs, setLoiOs] = useState(100);
+  const [loiW2, setLoiW2] = useState(50);
+  const [loiW4, setLoiW4] = useState(100);
+  const [loiW5, setLoiW5] = useState(100);
+
+  // ==================== SUB-MENU 2: PRESS & EDXRF ====================
+  // Press Pellet
+  const [pressOsAwal, setPressOsAwal] = useState(0);
+  const [pulpDryReceived, setPulpDryReceived] = useState(450); // Dari Prep Kering ke Lab
+  const [pressFinish, setPressFinish] = useState(450); // Selesai dipress
+
+  // EDXRF
+  const [edxrfOsAwal, setEdxrfOsAwal] = useState(0); // Pelet sisa shift lalu
+  const [epsC, setEpsC] = useState(60);
+  const [epsD, setEpsD] = useState(0);
+  const [epsE, setEpsE] = useState(80);
+  const [epsF, setEpsF] = useState(75);
+  const [epsG, setEpsG] = useState(70);
+  const [epsH, setEpsH] = useState(90);
+  const [s2Puma, setS2Puma] = useState(40);
+
+  // ==================== SUB-MENU 3: WDXRF ====================
+  // Zetium A
+  const [ztmAPrd, setZtmAPrd] = useState(30);
+  const [ztmAExp, setZtmAExp] = useState(40);
+  const [ztASml, setZtmASml] = useState(10);
+  const [ztmAGts, setZtmAGts] = useState(0);
+  const [ztmARarr, setZtmARarr] = useState(15);
+  const [ztmAVer, setZtmAVer] = useState(5);
+  const [ztmAStd, setZtmAStd] = useState(10);
+  const [ztmABlk, setZtmABlk] = useState(4);
+
+  // Zetium B
+  const [ztmBPrd, setZtmBPrd] = useState(0);
+  const [ztmBExp, setZtmBExp] = useState(80);
+  const [ztmBSml, setZtmBSml] = useState(5);
+  const [ztmBGts, setZtmBGts] = useState(0);
+  const [ztmBRarr, setZtmBRarr] = useState(10);
+  const [ztmBVer, setZtmBVer] = useState(5);
+  const [ztmBStd, setZtmBStd] = useState(20);
+  const [ztmBBlk, setZtmBBlk] = useState(4);
+
+  // ==================== SUB-MENU 4: QC DATA ====================
+  const [qcOs, setQcOs] = useState(0);
+  const [qcFinish, setQcFinish] = useState(0);
+
+  // ==================== SUB-MENU 5: REPORTING ====================
+  const [reportOs, setReportOs] = useState(0);
+  const [reportDone, setReportDone] = useState(0);
+
+  // Load Roster Live
+  useEffect(() => {
+    let isMounted = true;
+    setIsRosterLoading(true);
+    getRosterData()
+      .then((res: any) => {
+        if (!isMounted) return;
+        const list = Array.isArray(res) ? res : (res?.roster || []);
+        setRosterRaw(list);
+      })
+      .catch(err => {
+        console.error('Failed to load roster:', err);
+      })
+      .finally(() => {
+        if (isMounted) setIsRosterLoading(false);
+      });
+    return () => { isMounted = false; };
+  }, []);
+
+  // Filter roster by Regu & Shift
+  const currentReguEmployees = useMemo(() => {
+    if (!rosterRaw.length) return [];
+    return rosterRaw.filter(emp => {
+      const empRegu = String(emp.regu || emp.Regu || '').trim().toUpperCase();
+      return empRegu === regu.toUpperCase();
+    });
+  }, [rosterRaw, regu]);
+
+  // Adjust custom sizes
+  useEffect(() => {
+    const count = Math.max(1, Math.min(20, newBatchCount || 1));
+    setNewBatchCustomSizes(prev => {
+      if (prev.length === count) return prev;
+      const next = [...prev];
+      while (next.length < count) next.push(newBatchSplPerBatch || 24);
+      return next.slice(0, count);
+    });
+  }, [newBatchCount, newBatchSplPerBatch]);
+
+  // ==================== CALCULATIONS & AUTO CASCADING ====================
+  // 1. Press & EDXRF
+  const totalPressLoad = pressOsAwal + pulpDryReceived;
+  const osPress = Math.max(0, totalPressLoad - pressFinish);
+
+  const edxrfReceived = pressFinish; // HANYA yang finished di press yang masuk EDXRF
+  const totalEdxrfLoad = edxrfOsAwal + edxrfReceived;
+  const edxrfTotal = epsC + epsD + epsE + epsF + epsG + epsH + s2Puma;
+  const osEdxrf = Math.max(0, totalEdxrfLoad - edxrfTotal);
+
+  // 2. Weighing & Fusion
+  const finishedBatches = batches.filter(b => b.isFinished);
+  const outstandingBatches = batches.filter(b => !b.isFinished);
+  const fusionFinishCount = finishedBatches.reduce((acc, b) => acc + b.sampleCount, 0);
+  const fusionOsCount = outstandingBatches.reduce((acc, b) => acc + b.sampleCount, 0);
+
+  // LOI
+  const loiFinish = loiW2 + loiW4 + loiW5;
+  const loiBal = Math.max(0, loiOs - loiFinish);
+
+  // 3. WDXRF Zetium
+  const ztmATotal = ztmAPrd + ztmAExp + ztASml + ztmAGts + ztmARarr + ztmAVer + ztmAStd + ztmABlk;
+  const ztmBTotal = ztmBPrd + ztmBExp + ztmBSml + ztmBGts + ztmBRarr + ztmBVer + ztmBStd + ztmBBlk;
+  const wdxrfTotal = ztmATotal + ztmBTotal;
+  const wdxrfBal = Math.max(0, fusionFinishCount - wdxrfTotal);
+
+  // 4. QC Data (Cascading dari WDXRF Total)
+  const qcReceived = wdxrfTotal;
+  const totalQcLoad = qcOs + qcReceived;
+  useEffect(() => {
+    if (qcFinish === 0 && qcReceived > 0) {
+      setQcFinish(qcReceived);
+    }
+  }, [qcReceived]);
+  const qcBal = Math.max(0, totalQcLoad - qcFinish);
+
+  // 5. Reporting (Cascading dari QC Finish)
+  const reportReceived = qcFinish;
+  const totalReportLoad = reportOs + reportReceived;
+  useEffect(() => {
+    if (reportDone === 0 && reportReceived > 0) {
+      setReportDone(reportReceived);
+    }
+  }, [reportReceived]);
+  const reportBal = Math.max(0, totalReportLoad - reportDone);
+
+  // Batch actions
+  const handleAddBatch = () => {
+    const count = Math.max(1, Math.min(20, newBatchCount || 1));
+    const nowIso = new Date().toISOString();
+    const created: SampleBatchRecord[] = [];
+
+    for (let i = 0; i < count; i++) {
+      const splCount = newBatchUniformSize ? newBatchSplPerBatch : (newBatchCustomSizes[i] || newBatchSplPerBatch);
+      const batchNo = batches.filter(b => b.pt === newBatchPt).length + i + 1;
+      created.push({
+        id: `batch_${Date.now()}_${newBatchPt}_${batchNo}_${Math.random().toString(36).substring(2, 6)}`,
+        batchName: `Batch ${batchNo} - ${newBatchPt}`,
+        pt: newBatchPt,
+        sampleCount: splCount,
+        receivedShift: shiftType,
+        receivedDate: date,
+        station: 'Weighing',
+        isFinished: false,
+        createdAt: nowIso
+      });
+    }
+
+    const updated = [...batches, ...created];
+    setBatches(updated);
+    saveStoredSampleBatches(updated);
+    window.dispatchEvent(new CustomEvent('preplab-batches-updated'));
+    toast.success(`${count} batch untuk ${newBatchPt} (${count * newBatchSplPerBatch} spl) berhasil didaftarkan!`);
+  };
+
+  const handleToggleBatchFinish = (id: string) => {
+    const updated = batches.map(b => b.id === id ? { ...b, isFinished: !b.isFinished } : b);
+    setBatches(updated);
+    saveStoredSampleBatches(updated);
+    window.dispatchEvent(new CustomEvent('preplab-batches-updated'));
+  };
+
+  // Submit Quick Absence to ADM
+  const handleQuickAbsenceSubmit = async () => {
+    if (!selectedEmpNik) {
+      toast.error('Pilih nama anggota regu terlebih dahulu.');
+      return;
+    }
+    const emp = currentReguEmployees.find(e => String(e.nik || e.NIK).trim() === selectedEmpNik.trim());
+    if (!emp) {
+      toast.error('Karyawan tidak ditemukan di roster.');
+      return;
+    }
+
+    const empName = emp.nama || emp.name || emp.Nama || 'Karyawan';
+    setIsSubmittingAbsence(true);
+
+    try {
+      const parts = date.split('/');
+      const isoDate = parts.length === 3 ? `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}` : date;
+
+      const payload = {
+        nik: selectedEmpNik,
+        name: empName,
+        jabatan: emp.jabatan || emp.position || 'Operator Preparation',
+        section: emp.section || 'Preparation Laboratory',
+        penempatan: 'Site Tanjung Buli',
+        shift: `${regu} - ${shiftType}`,
+        jamShift: shiftType === 'DAY' ? '07:00 - 19:00 WITA' : '19:00 - 07:00 WITA',
+        awalAbsensi: isoDate,
+        akhirAbsensi: isoDate,
+        jumlah: 1,
+        lamanyaIzin: '1 Hari Shift',
+        kategoriIzin: absenceCategory,
+        alasanAbsensi: absenceReason || `${absenceCategory} shift ${shiftType} (Dilaporkan oleh Foreman di Daily Report Laboratory)`,
+        pengawasMengetahui: inspectorName,
+        acc: 'PENDING'
+      };
+
+      const res = await fetch('/api/employee-leaves', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.message || 'Gagal menyimpan izin ke database.');
+      }
+
+      if (absenceCategory === 'SAKIT') {
+        setCrewSakit(prev => prev + 1);
+        setCrewShift(prev => Math.max(0, prev - 1));
+      } else {
+        setCrewIzin(prev => prev + 1);
+        setCrewShift(prev => Math.max(0, prev - 1));
+      }
+
+      setReportedAbsences(prev => [
+        ...prev,
+        {
+          nik: selectedEmpNik,
+          name: empName,
+          category: absenceCategory,
+          reason: absenceReason || `Dilaporkan shift ${shiftType}`,
+          status: 'PENDING REVIEW ADM'
+        }
+      ]);
+
+      toast.success(`Tiket ${absenceCategory} untuk ${empName} berhasil dikirim ke Tim Administrasi untuk direview!`);
+      setSelectedEmpNik('');
+      setAbsenceReason('');
+      setShowAbsenceDialog(false);
+    } catch (err: any) {
+      console.error('Error submitting absence:', err);
+      toast.error(`Gagal mencatat izin: ${err.message}`);
+    } finally {
+      setIsSubmittingAbsence(false);
+    }
+  };
+
+  // Sync / Save Full Record to LocalStorage & Central Store
+  const handleSaveAllRecord = () => {
+    const parts = date.split('/');
+    const isoDate = parts.length === 3 ? `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}` : date;
+    const id = `${isoDate}_${regu}_${shiftType}`;
+
+    const newRec: DailyPerformanceRecord = {
+      id,
+      no: allRecords.length + 1,
+      date,
+      isoDate,
+      week: Number(week),
+      regu,
+      shiftType,
+      manpower: {
+        staff: { shift: staffShift, cuti: staffCuti, alpa: 0, izin: 0, sakit: 0, total: staffShift + staffCuti },
+        crew: { 
+          shift: crewShift, 
+          bantn: crewBantn, 
+          lab: crewShift, 
+          cuti: crewCuti, 
+          alpa: 0, 
+          izin: crewIzin, 
+          sakit: crewSakit, 
+          total: crewShift + crewBantn + crewCuti + crewIzin + crewSakit 
+        }
+      },
+      sampleReceived: {
+        gc: { shift: pulpDryReceived, day: pulpDryReceived, wkly: pulpDryReceived },
+        prod: { shift: prodShift, rc: prodShift, ra: 0, day: prodShift, wkly: prodShift },
+        exp: { shift: expShift, day: expShift, wkly: expShift },
+        smelter: { shift: smelterShift, day: smelterShift, wkly: smelterShift }
+      },
+      pressPowder: {
+        os: pressOsAwal,
+        received: { shift: pulpDryReceived, day: pulpDryReceived, wkly: pulpDryReceived },
+        finish: { shift: pressFinish, day: pressFinish, wkly: pressFinish },
+        bal: osPress
+      },
+      edxrf: {
+        os: edxrfOsAwal,
+        received: edxrfReceived,
+        epsC, epsD, epsE, epsF, epsG, epsH, s2Puma,
+        shift: edxrfTotal, day: edxrfTotal, wkly: edxrfTotal,
+        bal: osEdxrf
+      },
+      fuseBead: {
+        osExp: fusionOsCount,
+        finishShift: fusionFinishCount,
+        finishDay: fusionFinishCount,
+        finishWkly: fusionFinishCount,
+        balExp: fusionOsCount
+      },
+      loi: {
+        os: loiOs,
+        w2: loiW2, w4: loiW4, w5: loiW5,
+        finLoiShift: loiFinish, finLoiDay: loiFinish, finLoiWkly: 0,
+        bal: loiBal
+      },
+      wdxrf: {
+        osExp: wdxrfBal,
+        zetiumA: {
+          prod: ztmAPrd, exp: ztmAExp, smelt: ztASml, gts: ztmAGts, rarr: ztmARarr, ver: ztmAVer, std: ztmAStd, blank: ztmABlk,
+          total: ztmATotal, day: ztmATotal, wkly: ztmATotal
+        },
+        zetiumB: {
+          prod: ztmBPrd, exp: ztmBExp, smelt: ztmBSml, gts: ztmBGts, rarr: ztmBRarr, ver: ztmBVer, std: ztmBStd, blank: ztmBBlk,
+          total: ztmBTotal, day: ztmBTotal, wkly: ztmBTotal
+        },
+        bal: wdxrfBal
+      },
+      qc: {
+        os: qcOs,
+        received: qcReceived,
+        finishShift: qcFinish, 
+        finishDay: qcFinish, 
+        finishWkly: qcFinish, 
+        bal: qcBal
+      },
+      report: {
+        osReport: reportOs, 
+        received: reportReceived, 
+        finishReportDay: reportDone, 
+        finishReportWkly: reportDone, 
+        bal: reportBal
+      },
+      manpowerNotes: manpowerNotes || undefined,
+      updatedAt: new Date().toISOString()
+    };
+
+    // Replace or append
+    const idx = allRecords.findIndex(r => r.id === id);
+    let updatedList: DailyPerformanceRecord[];
+    if (idx !== -1) {
+      updatedList = [...allRecords];
+      updatedList[idx] = newRec;
+    } else {
+      updatedList = [...allRecords, newRec];
+    }
+
+    setAllRecords(updatedList);
+    saveStoredRecords(updatedList);
+    saveStoredSampleBatches(batches);
+
+    // Dispatch global events for instant dashboard reflection
+    window.dispatchEvent(new CustomEvent('preplab-daily-performance-updated'));
+    window.dispatchEvent(new CustomEvent('preplab-batches-updated'));
+
+    toast.success(`Data Daily Report Lab ${date} (${regu} - ${shiftType}) tersimpan & tersinkronisasi ke Daily Performance!`);
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-50/60 dark:bg-slate-950 text-slate-800 dark:text-slate-100 flex flex-col font-sans pb-24">
+      
+      {/* TOP HEADER */}
+      <header className="sticky top-0 z-40 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800 px-4 sm:px-6 py-3.5 flex items-center justify-between gap-4 shadow-sm">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={onBack}
+            className="p-2 rounded-xl text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer transition-all"
+            title="Kembali"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="p-1 rounded-lg bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400">
+                <Beaker className="w-4 h-4" />
+              </span>
+              <h1 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                Daily Report Laboratory
+              </h1>
+              <span className="hidden sm:inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                Workstation Foreman
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-500 hidden sm:block">
+              Penginputan data operasional terstruktur per-stasiun dengan otomasi antrean bersambung
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {onNavigateToDailyPerformance && (
+            <button
+              onClick={onNavigateToDailyPerformance}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-teal-200 dark:border-teal-800 bg-teal-50/60 dark:bg-teal-950/30 text-teal-800 dark:text-teal-300 text-xs font-semibold hover:bg-teal-100 dark:hover:bg-teal-900/40 cursor-pointer transition-all"
+            >
+              <BarChart3 className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Lihat Rekap Dashboard</span>
+            </button>
+          )}
+
+          <button
+            onClick={handleSaveAllRecord}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-md shadow-emerald-500/20 cursor-pointer transition-all"
+          >
+            <Save className="w-4 h-4" />
+            <span>Simpan Shift</span>
+          </button>
+        </div>
+      </header>
+
+      {/* SHIFT & MANPOWER ROSTER BAR */}
+      <section className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-4 sm:px-6 py-3.5">
+        <div className="max-w-7xl mx-auto space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            
+            {/* Shift Context Fields */}
+            <div className="flex flex-wrap items-center gap-2.5 text-xs">
+              <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800 px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700">
+                <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                <span className="text-[11px] text-slate-500 font-medium">Tanggal:</span>
+                <input
+                  type="text"
+                  value={date}
+                  onChange={e => setDate(e.target.value)}
+                  className="w-24 bg-transparent font-bold text-slate-800 dark:text-white outline-none"
+                />
+              </div>
+
+              <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800 px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700">
+                <span className="text-[11px] text-slate-500 font-medium">Wk:</span>
+                <input
+                  type="number"
+                  value={week}
+                  onChange={e => setWeek(Number(e.target.value))}
+                  className="w-10 bg-transparent font-bold text-slate-800 dark:text-white outline-none"
+                />
+              </div>
+
+              <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800 px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700">
+                <span className="text-[11px] text-slate-500 font-medium">Regu:</span>
+                <select
+                  value={regu}
+                  onChange={e => setRegu(e.target.value as any)}
+                  className="bg-transparent font-bold text-teal-600 dark:text-teal-400 outline-none cursor-pointer"
+                >
+                  <option value="A">Shift A</option>
+                  <option value="B">Shift B</option>
+                  <option value="C">Shift C</option>
+                </select>
+              </div>
+
+              <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800 px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700">
+                <Clock className="w-3.5 h-3.5 text-slate-400" />
+                <select
+                  value={shiftType}
+                  onChange={e => setShiftType(e.target.value as any)}
+                  className="bg-transparent font-bold text-slate-800 dark:text-white outline-none cursor-pointer"
+                >
+                  <option value="DAY">DAY (07:00 - 19:00 WIT)</option>
+                  <option value="NIGHT">NIGHT (19:00 - 07:00 WIT)</option>
+                  <option value="LS">LS (07:00 - 24:00 WIT)</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Quick Absence Button */}
+            <button
+              onClick={() => setShowAbsenceDialog(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold shadow-sm cursor-pointer transition-all"
+            >
+              <Stethoscope className="w-3.5 h-3.5" />
+              <span>+ Catat Izin / Sakit (Review ADM)</span>
+            </button>
+          </div>
+
+          {/* Manpower Counters Row */}
+          <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-100 dark:border-slate-800 text-xs">
+            <div className="flex items-center gap-3 flex-wrap">
+              <span className="text-[11px] font-semibold text-slate-500">SDM Shift:</span>
+              <span className="bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-lg text-slate-700 dark:text-slate-300">
+                Staff Hadir: <strong className="font-mono">{staffShift}</strong>
+              </span>
+              <span className="bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 px-2 py-0.5 rounded-lg border border-emerald-200 dark:border-emerald-800">
+                Crew Hadir: <strong className="font-mono font-bold">{crewShift}</strong>
+              </span>
+              <span className="bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-lg text-slate-600 dark:text-slate-400">
+                Cuti: <strong className="font-mono">{staffCuti + crewCuti}</strong>
+              </span>
+              {crewSakit > 0 && (
+                <span className="bg-red-100 text-red-700 px-2 py-0.5 rounded-lg font-bold">
+                  Sakit: {crewSakit}
+                </span>
+              )}
+              {crewIzin > 0 && (
+                <span className="bg-amber-100 text-amber-700 px-2 py-0.5 rounded-lg font-bold">
+                  Izin: {crewIzin}
+                </span>
+              )}
+            </div>
+
+            <div className="text-[11px] text-slate-500">
+              Roster Regu {regu}: {isRosterLoading ? 'Memuat...' : `${currentReguEmployees.length} terdaftar`}
+            </div>
+          </div>
+
+          {/* Quick Absence Modal */}
+          {showAbsenceDialog && (
+            <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/60 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-amber-900 dark:text-amber-200 flex items-center gap-1.5">
+                  <AlertCircle className="w-4 h-4 text-amber-600" />
+                  Pelaporan Izin/Sakit Anggota Shift (Diteruskan ke Review Administrasi)
+                </span>
+                <button 
+                  type="button"
+                  onClick={() => setShowAbsenceDialog(false)}
+                  className="text-amber-700 hover:text-amber-900 dark:text-amber-300"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
+                <div>
+                  <label className="text-[10px] font-semibold text-amber-900 dark:text-amber-200">Pilih Anggota Regu {regu}</label>
+                  <select
+                    value={selectedEmpNik}
+                    onChange={e => setSelectedEmpNik(e.target.value)}
+                    className="w-full mt-1 px-2.5 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-amber-300 dark:border-amber-700 text-xs"
+                  >
+                    <option value="">-- Pilih Karyawan --</option>
+                    {currentReguEmployees.map(emp => (
+                      <option key={emp.nik || emp.NIK} value={emp.nik || emp.NIK}>
+                        {emp.nama || emp.name || emp.Nama} ({emp.nik || emp.NIK}) - {emp.jabatan || 'Crew'}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-semibold text-amber-900 dark:text-amber-200">Kategori Absensi</label>
+                  <select
+                    value={absenceCategory}
+                    onChange={e => setAbsenceCategory(e.target.value as any)}
+                    className="w-full mt-1 px-2.5 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-amber-300 dark:border-amber-700 text-xs font-bold"
+                  >
+                    <option value="SAKIT">Sakit (Dengan/Tanpa Surat Dokter)</option>
+                    <option value="IZIN">Izin Keperluan Pribadi / Mendesak</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-semibold text-amber-900 dark:text-amber-200">Keterangan / Alasan</label>
+                  <input
+                    type="text"
+                    value={absenceReason}
+                    onChange={e => setAbsenceReason(e.target.value)}
+                    placeholder="Contoh: Demam, izin keperluan keluarga mendesak"
+                    className="w-full mt-1 px-2.5 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-amber-300 dark:border-amber-700 text-xs"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end pt-1">
+                <button
+                  type="button"
+                  disabled={isSubmittingAbsence}
+                  onClick={handleQuickAbsenceSubmit}
+                  className="flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold cursor-pointer disabled:opacity-50"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  <span>{isSubmittingAbsence ? 'Mengirim...' : 'Kirim Tiket ke Tim Administrasi'}</span>
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* 5 SUB-MENUS TAB NAVIGATION */}
+      <nav className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-4 sm:px-6">
+        <div className="max-w-7xl mx-auto flex gap-2 overflow-x-auto scrollbar-none py-2 text-xs font-semibold">
+          {[
+            { id: 'weighing_fuse_loi', label: '1. Weighing, Fuse & LOI', icon: <Flame className="w-4 h-4" />, count: `${batches.length} batch` },
+            { id: 'press_edxrf', label: '2. Press & EDXRF', icon: <Layers className="w-4 h-4" />, count: `${edxrfTotal} scan` },
+            { id: 'wdxrf', label: '3. WDXRF', icon: <Cpu className="w-4 h-4" />, count: `${wdxrfTotal} run` },
+            { id: 'qc_data', label: '4. QC Data', icon: <Shield className="w-4 h-4" />, count: `${qcFinish} lolos` },
+            { id: 'reporting', label: '5. Reporting', icon: <FileCheck className="w-4 h-4" />, count: `${reportDone} CoA` },
+          ].map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveSubMenu(tab.id as any)}
+              className={`flex items-center gap-2 py-2 px-3.5 rounded-xl cursor-pointer transition-all whitespace-nowrap ${
+                activeSubMenu === tab.id
+                  ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/20 font-bold'
+                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+              }`}
+            >
+              {tab.icon}
+              <span>{tab.label}</span>
+              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
+                activeSubMenu === tab.id ? 'bg-white/20 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-500'
+              }`}>
+                {tab.count}
+              </span>
+            </button>
+          ))}
+        </div>
+      </nav>
+
+      {/* WORKSTATION CONTENT BODY */}
+      <main className="max-w-7xl mx-auto w-full px-4 sm:px-6 py-6 flex-1 space-y-6">
+        
+        {/* ========================================================================= */}
+        {/* SUB-MENU 1: WEIGHING, FUSE & LOI */}
+        {/* ========================================================================= */}
+        {activeSubMenu === 'weighing_fuse_loi' && (
+          <div className="space-y-6">
+            
+            {/* Banner Guide */}
+            <div className="p-4 rounded-2xl bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30 border border-blue-200/80 dark:border-blue-900/60 flex items-center justify-between gap-4">
+              <div className="space-y-1">
+                <h3 className="text-sm font-bold text-blue-900 dark:text-blue-200 flex items-center gap-2">
+                  <Flame className="w-4 h-4 text-blue-600" />
+                  Stasiun Weighing, Peleburan Fusion & Pembakaran LOI
+                </h3>
+                <p className="text-xs text-blue-700 dark:text-blue-400">
+                  Daftarkan batch di stasiun Weighing (1x entry hulu). Foreman Fusion cukup mencentang batch selesai lebur.
+                </p>
+              </div>
+              <div className="text-right text-xs">
+                <span className="text-slate-500 block">Selesai Lebur:</span>
+                <span className="font-mono font-bold text-emerald-600 text-base">{fusionFinishCount} spl</span>
+              </div>
+            </div>
+
+            {/* Bagian A: Pendaftaran Batch Masuk Stasiun Weighing */}
+            <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+                <div className="flex items-center gap-2">
+                  <Building2 className="w-4 h-4 text-teal-600" />
+                  <h4 className="font-bold text-sm text-slate-800 dark:text-white">
+                    Pendaftaran Batch Sampel Masuk (Weighing 1x Input)
+                  </h4>
+                </div>
+                <span className="text-xs font-mono font-bold text-teal-700 dark:text-teal-300">
+                  Total Terdaftar: {batches.length} batch ({batches.reduce((a, b) => a + b.sampleCount, 0)} spl)
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs">
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-400">Asal PT / Pengirim</label>
+                  <select
+                    value={newBatchPt}
+                    onChange={e => setNewBatchPt(e.target.value)}
+                    className="w-full mt-1 px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-bold cursor-pointer"
+                  >
+                    <option value="TBP">PT TBP (Trimegah)</option>
+                    <option value="GPS">PT GPS (Gane Permai)</option>
+                    <option value="MMP">PT MMP (Megah Mulia)</option>
+                    <option value="KPS">PT KPS (Karya Prima)</option>
+                    <option value="EXP">Eksplorasi (EXP)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-400">Jumlah Batch Masuk</label>
+                  <input 
+                    type="number" 
+                    min={1} 
+                    max={20}
+                    value={newBatchCount} 
+                    onChange={e => setNewBatchCount(Number(e.target.value))}
+                    className="w-full mt-1 px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono text-center font-bold"
+                  />
+                </div>
+
+                <div className="sm:col-span-2 flex flex-col justify-center">
+                  <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-700 dark:text-slate-300 mt-3">
+                    <input 
+                      type="checkbox"
+                      checked={newBatchUniformSize}
+                      onChange={e => setNewBatchUniformSize(e.target.checked)}
+                      className="rounded border-slate-300 text-teal-600 focus:ring-teal-500 cursor-pointer w-4 h-4"
+                    />
+                    <span>Jumlah sampel per batch seragam ({newBatchSplPerBatch} spl/batch)</span>
+                  </label>
+                </div>
+              </div>
+
+              {!newBatchUniformSize && (
+                <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-2">
+                  <span className="text-[11px] text-slate-500 font-semibold block">Tentukan Ukuran Sampel Masing-Masing Batch:</span>
+                  <div className="flex flex-wrap gap-2">
+                    {newBatchCustomSizes.map((sz, idx) => (
+                      <div key={idx} className="flex items-center gap-1 text-xs">
+                        <span className="text-slate-400">B#{idx+1}:</span>
+                        <input 
+                          type="number"
+                          value={sz}
+                          onChange={e => {
+                            const val = Number(e.target.value);
+                            setNewBatchCustomSizes(prev => {
+                              const next = [...prev];
+                              next[idx] = val;
+                              return next;
+                            });
+                          }}
+                          className="w-16 px-2 py-1 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-center font-mono font-bold"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="flex justify-end pt-1">
+                <button
+                  type="button"
+                  onClick={handleAddBatch}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold shadow-sm cursor-pointer transition-all"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Daftarkan {newBatchCount} Batch ke Stasiun Weighing</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Bagian B: Checklist Finish Stasiun Fusion */}
+            <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+                <div className="flex items-center gap-2">
+                  <CheckSquare className="w-4 h-4 text-emerald-600" />
+                  <h4 className="font-bold text-sm text-slate-800 dark:text-white">
+                    Checklist Batch Selesai Dilebur (Fusion Bead)
+                  </h4>
+                </div>
+                <div className="flex items-center gap-3 text-xs">
+                  <span className="text-emerald-600 font-bold">Finished: {fusionFinishCount} spl</span>
+                  <span className="text-slate-300">|</span>
+                  <span className="text-amber-600 font-bold">OS Sisa: {fusionOsCount} spl</span>
+                </div>
+              </div>
+
+              {batches.length === 0 ? (
+                <p className="text-xs text-slate-400 italic py-6 text-center">
+                  Belum ada batch terdaftar di stasiun Weighing. Daftarkan batch di atas terlebih dahulu.
+                </p>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                  {batches.map(b => (
+                    <div 
+                      key={b.id}
+                      onClick={() => handleToggleBatchFinish(b.id)}
+                      className={`p-3.5 rounded-2xl border cursor-pointer transition-all flex items-center justify-between text-xs ${
+                        b.isFinished 
+                          ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-300 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200 shadow-sm' 
+                          : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:border-teal-400'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5">
+                        {b.isFinished ? (
+                          <CheckSquare className="w-5 h-5 text-emerald-600 flex-shrink-0" />
+                        ) : (
+                          <Square className="w-5 h-5 text-slate-400 flex-shrink-0" />
+                        )}
+                        <div>
+                          <span className="font-bold block text-sm leading-tight">{b.batchName}</span>
+                          <span className="text-[11px] text-slate-500 font-medium">
+                            {b.sampleCount} sampel • Asal PT {b.pt}
+                          </span>
+                        </div>
+                      </div>
+                      <span className={`text-[10px] px-2 py-0.5 rounded font-bold ${
+                        b.isFinished ? 'bg-emerald-200 dark:bg-emerald-800 text-emerald-800 dark:text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'
+                      }`}>
+                        {b.isFinished ? 'FINISHED' : 'ANTREAN'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Bagian C: Pembakaran Stasiun LOI */}
+            <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+                <div className="flex items-center gap-2">
+                  <Flame className="w-4 h-4 text-amber-600" />
+                  <h4 className="font-bold text-sm text-slate-800 dark:text-white">
+                    Pembakaran Muffle Furnace (Stasiun LOI)
+                  </h4>
+                </div>
+                <div className="flex items-center gap-3 text-xs">
+                  <span className="text-emerald-600 font-bold">Finish LOI: {loiFinish} spl</span>
+                  <span className="text-slate-300">|</span>
+                  <span className="text-amber-600 font-bold">Saldo Sisa LOI: {loiBal} spl</span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                <div>
+                  <label className="text-[10px] text-slate-500 font-medium">LOI Saldo Awal (OS)</label>
+                  <input 
+                    type="number" 
+                    value={loiOs} 
+                    onChange={e => setLoiOs(Number(e.target.value))}
+                    className="w-full mt-1 px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono text-center font-bold"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] text-slate-500 font-medium">Furnace W2</label>
+                  <input 
+                    type="number" 
+                    value={loiW2} 
+                    onChange={e => setLoiW2(Number(e.target.value))}
+                    className="w-full mt-1 px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono text-center font-bold"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] text-slate-500 font-medium">Furnace W4</label>
+                  <input 
+                    type="number" 
+                    value={loiW4} 
+                    onChange={e => setLoiW4(Number(e.target.value))}
+                    className="w-full mt-1 px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono text-center font-bold"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] text-slate-500 font-medium">Furnace W5</label>
+                  <input 
+                    type="number" 
+                    value={loiW5} 
+                    onChange={e => setLoiW5(Number(e.target.value))}
+                    className="w-full mt-1 px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono text-center font-bold"
+                  />
+                </div>
+              </div>
+            </div>
+
+          </div>
+        )}
+
+        {/* ========================================================================= */}
+        {/* SUB-MENU 2: PRESS & EDXRF */}
+        {/* ========================================================================= */}
+        {activeSubMenu === 'press_edxrf' && (
+          <div className="space-y-6">
+            
+            {/* Banner Guide */}
+            <div className="p-4 rounded-2xl bg-gradient-to-r from-teal-50 to-emerald-50 dark:from-teal-950/30 dark:to-emerald-950/30 border border-teal-200/80 dark:border-teal-900/60 flex items-center justify-between gap-4">
+              <div className="space-y-1">
+                <h3 className="text-sm font-bold text-teal-900 dark:text-teal-200 flex items-center gap-2">
+                  <Layers className="w-4 h-4 text-teal-600" />
+                  Jalur Grade Control: Press Pellet & Meja Spektrometer EDXRF
+                </h3>
+                <p className="text-xs text-teal-700 dark:text-teal-400">
+                  Pulp kering masuk lab dari prep kering. Pelet selesai dipress otomatis menjadi antrean meja EDXRF.
+                </p>
+              </div>
+              <div className="text-right text-xs">
+                <span className="text-slate-500 block">Total Scan EDXRF:</span>
+                <span className="font-mono font-bold text-teal-600 text-base">{edxrfTotal} spl</span>
+              </div>
+            </div>
+
+            {/* Tahap 1: Stasiun Press Pellet */}
+            <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+                <div className="flex items-center gap-2">
+                  <Layers className="w-4 h-4 text-teal-600" />
+                  <h4 className="font-bold text-sm text-slate-800 dark:text-white">
+                    Tahap 1: Pengepresan Bubuk Padat (Press Pellet)
+                  </h4>
+                </div>
+                <div className="flex items-center gap-3 text-xs">
+                  <span className="text-slate-500">Beban Press: <strong>{totalPressLoad} spl</strong></span>
+                  <span className="text-slate-300">|</span>
+                  <span className="text-amber-600 font-bold">OS Press: {osPress} spl</span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-400">
+                    OS Press Awal (Sisa Serbuk Shift Sebelumnya)
+                  </label>
+                  <input 
+                    type="number" 
+                    value={pressOsAwal} 
+                    onChange={e => setPressOsAwal(Number(e.target.value))}
+                    className="w-full mt-1.5 px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono text-center font-bold"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold text-teal-700 dark:text-teal-400">
+                    Pulp Kering Masuk Lab dari Prep Kering (1x Entry)
+                  </label>
+                  <input 
+                    type="number" 
+                    value={pulpDryReceived} 
+                    onChange={e => {
+                      const val = Number(e.target.value);
+                      setPulpDryReceived(val);
+                      setPressFinish(val); // default sync
+                    }}
+                    className="w-full mt-1.5 px-3 py-2 rounded-xl bg-teal-50/50 dark:bg-teal-950/30 border border-teal-300 dark:border-teal-700 font-mono text-center font-bold text-teal-700 dark:text-teal-300"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400">
+                    Press Selesai (Finished Press)
+                  </label>
+                  <input 
+                    type="number" 
+                    value={pressFinish} 
+                    onChange={e => setPressFinish(Number(e.target.value))}
+                    className="w-full mt-1.5 px-3 py-2 rounded-xl bg-emerald-50/50 dark:bg-emerald-950/30 border border-emerald-300 dark:border-emerald-700 font-mono text-center font-bold text-emerald-700 dark:text-emerald-300"
+                  />
+                </div>
+              </div>
+
+              {osPress > 0 && (
+                <div className="p-3 rounded-2xl bg-amber-50 dark:bg-amber-950/40 text-xs text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800 flex items-center justify-between">
+                  <span>⚠️ Terdapat sisa serbuk belum dipress (Finished di bawah Received):</span>
+                  <strong className="font-mono">{totalPressLoad} total serbuk − {pressFinish} selesai = {osPress} spl OS Press</strong>
+                </div>
+              )}
+            </div>
+
+            {/* Tahap 2: Stasiun EDXRF */}
+            <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+                <div className="flex items-center gap-2">
+                  <Cpu className="w-4 h-4 text-blue-600" />
+                  <h4 className="font-bold text-sm text-slate-800 dark:text-white">
+                    Tahap 2: Pembacaan Spektrometer EDXRF
+                  </h4>
+                  <span className="text-[10px] bg-teal-100 dark:bg-teal-900/60 text-teal-800 dark:text-teal-300 px-2 py-0.5 rounded font-bold">
+                    Antrean Pelet: {edxrfReceived} spl (dari Finish Press)
+                  </span>
+                </div>
+                <div className="flex items-center gap-3 text-xs">
+                  <span className="text-slate-500">Scan Selesai: <strong>{edxrfTotal} spl</strong></span>
+                  <span className="text-slate-300">|</span>
+                  <span className="text-blue-600 font-bold">OS EDXRF: {osEdxrf} pelet</span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
+                  <label className="text-[10px] text-slate-500 font-medium block">OS Pelet Awal</label>
+                  <input 
+                    type="number" 
+                    value={edxrfOsAwal} 
+                    onChange={e => setEdxrfOsAwal(Number(e.target.value))}
+                    className="w-full mt-1 px-2.5 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 font-mono text-center font-bold"
+                  />
+                </div>
+
+                {[
+                  ['Epsilon C', epsC, setEpsC], 
+                  ['Epsilon D', epsD, setEpsD], 
+                  ['Epsilon E', epsE, setEpsE], 
+                  ['Epsilon F', epsF, setEpsF],
+                  ['Epsilon G', epsG, setEpsG], 
+                  ['Epsilon H', epsH, setEpsH], 
+                  ['S2 Puma', s2Puma, setS2Puma]
+                ].map(([name, val, setter]: any) => (
+                  <div key={name} className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
+                    <label className="text-[10px] text-slate-500 font-medium block">{name}</label>
+                    <input 
+                      type="number" 
+                      value={val} 
+                      onChange={e => setter(Number(e.target.value))}
+                      className="w-full mt-1 px-2.5 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 font-mono text-center font-bold"
+                    />
+                  </div>
+                ))}
+              </div>
+
+              {/* Rincian Dual OS Box */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 flex items-center justify-between text-xs">
+                  <div>
+                    <span className="font-bold text-amber-800 dark:text-amber-300 block text-sm">1. OS Press (Serbuk Belum Dipress):</span>
+                    <span className="text-[11px] text-amber-600 dark:text-amber-400">
+                      {totalPressLoad} total beban serbuk − {pressFinish} pelet selesai
+                    </span>
+                  </div>
+                  <span className="text-xl font-extrabold text-amber-700 dark:text-amber-300 font-mono">
+                    {osPress} spl
+                  </span>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 flex items-center justify-between text-xs">
+                  <div>
+                    <span className="font-bold text-blue-800 dark:text-blue-300 block text-sm">2. OS EDXRF (Pelet Selesai Belum Discan):</span>
+                    <span className="text-[11px] text-blue-600 dark:text-blue-400">
+                      {totalEdxrfLoad} total pelet − {edxrfTotal} selesai scan
+                    </span>
+                  </div>
+                  <span className="text-xl font-extrabold text-blue-700 dark:text-blue-300 font-mono">
+                    {osEdxrf} pelet
+                  </span>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        )}
+
+        {/* ========================================================================= */}
+        {/* SUB-MENU 3: WDXRF */}
+        {/* ========================================================================= */}
+        {activeSubMenu === 'wdxrf' && (
+          <div className="space-y-6">
+            
+            {/* Banner Guide */}
+            <div className="p-4 rounded-2xl bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-950/30 dark:to-purple-950/30 border border-indigo-200/80 dark:border-indigo-900/60 flex items-center justify-between gap-4">
+              <div className="space-y-1">
+                <h3 className="text-sm font-bold text-indigo-900 dark:text-indigo-200 flex items-center gap-2">
+                  <Cpu className="w-4 h-4 text-indigo-600" />
+                  Stasiun Spektrometri WDXRF (Zetium A & B)
+                </h3>
+                <p className="text-xs text-indigo-700 dark:text-indigo-400">
+                  Antrean manik kaca (*glass bead*) otomatis diterima dari hasil checklist Stasiun Fusion ({fusionFinishCount} bead).
+                </p>
+              </div>
+              <div className="text-right text-xs">
+                <span className="text-slate-500 block">Total Run Spektrometri:</span>
+                <span className="font-mono font-bold text-indigo-600 text-base">{wdxrfTotal} run</span>
+              </div>
+            </div>
+
+            <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+                <h4 className="font-bold text-sm text-slate-800 dark:text-white">
+                  Pengukuran Instrumen Zetium A & Zetium B
+                </h4>
+                <div className="flex items-center gap-3 text-xs">
+                  <span className="text-slate-500">Antrean Bead: <strong>{fusionFinishCount} bead</strong></span>
+                  <span className="text-slate-300">|</span>
+                  <span className="text-indigo-600 font-bold">OS Bead (Bal): {wdxrfBal} bead</span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                {/* Zetium A */}
+                <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-sm text-blue-600">Instrumen Zetium A</span>
+                    <span className="font-mono font-bold text-blue-700 dark:text-blue-300 text-sm">Total: {ztmATotal}</span>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[10px]">
+                    <div>
+                      <label className="text-slate-500">Produksi</label>
+                      <input type="number" value={ztmAPrd} onChange={e => setZtmAPrd(Number(e.target.value))} className="w-full mt-1 px-2 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono text-center font-bold" />
+                    </div>
+                    <div>
+                      <label className="text-slate-500">Eksplorasi</label>
+                      <input type="number" value={ztmAExp} onChange={e => setZtmAExp(Number(e.target.value))} className="w-full mt-1 px-2 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono text-center font-bold" />
+                    </div>
+                    <div>
+                      <label className="text-slate-500">Smelter</label>
+                      <input type="number" value={ztASml} onChange={e => setZtmASml(Number(e.target.value))} className="w-full mt-1 px-2 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono text-center font-bold" />
+                    </div>
+                    <div>
+                      <label className="text-slate-500">GTS</label>
+                      <input type="number" value={ztmAGts} onChange={e => setZtmAGts(Number(e.target.value))} className="w-full mt-1 px-2 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono text-center font-bold" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Zetium B */}
+                <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-sm text-indigo-600">Instrumen Zetium B</span>
+                    <span className="font-mono font-bold text-indigo-700 dark:text-indigo-300 text-sm">Total: {ztmBTotal}</span>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[10px]">
+                    <div>
+                      <label className="text-slate-500">Produksi</label>
+                      <input type="number" value={ztmBPrd} onChange={e => setZtmBPrd(Number(e.target.value))} className="w-full mt-1 px-2 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono text-center font-bold" />
+                    </div>
+                    <div>
+                      <label className="text-slate-500">Eksplorasi</label>
+                      <input type="number" value={ztmBExp} onChange={e => setZtmBExp(Number(e.target.value))} className="w-full mt-1 px-2 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono text-center font-bold" />
+                    </div>
+                    <div>
+                      <label className="text-slate-500">Smelter</label>
+                      <input type="number" value={ztmBSml} onChange={e => setZtmBSml(Number(e.target.value))} className="w-full mt-1 px-2 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono text-center font-bold" />
+                    </div>
+                    <div>
+                      <label className="text-slate-500">GTS</label>
+                      <input type="number" value={ztmBGts} onChange={e => setZtmBGts(Number(e.target.value))} className="w-full mt-1 px-2 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono text-center font-bold" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Saldo Antrean Bead */}
+              <div className="p-3.5 rounded-2xl bg-indigo-50 dark:bg-indigo-950/40 text-xs text-indigo-800 dark:text-indigo-300 flex items-center justify-between">
+                <span>Saldo Sisa Manik Kaca Belum Terukur (OS WDXRF):</span>
+                <strong className="font-mono text-base">{fusionFinishCount} selesai fusion − {wdxrfTotal} selesai WDXRF = {wdxrfBal} bead</strong>
+              </div>
+            </div>
+
+          </div>
+        )}
+
+        {/* ========================================================================= */}
+        {/* SUB-MENU 4: QC DATA */}
+        {/* ========================================================================= */}
+        {activeSubMenu === 'qc_data' && (
+          <div className="space-y-6">
+            
+            {/* Banner Guide */}
+            <div className="p-4 rounded-2xl bg-gradient-to-r from-blue-50 to-teal-50 dark:from-blue-950/30 dark:to-teal-950/30 border border-blue-200/80 dark:border-blue-900/60 flex items-center justify-between gap-4">
+              <div className="space-y-1">
+                <h3 className="text-sm font-bold text-blue-900 dark:text-blue-200 flex items-center gap-2">
+                  <Shield className="w-4 h-4 text-blue-600" />
+                  Stasiun Validasi Quality Control (QC Data)
+                </h3>
+                <p className="text-xs text-blue-700 dark:text-blue-400">
+                  Data <strong>Received QC otomatis masuk</strong> dari hasil selesai scan WDXRF ({qcReceived} spl). Lolos validasi akan otomatis diteruskan ke Pelaporan.
+                </p>
+              </div>
+              <div className="text-right text-xs">
+                <span className="text-slate-500 block">Lolos QC:</span>
+                <span className="font-mono font-bold text-teal-600 text-base">{qcFinish} spl</span>
+              </div>
+            </div>
+
+            <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+                <h4 className="font-bold text-sm text-slate-800 dark:text-white">
+                  Pencatatan Validasi QC Shift
+                </h4>
+                <div className="flex items-center gap-3 text-xs">
+                  <span className="text-slate-500">Total Beban QC: <strong>{totalQcLoad} spl</strong></span>
+                  <span className="text-slate-300">|</span>
+                  <span className="text-amber-600 font-bold">OS QC Sisa: {qcBal} spl</span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-400">
+                    QC Saldo Awal (OS Shift Lalu)
+                  </label>
+                  <input 
+                    type="number" 
+                    value={qcOs} 
+                    onChange={e => setQcOs(Number(e.target.value))}
+                    className="w-full mt-1.5 px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono text-center font-bold"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold text-blue-700 dark:text-blue-400">
+                    Received QC (Otomatis dari Finished WDXRF)
+                  </label>
+                  <div className="w-full mt-1.5 px-3 py-2 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 font-mono text-center font-bold text-blue-700 dark:text-blue-300">
+                    {qcReceived} sampel
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400">
+                    Finished QC (Lolos Validasi & Kriteria Mutu)
+                  </label>
+                  <input 
+                    type="number" 
+                    value={qcFinish} 
+                    onChange={e => setQcFinish(Number(e.target.value))}
+                    className="w-full mt-1.5 px-3 py-2 rounded-xl bg-emerald-50/50 dark:bg-emerald-950/30 border border-emerald-300 dark:border-emerald-700 font-mono text-center font-bold text-emerald-700 dark:text-emerald-300"
+                  />
+                </div>
+              </div>
+
+              <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 flex items-center justify-between text-xs">
+                <span>Status Saldo Antrean QC:</span>
+                <strong className="font-mono">{totalQcLoad} beban QC − {qcFinish} lolos validasi = {qcBal} spl OS QC</strong>
+              </div>
+            </div>
+
+          </div>
+        )}
+
+        {/* ========================================================================= */}
+        {/* SUB-MENU 5: REPORTING */}
+        {/* ========================================================================= */}
+        {activeSubMenu === 'reporting' && (
+          <div className="space-y-6">
+            
+            {/* Banner Guide */}
+            <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-950/30 dark:to-teal-950/30 border border-emerald-200/80 dark:border-emerald-900/60 flex items-center justify-between gap-4">
+              <div className="space-y-1">
+                <h3 className="text-sm font-bold text-emerald-900 dark:text-emerald-200 flex items-center gap-2">
+                  <FileCheck className="w-4 h-4 text-emerald-600" />
+                  Stasiun Pelaporan & Penerbitan Sertifikat Analisis (CoA Release)
+                </h3>
+                <p className="text-xs text-emerald-700 dark:text-emerald-400">
+                  Data <strong>Received Pelaporan otomatis masuk</strong> dari hasil selesai QC ({reportReceived} spl). Selesai dicetak dan dirilis ke klien/tambang.
+                </p>
+              </div>
+              <div className="text-right text-xs">
+                <span className="text-slate-500 block">CoA Selesai Rilis:</span>
+                <span className="font-mono font-bold text-emerald-600 text-base">{reportDone} CoA</span>
+              </div>
+            </div>
+
+            <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+                <h4 className="font-bold text-sm text-slate-800 dark:text-white">
+                  Penerbitan Laporan / CoA Shift
+                </h4>
+                <div className="flex items-center gap-3 text-xs">
+                  <span className="text-slate-500">Total Beban Laporan: <strong>{totalReportLoad} CoA</strong></span>
+                  <span className="text-slate-300">|</span>
+                  <span className="text-amber-600 font-bold">Pending CoA: {reportBal} CoA</span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-400">
+                    Report Saldo Awal (Pending Shift Lalu)
+                  </label>
+                  <input 
+                    type="number" 
+                    value={reportOs} 
+                    onChange={e => setReportOs(Number(e.target.value))}
+                    className="w-full mt-1.5 px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono text-center font-bold"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400">
+                    Received Pelaporan (Otomatis dari Finished QC)
+                  </label>
+                  <div className="w-full mt-1.5 px-3 py-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 font-mono text-center font-bold text-emerald-700 dark:text-emerald-300">
+                    {reportReceived} sampel lolos
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold text-teal-700 dark:text-teal-400">
+                    CoA Selesai Rilis (Done Released)
+                  </label>
+                  <input 
+                    type="number" 
+                    value={reportDone} 
+                    onChange={e => setReportDone(Number(e.target.value))}
+                    className="w-full mt-1.5 px-3 py-2 rounded-xl bg-teal-50/50 dark:bg-teal-950/30 border border-teal-300 dark:border-teal-700 font-mono text-center font-bold text-teal-700 dark:text-teal-300"
+                  />
+                </div>
+              </div>
+
+              <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 flex items-center justify-between text-xs">
+                <span>Status Saldo Pending Rilis:</span>
+                <strong className="font-mono">{totalReportLoad} beban laporan − {reportDone} rilis = {reportBal} CoA pending</strong>
+              </div>
+            </div>
+
+          </div>
+        )}
+
+      </main>
+
+      {/* FLOATING ACTION BOTTOM BAR */}
+      <footer className="fixed bottom-0 left-0 right-0 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 px-4 sm:px-6 py-3 shadow-lg">
+        <div className="max-w-7xl mx-auto flex items-center justify-between gap-4 flex-wrap text-xs">
+          <div className="flex items-center gap-3 text-slate-500 hidden sm:flex">
+            <span>Ringkasan Shift {regu}:</span>
+            <span className="font-mono text-slate-800 dark:text-white">Press Finish: <strong>{pressFinish}</strong></span>
+            <span>•</span>
+            <span className="font-mono text-slate-800 dark:text-white">EDXRF: <strong>{edxrfTotal}</strong></span>
+            <span>•</span>
+            <span className="font-mono text-slate-800 dark:text-white">Fusion: <strong>{fusionFinishCount}</strong></span>
+            <span>•</span>
+            <span className="font-mono text-slate-800 dark:text-white">WDXRF: <strong>{wdxrfTotal}</strong></span>
+            <span>•</span>
+            <span className="font-mono text-slate-800 dark:text-white">CoA Done: <strong>{reportDone}</strong></span>
+          </div>
+
+          <div className="flex items-center gap-2.5 ml-auto">
+            <span className="text-[11px] text-emerald-600 dark:text-emerald-400 hidden sm:inline flex items-center gap-1">
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              Tersambung ke Daily Performance
+            </span>
+            <button
+              onClick={handleSaveAllRecord}
+              className="flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-md shadow-emerald-500/25 cursor-pointer transition-all"
+            >
+              <Save className="w-4 h-4" />
+              <span>Simpan & Sinkronkan Laporan Shift</span>
+            </button>
+          </div>
+        </div>
+      </footer>
+
+    </div>
+  );
+};
