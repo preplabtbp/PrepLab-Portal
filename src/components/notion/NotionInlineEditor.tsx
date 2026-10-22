@@ -1751,7 +1751,48 @@ const NotionMultilineBubbleEditor: React.FC<NotionMultilineBubbleEditorProps> = 
     updateBubblePosition();
   };
 
-  // Apply Notion Color Tag to selected text (Non-nesting)
+  // Helper to find all block elements touched by a range inside the editor
+  const getTouchedBlocks = (range: Range): HTMLElement[] => {
+    if (!editorRef.current) return [];
+
+    // Check if range touches <li> elements
+    const lis = Array.from(editorRef.current.querySelectorAll('li'));
+    const touchedLis = lis.filter((li) => {
+      try {
+        const liRange = document.createRange();
+        liRange.selectNodeContents(li);
+        if (range.compareBoundaryPoints(Range.END_TO_START, liRange) >= 0) return false;
+        if (range.compareBoundaryPoints(Range.START_TO_END, liRange) <= 0) return false;
+        return true;
+      } catch (e) {
+        return false;
+      }
+    });
+
+    if (touchedLis.length > 0) {
+      return touchedLis;
+    }
+
+    // Otherwise check child blocks of editor (e.g. divs, p, blockquote)
+    const blocks = Array.from(editorRef.current.children).filter((child) => {
+      if (child.nodeType !== Node.ELEMENT_NODE) return false;
+      const tag = child.tagName.toLowerCase();
+      if (tag === 'ul' || tag === 'ol') return false;
+      try {
+        const childRange = document.createRange();
+        childRange.selectNodeContents(child);
+        if (range.compareBoundaryPoints(Range.END_TO_START, childRange) >= 0) return false;
+        if (range.compareBoundaryPoints(Range.START_TO_END, childRange) <= 0) return false;
+        return true;
+      } catch (e) {
+        return false;
+      }
+    }) as HTMLElement[];
+
+    return blocks;
+  };
+
+  // Apply Notion Color Tag to selected text (Non-nesting & multi-line safe)
   const handleApplyColor = (hex: string, colorKey: string) => {
     const sel = window.getSelection();
     let range: Range | null = null;
@@ -1766,6 +1807,84 @@ const NotionMultilineBubbleEditor: React.FC<NotionMultilineBubbleEditorProps> = 
     if (sel) {
       sel.removeAllRanges();
       sel.addRange(range);
+    }
+
+    const touchedBlocks = getTouchedBlocks(range);
+
+    // Multi-line / Multi-bullet selection: Format each block individually to avoid DOM splitting & empty bullets
+    if (touchedBlocks.length > 1) {
+      const startContainer = range.startContainer;
+      const startOffset = range.startOffset;
+      const endContainer = range.endContainer;
+      const endOffset = range.endOffset;
+
+      touchedBlocks.forEach((block) => {
+        // Strip existing color styling inside block
+        const existingColorSpans = block.querySelectorAll('span[data-color], span[style*="color"]');
+        existingColorSpans.forEach((el) => {
+          const htmlEl = el as HTMLElement;
+          htmlEl.removeAttribute('data-color');
+          htmlEl.style.color = '';
+          if (!htmlEl.getAttribute('style')?.trim() && !htmlEl.getAttribute('data-bg')) {
+            const parent = htmlEl.parentNode;
+            while (htmlEl.firstChild) {
+              parent?.insertBefore(htmlEl.firstChild, htmlEl);
+            }
+            parent?.removeChild(htmlEl);
+          }
+        });
+
+        if (colorKey !== 'default') {
+          const subRange = document.createRange();
+          subRange.selectNodeContents(block);
+          if (block.contains(startContainer)) {
+            try {
+              subRange.setStart(startContainer, startOffset);
+            } catch (e) {}
+          }
+          if (block.contains(endContainer)) {
+            try {
+              subRange.setEnd(endContainer, endOffset);
+            } catch (e) {}
+          }
+
+          if (!subRange.collapsed && subRange.toString().length > 0) {
+            const span = document.createElement('span');
+            span.style.color = hex;
+            span.setAttribute('data-color', colorKey);
+
+            try {
+              const contents = subRange.extractContents();
+              span.appendChild(contents);
+              subRange.insertNode(span);
+            } catch (e) {}
+          }
+        }
+      });
+
+      // Cleanup any orphaned empty bullet points
+      if (editorRef.current) {
+        editorRef.current.querySelectorAll('li').forEach((li) => {
+          if (!li.textContent?.trim() && !li.querySelector('img, input, button')) {
+            li.remove();
+          }
+        });
+      }
+
+      // Restore selection covering all touched blocks
+      if (sel && touchedBlocks.length > 0) {
+        try {
+          const newRange = document.createRange();
+          newRange.setStart(touchedBlocks[0], 0);
+          newRange.setEnd(touchedBlocks[touchedBlocks.length - 1], touchedBlocks[touchedBlocks.length - 1].childNodes.length);
+          sel.removeAllRanges();
+          sel.addRange(newRange);
+          lastSavedRangeRef.current = newRange.cloneRange();
+        } catch (e) {}
+      }
+
+      setIsColorMenuOpen(false);
+      return;
     }
 
     let colorAncestor: HTMLElement | null = null;
@@ -1867,10 +1986,19 @@ const NotionMultilineBubbleEditor: React.FC<NotionMultilineBubbleEditorProps> = 
       }
     }
 
+    // Safety cleanup: purge any empty li elements
+    if (editorRef.current) {
+      editorRef.current.querySelectorAll('li').forEach((li) => {
+        if (!li.textContent?.trim() && !li.querySelector('img, input, button')) {
+          li.remove();
+        }
+      });
+    }
+
     setIsColorMenuOpen(false);
   };
 
-  // Apply Notion Highlight Tag to selected text (Non-nesting)
+  // Apply Notion Highlight Tag to selected text (Non-nesting & multi-line safe)
   const handleApplyHighlight = (hex: string, highlightKey: string) => {
     const sel = window.getSelection();
     let range: Range | null = null;
@@ -1885,6 +2013,88 @@ const NotionMultilineBubbleEditor: React.FC<NotionMultilineBubbleEditorProps> = 
     if (sel) {
       sel.removeAllRanges();
       sel.addRange(range);
+    }
+
+    const touchedBlocks = getTouchedBlocks(range);
+
+    // Multi-line / Multi-bullet selection: Format each block individually to avoid DOM splitting & empty bullets
+    if (touchedBlocks.length > 1) {
+      const startContainer = range.startContainer;
+      const startOffset = range.startOffset;
+      const endContainer = range.endContainer;
+      const endOffset = range.endOffset;
+
+      touchedBlocks.forEach((block) => {
+        // Strip existing highlight styling inside block
+        const existingBgSpans = block.querySelectorAll('span[data-bg], span[style*="background"]');
+        existingBgSpans.forEach((el) => {
+          const htmlEl = el as HTMLElement;
+          htmlEl.removeAttribute('data-bg');
+          htmlEl.style.backgroundColor = '';
+          htmlEl.style.padding = '';
+          htmlEl.style.borderRadius = '';
+          if (!htmlEl.getAttribute('style')?.trim() && !htmlEl.getAttribute('data-color')) {
+            const parent = htmlEl.parentNode;
+            while (htmlEl.firstChild) {
+              parent?.insertBefore(htmlEl.firstChild, htmlEl);
+            }
+            parent?.removeChild(htmlEl);
+          }
+        });
+
+        if (highlightKey !== 'default' && hex !== 'transparent') {
+          const subRange = document.createRange();
+          subRange.selectNodeContents(block);
+          if (block.contains(startContainer)) {
+            try {
+              subRange.setStart(startContainer, startOffset);
+            } catch (e) {}
+          }
+          if (block.contains(endContainer)) {
+            try {
+              subRange.setEnd(endContainer, endOffset);
+            } catch (e) {}
+          }
+
+          if (!subRange.collapsed && subRange.toString().length > 0) {
+            const span = document.createElement('span');
+            span.style.backgroundColor = hex;
+            span.style.padding = '1px 3px';
+            span.style.borderRadius = '3px';
+            span.setAttribute('data-bg', highlightKey);
+
+            try {
+              const contents = subRange.extractContents();
+              span.appendChild(contents);
+              subRange.insertNode(span);
+            } catch (e) {}
+          }
+        }
+      });
+
+      // Cleanup any orphaned empty bullet points
+      if (editorRef.current) {
+        editorRef.current.querySelectorAll('li').forEach((li) => {
+          if (!li.textContent?.trim() && !li.querySelector('img, input, button')) {
+            li.remove();
+          }
+        });
+      }
+
+      // Restore selection covering all touched blocks
+      if (sel && touchedBlocks.length > 0) {
+        try {
+          const newRange = document.createRange();
+          newRange.setStart(touchedBlocks[0], 0);
+          newRange.setEnd(touchedBlocks[touchedBlocks.length - 1], touchedBlocks[touchedBlocks.length - 1].childNodes.length);
+          sel.removeAllRanges();
+          sel.addRange(newRange);
+          lastSavedRangeRef.current = newRange.cloneRange();
+        } catch (e) {}
+      }
+
+      setIsColorMenuOpen(false);
+      return;
     }
 
     let bgAncestor: HTMLElement | null = null;
@@ -1993,12 +2203,63 @@ const NotionMultilineBubbleEditor: React.FC<NotionMultilineBubbleEditorProps> = 
       }
     }
 
+    // Safety cleanup: purge any empty li elements
+    if (editorRef.current) {
+      editorRef.current.querySelectorAll('li').forEach((li) => {
+        if (!li.textContent?.trim() && !li.querySelector('img, input, button')) {
+          li.remove();
+        }
+      });
+    }
+
     setIsColorMenuOpen(false);
   };
 
   // Clear format
   const handleClearFormat = () => {
+    const sel = window.getSelection();
+    let range: Range | null = null;
+    if (sel && sel.rangeCount > 0 && !sel.isCollapsed) {
+      range = sel.getRangeAt(0);
+    } else if (lastSavedRangeRef.current) {
+      range = lastSavedRangeRef.current;
+    }
+
+    if (range) {
+      const touchedBlocks = getTouchedBlocks(range);
+      if (touchedBlocks.length > 1) {
+        touchedBlocks.forEach((block) => {
+          const spans = block.querySelectorAll('span[data-color], span[data-bg], span[style*="color"], span[style*="background"]');
+          spans.forEach((el) => {
+            const htmlEl = el as HTMLElement;
+            htmlEl.removeAttribute('data-color');
+            htmlEl.removeAttribute('data-bg');
+            htmlEl.style.color = '';
+            htmlEl.style.backgroundColor = '';
+            htmlEl.style.padding = '';
+            htmlEl.style.borderRadius = '';
+            if (!htmlEl.getAttribute('style')?.trim()) {
+              const parent = htmlEl.parentNode;
+              while (htmlEl.firstChild) {
+                parent?.insertBefore(htmlEl.firstChild, htmlEl);
+              }
+              parent?.removeChild(htmlEl);
+            }
+          });
+        });
+      }
+    }
+
     execCmd('removeFormat');
+
+    if (editorRef.current) {
+      editorRef.current.querySelectorAll('li').forEach((li) => {
+        if (!li.textContent?.trim() && !li.querySelector('img, input, button')) {
+          li.remove();
+        }
+      });
+    }
+
     setIsColorMenuOpen(false);
     setBubblePos(null);
   };
