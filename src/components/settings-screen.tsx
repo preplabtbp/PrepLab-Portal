@@ -470,21 +470,19 @@ export function SettingsScreen({
                   <p className="text-xs" style={{ color: 'var(--text-muted, #64748B)' }}>
                     Jika diisi, modal kirim WA akan langsung menuju ke nomor/PIC ini. (Format: 62812...)
                   </p>
-                  <div className="flex gap-2">
-                     <Input 
-                        value={waTarget}
-                        onChange={e => setWaTarget(e.target.value)}
-                        placeholder="628..."
-                        containerClassName="flex-1 !mb-0"
-                     />
-                     <Button 
-                       onClick={handleSaveWaTarget} 
-                       className="shrink-0 font-bold"
-                       style={{ backgroundColor: 'var(--primary, #2A9D8F)', color: '#FFFFFF' }}
-                     >
-                       Simpan
-                     </Button>
-                  </div>
+                  <Input 
+                    value={waTarget}
+                    onChange={e => setWaTarget(e.target.value)}
+                    placeholder="Contoh: 628123456789"
+                    containerClassName="!mb-2"
+                  />
+                  <Button 
+                    onClick={handleSaveWaTarget} 
+                    className="w-full font-bold"
+                    style={{ backgroundColor: 'var(--primary, #2A9D8F)', color: '#FFFFFF' }}
+                  >
+                    Simpan Target WhatsApp
+                  </Button>
                 </div>
               </Card>
             )}

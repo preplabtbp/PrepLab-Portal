@@ -169,22 +169,22 @@ export function DevRoleplaySwitcher({ onProfileChange }: DevRoleplaySwitcherProp
       {/* Trigger Bar */}
       <div 
         onClick={() => setIsOpen(prev => !prev)}
-        className="w-full flex items-center justify-between p-2 px-3 rounded-xl bg-slate-900/90 text-white border border-amber-500/30 text-xs shadow-md cursor-pointer hover:bg-slate-800 transition-all select-none"
+        className="w-full flex items-center justify-between p-2.5 px-3 rounded-xl bg-amber-50/80 hover:bg-amber-100/90 text-amber-950 border border-amber-300 text-xs shadow-xs cursor-pointer transition-all select-none"
       >
-        <div className="flex items-center gap-2 min-w-0">
-          <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse shrink-0" />
-          <div className="flex items-center gap-1.5 min-w-0">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400 shrink-0">
-              Simulasi Peran:
+        <div className="flex items-center gap-2 min-w-0 flex-1">
+          <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse shrink-0" />
+          <div className="flex items-center gap-1.5 min-w-0 flex-1">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-amber-800 shrink-0">
+              Peran:
             </span>
-            <span className="font-semibold text-slate-100 truncate text-[11px]">
-              {activeSim ? `${activeSim.badge} (Akun Anda)` : 'Akun Asli (Normal)'}
+            <span className="font-semibold text-slate-800 truncate text-[11px]">
+              {activeSim ? `${activeSim.badge} (Simulasi)` : 'Akun Asli (Normal)'}
             </span>
           </div>
         </div>
 
-        <div className="flex items-center gap-1 text-slate-400 shrink-0">
-          <span className="text-[10px] hidden sm:inline text-amber-300">Uji Tampilan Role</span>
+        <div className="flex items-center gap-1 text-amber-700 shrink-0 ml-2">
+          <span className="text-[10px] font-medium hidden sm:inline">Uji Role</span>
           {isOpen ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
         </div>
       </div>
