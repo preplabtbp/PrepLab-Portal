@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from "react"
 import { translateDisplayText, isSameSection } from './notion/logbook-section-utils';
 import { TbpDashboard } from "./TbpDashboard";
 import { SectionHubDashboard, COVER_PRESETS } from "./SectionHubDashboard";
+import { VerifiedBadge } from "./VerifiedBadge";
 import { NotionDatabaseTable, TableRowData, extractDriveId } from "./NotionDatabaseTable";
 import { isLogbookPost, getSectionFromPost, getLogbookTableData, aggregateSectionActiveTasks, KNOWN_SECTIONS, getUserAllowedSections, isUserAllowedToAccessSection } from "./notion/logbook-section-utils";
 import { EnterpriseWysiwygEditor } from "./notion/EnterpriseWysiwygEditor";
@@ -3116,9 +3117,10 @@ ${aiMeetingNotes
               {/* Title & Metadata */}
               <div>
                 <h1 
-                  className="text-3xl md:text-5xl font-black tracking-tight leading-tight mb-3 text-slate-900"
+                  className="text-3xl md:text-5xl font-black tracking-tight leading-tight mb-3 text-slate-900 flex items-center gap-2.5 flex-wrap"
                 >
-                  {translateDisplayText(getPostTitle(selectedPost))}
+                  <span>{translateDisplayText(getPostTitle(selectedPost))}</span>
+                  <VerifiedBadge size="md" title="Dokumen Resmi Terverifikasi Labnote" />
                 </h1>
 
                 <div 
@@ -3128,6 +3130,7 @@ ${aiMeetingNotes
                   <div className="flex items-center gap-1.5">
                     <User className="w-3.5 h-3.5 opacity-70" />
                     <span>{selectedPost.authorName || "System"}</span>
+                    <VerifiedBadge size="xs" title="Penulis Resmi Terverifikasi" />
                   </div>
                   <span>•</span>
                   <div className="flex items-center gap-1.5">
@@ -3884,6 +3887,7 @@ ${aiMeetingNotes
                         <span>Seksi: <strong className="text-slate-200">{p.department || p.category || 'General'}</strong></span>
                         <span>•</span>
                         <span>Penulis: <strong className="text-slate-200">{p.authorName || 'Personil'}</strong></span>
+                        <VerifiedBadge size="xs" title="Terverifikasi" />
                         <span>•</span>
                         <span>Universe: <strong className="text-teal-300">{p.pt || 'TBP'}</strong></span>
                       </div>

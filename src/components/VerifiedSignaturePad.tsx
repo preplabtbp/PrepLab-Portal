@@ -1,3 +1,4 @@
+import { VerifiedBadge } from './VerifiedBadge';
 import React, { useState, useEffect, useRef } from 'react';
 import SignatureCanvas from 'react-signature-canvas';
 import { 
@@ -219,8 +220,8 @@ export function VerifiedSignaturePad({
               <img src={value} alt="Preview TTD" className="max-h-full max-w-full object-contain" />
             </div>
             <div>
-              <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-600 dark:text-emerald-400">
-                <CheckCircle2 className="w-4 h-4 shrink-0" />
+              <div className="flex items-center gap-1.5 text-xs font-bold text-sky-600 dark:text-sky-400">
+                <VerifiedBadge size="sm" />
                 <span>Tanda Tangan Terverifikasi</span>
               </div>
               <p className="text-[11px] text-[var(--text-muted)] mt-0.5">

@@ -1,3 +1,4 @@
+import { VerifiedBadge } from './VerifiedBadge';
 import React, { useState, useEffect, useRef } from 'react';
 import SignatureCanvas from 'react-signature-canvas';
 import { 
@@ -939,8 +940,8 @@ export function SignatureSettingsCard({ inspectorNik, inspectorName }: Signature
                     />
                   </div>
 
-                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
-                    <CheckCircle2 className="w-3.5 h-3.5" /> Tanda Tangan Terverifikasi &amp; Siap Digunakan
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-sky-50 text-sky-800 dark:bg-sky-950/60 dark:text-sky-300 border border-sky-200 dark:border-sky-800 shadow-2xs">
+                    <VerifiedBadge size="xs" /> Tanda Tangan Terverifikasi &amp; Siap Digunakan
                   </div>
 
                   <p className="text-xs text-[var(--text-muted)] leading-relaxed">

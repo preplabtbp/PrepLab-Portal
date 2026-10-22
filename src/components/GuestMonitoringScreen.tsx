@@ -1,3 +1,4 @@
+import { VerifiedBadge } from './VerifiedBadge';
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   ThermometerSun, Wind, ShieldCheck, CheckCircle2, AlertTriangle, 
@@ -1266,7 +1267,7 @@ export const GuestMonitoringScreen: React.FC = () => {
                         <div className="text-sm font-bold text-teal-900 font-display mt-1 truncate">
                           {rec?.inspektorPetugas || 'Petugas Lab'}
                         </div>
-                        <div className="text-[11px] text-emerald-700 font-bold mt-1">Terverifikasi Database</div>
+                        <div className="text-[11px] text-sky-700 dark:text-sky-400 font-bold mt-1 flex items-center justify-center gap-1"><VerifiedBadge size="xs" /> Terverifikasi Database</div>
                       </div>
                     </div>
 

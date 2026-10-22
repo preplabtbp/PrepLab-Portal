@@ -1,3 +1,4 @@
+import { VerifiedBadge } from '../VerifiedBadge';
 import React, { useState, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 import SignatureCanvas from 'react-signature-canvas';
@@ -1601,8 +1602,8 @@ export const P2HLaboratoryApprovalQueue: React.FC<P2HLaboratoryApprovalQueueProp
                     /* 1. Tanda Tangan Terdaftar & Sudah Terbuka dengan PIN */
                     <div className="p-4 rounded-2xl bg-emerald-50/50 dark:bg-emerald-950/20 border-2 border-emerald-500/40 space-y-3">
                       <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
-                          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                        <span className="text-xs font-bold text-sky-800 dark:text-sky-300 flex items-center gap-1.5">
+                          <VerifiedBadge size="sm" />
                           Tanda Tangan Resmi Terverifikasi (PIN Valid)
                         </span>
                         <div className="flex items-center gap-2">

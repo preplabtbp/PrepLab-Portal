@@ -1,4 +1,5 @@
 import { translateDisplayText } from './notion/logbook-section-utils';
+import { VerifiedBadge } from './VerifiedBadge';
 import React, { useState, useMemo } from 'react';
 import { 
   Home, 
@@ -148,6 +149,27 @@ export function SectionHubDashboard({
   const [showCoverModal, setShowCoverModal] = useState<boolean>(false);
   const [coverInputUrl, setCoverInputUrl] = useState<string>('');
   const [isSavingCover, setIsSavingCover] = useState<boolean>(false);
+
+  // Section Verification State (persist in localStorage per section post ID)
+  const [isVerified, setIsVerified] = useState<boolean>(() => {
+    if (!post?.id) return true;
+    try {
+      const saved = localStorage.getItem(`preplab_section_verified_${post.id}`);
+      return saved !== null ? saved === 'true' : true;
+    } catch {
+      return true;
+    }
+  });
+
+  const handleToggleVerification = () => {
+    const next = !isVerified;
+    setIsVerified(next);
+    if (post?.id) {
+      try {
+        localStorage.setItem(`preplab_section_verified_${post.id}`, String(next));
+      } catch {}
+    }
+  };
 
   const handleSaveCover = async (urlToSave: string) => {
     if (!post?.id) return;
@@ -1131,9 +1153,15 @@ export function SectionHubDashboard({
 
         {/* Action / Verification Row */}
         <div className="flex items-center gap-4 text-xs text-slate-400 font-medium pt-1">
-          <span className="flex items-center gap-1.5 hover:text-slate-600 transition-colors cursor-pointer">
-            <CheckCircle2 className="w-3.5 h-3.5 text-slate-400" />
-            <span>Add verification</span>
+          <span 
+            onClick={handleToggleVerification}
+            className="flex items-center gap-1.5 hover:text-sky-600 transition-colors cursor-pointer group"
+            title={isVerified ? "Seksi ini telah terverifikasi resmi (Klik untuk toggle)" : "Klik untuk memverifikasi seksi ini"}
+          >
+            <VerifiedBadge size="xs" />
+            <span className={isVerified ? "text-sky-600 font-bold" : "group-hover:text-sky-600"}>
+              {isVerified ? "Terverifikasi" : "Add verification"}
+            </span>
           </span>
           <span className="flex items-center gap-1.5 hover:text-slate-600 transition-colors cursor-pointer">
             <MessageSquare className="w-3.5 h-3.5 text-slate-400" />
@@ -1288,10 +1316,11 @@ export function SectionHubDashboard({
               title="Double klik untuk mengedit judul atau warna teks"
             >
               <h1 
-                className="text-3xl md:text-4xl lg:text-5xl font-black tracking-tight transition-colors"
+                className="text-3xl md:text-4xl lg:text-5xl font-black tracking-tight transition-colors flex items-center gap-2.5 flex-wrap"
                 style={{ color: titleColor }}
               >
-                {displayedTitle ? translateDisplayText(displayedTitle.toUpperCase().trim()) : translateDisplayText(sectionTitle)}
+                <span>{displayedTitle ? translateDisplayText(displayedTitle.toUpperCase().trim()) : translateDisplayText(sectionTitle)}</span>
+                {isVerified && <VerifiedBadge size="md" title="Seksi Terverifikasi Resmi Labnote" />}
               </h1>
               <span className="opacity-0 group-hover/title:opacity-100 p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all text-xs font-semibold flex items-center gap-1 shrink-0 border border-transparent hover:border-blue-200 shadow-2xs">
                 <Pencil className="w-3.5 h-3.5" />
