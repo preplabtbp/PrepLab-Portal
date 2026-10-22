@@ -3240,6 +3240,64 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
   const [editingRecord, setEditingRecord] = useState<TrainingRecord | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [isSaving, setIsSaving] = useState(false);
+
+  // State for Double-Click Inline Editing of POP cells (Batch POP, Kualifikasi, Keterangan POP)
+  const [inlineEdit, setInlineEdit] = useState<{
+    recordId: number;
+    field: 'popBatch' | 'pendidikan' | 'popKeterangan';
+    value: string;
+  } | null>(null);
+  const [isSavingInline, setIsSavingInline] = useState(false);
+
+  const handleInlineSave = async (
+    record: TrainingRecord,
+    field: 'popBatch' | 'pendidikan' | 'popKeterangan',
+    newValue: string
+  ) => {
+    const currentVal = (record.popData as any)?.[field] ?? '';
+    if (String(currentVal).trim() === String(newValue).trim()) {
+      setInlineEdit(null);
+      return;
+    }
+
+    const updatedPopData = {
+      ...(record.popData || {}),
+      [field]: newValue.trim() || null,
+    };
+
+    try {
+      setIsSavingInline(true);
+      const url = `/api/training-records/${record.id}`;
+      const res = await fetch(url, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nik: record.nik,
+          nama: record.nama,
+          jabatan: record.jabatan,
+          bagian: record.bagian,
+          pt: record.pt,
+          gol: record.gol,
+          shift: record.shift,
+          popData: updatedPopData,
+          program: 'pop',
+          updatedBy: inspectorName || inspectorNik,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok || json.status !== 'success') {
+        toast.error(json.message || 'Gagal menyimpan perubahan');
+        return;
+      }
+      fetchRecords();
+      toast.success('Data POP berhasil diperbarui');
+    } catch (err: any) {
+      toast.error(err.message || 'Terjadi kesalahan saat menyimpan');
+    } finally {
+      setIsSavingInline(false);
+      setInlineEdit(null);
+    }
+  };
   const [deleteTarget, setDeleteTarget] = useState<TrainingRecord | null>(null);
   const [isImporting, setIsImporting] = useState(false);
   const [importPreview, setImportPreview] = useState<(ParsedTrainingSheet & { fileName: string; sheetRows: unknown[][] }) | null>(null);
@@ -6108,9 +6166,119 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                               <span className="font-bold text-slate-800">{popMasaKerja(r.popData) || '-'}</span>
                               {r.popData?.doh && <span className="block text-[10px] font-semibold text-slate-500">DOH {formatTrainingDate(r.popData.doh)}</span>}
                             </td>
-                            <td className="px-3 py-2 text-center border-r border-slate-100 dark:border-slate-800/70">{renderPopBatch(r.popData)}</td>
-                            <td className="px-3 py-2 min-w-[140px] border-r border-slate-100 dark:border-slate-800/70">{renderKualifikasi(r.popData)}</td>
-                            <td className="px-3 py-2 text-center border-r border-slate-100 dark:border-slate-800/70">{renderPopKeterangan(r.popData?.popKeterangan)}</td>
+                            {/* 1. POP Batch (Double Click to Edit) */}
+                            <td 
+                              className={`px-3 py-2 text-center border-r border-slate-100 dark:border-slate-800/70 transition-colors ${canManage ? 'cursor-pointer hover:bg-violet-50/50 dark:hover:bg-violet-950/20' : ''}`}
+                              title={canManage ? "Double klik untuk edit Batch POP" : undefined}
+                              onDoubleClick={() => {
+                                if (!canManage) return;
+                                setInlineEdit({
+                                  recordId: r.id,
+                                  field: 'popBatch',
+                                  value: r.popData?.popBatch || ''
+                                });
+                              }}
+                            >
+                              {inlineEdit?.recordId === r.id && inlineEdit.field === 'popBatch' ? (
+                                <div className="flex items-center justify-center gap-1" onClick={e => e.stopPropagation()}>
+                                  <input
+                                    type="text"
+                                    autoFocus
+                                    value={inlineEdit.value}
+                                    onChange={e => setInlineEdit({ ...inlineEdit, value: e.target.value })}
+                                    onKeyDown={e => {
+                                      if (e.key === 'Enter') handleInlineSave(r, 'popBatch', inlineEdit.value);
+                                      if (e.key === 'Escape') setInlineEdit(null);
+                                    }}
+                                    onBlur={() => handleInlineSave(r, 'popBatch', inlineEdit.value)}
+                                    disabled={isSavingInline}
+                                    placeholder="mis. Batch 2023..."
+                                    className="text-[11px] font-bold px-2 py-1 rounded-lg border-2 border-violet-500 bg-white shadow-md focus:outline-none w-28 text-center text-violet-900"
+                                  />
+                                  {isSavingInline && <Loader2 className="w-3.5 h-3.5 animate-spin text-violet-600" />}
+                                </div>
+                              ) : (
+                                renderPopBatch(r.popData)
+                              )}
+                            </td>
+                            {/* 2. Kualifikasi (Double Click to Edit) */}
+                            <td 
+                              className={`px-3 py-2 min-w-[140px] border-r border-slate-100 dark:border-slate-800/70 transition-colors ${canManage ? 'cursor-pointer hover:bg-sky-50/50 dark:hover:bg-sky-950/20' : ''}`}
+                              title={canManage ? "Double klik untuk edit Kualifikasi Pendidikan" : undefined}
+                              onDoubleClick={() => {
+                                if (!canManage) return;
+                                setInlineEdit({
+                                  recordId: r.id,
+                                  field: 'pendidikan',
+                                  value: r.popData?.pendidikan || ''
+                                });
+                              }}
+                            >
+                              {inlineEdit?.recordId === r.id && inlineEdit.field === 'pendidikan' ? (
+                                <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+                                  <input
+                                    type="text"
+                                    autoFocus
+                                    value={inlineEdit.value}
+                                    onChange={e => setInlineEdit({ ...inlineEdit, value: e.target.value })}
+                                    onKeyDown={e => {
+                                      if (e.key === 'Enter') handleInlineSave(r, 'pendidikan', inlineEdit.value);
+                                      if (e.key === 'Escape') setInlineEdit(null);
+                                    }}
+                                    onBlur={() => handleInlineSave(r, 'pendidikan', inlineEdit.value)}
+                                    disabled={isSavingInline}
+                                    placeholder="S1 / D3 / SMK..."
+                                    className="text-[11px] font-bold px-2 py-1 rounded-lg border-2 border-sky-500 bg-white shadow-md focus:outline-none w-24 text-slate-900"
+                                  />
+                                  {isSavingInline && <Loader2 className="w-3.5 h-3.5 animate-spin text-sky-600" />}
+                                </div>
+                              ) : (
+                                renderKualifikasi(r.popData)
+                              )}
+                            </td>
+                            {/* 3. Keterangan POP (Double Click to Edit) */}
+                            <td 
+                              className={`px-3 py-2 text-center border-r border-slate-100 dark:border-slate-800/70 transition-colors ${canManage ? 'cursor-pointer hover:bg-teal-50/50 dark:hover:bg-teal-950/20' : ''}`}
+                              title={canManage ? "Double klik untuk edit Keterangan POP" : undefined}
+                              onDoubleClick={() => {
+                                if (!canManage) return;
+                                setInlineEdit({
+                                  recordId: r.id,
+                                  field: 'popKeterangan',
+                                  value: r.popData?.popKeterangan || ''
+                                });
+                              }}
+                            >
+                              {inlineEdit?.recordId === r.id && inlineEdit.field === 'popKeterangan' ? (
+                                <div className="flex items-center justify-center gap-1" onClick={e => e.stopPropagation()}>
+                                  <select
+                                    autoFocus
+                                    value={inlineEdit.value}
+                                    onChange={e => {
+                                      const val = e.target.value;
+                                      setInlineEdit({ ...inlineEdit, value: val });
+                                      handleInlineSave(r, 'popKeterangan', val);
+                                    }}
+                                    onBlur={() => handleInlineSave(r, 'popKeterangan', inlineEdit.value)}
+                                    onKeyDown={e => {
+                                      if (e.key === 'Enter') handleInlineSave(r, 'popKeterangan', inlineEdit.value);
+                                      if (e.key === 'Escape') setInlineEdit(null);
+                                    }}
+                                    disabled={isSavingInline}
+                                    className="text-[10px] font-bold px-2 py-1 rounded-lg border-2 border-teal-500 bg-white shadow-md focus:outline-none cursor-pointer text-teal-900"
+                                  >
+                                    <option value="">- (Belum Ada)</option>
+                                    <option value="PASS">Memenuhi Syarat</option>
+                                    <option value="MASA_KERJA">Masa Kerja Belum Cukup</option>
+                                    <option value="IJAZAH">Ijazah Tidak Mendukung</option>
+                                    <option value="TIDAK_WAJIB">Tidak Wajib POP</option>
+                                  </select>
+                                  {isSavingInline && <Loader2 className="w-3.5 h-3.5 animate-spin text-teal-600" />}
+                                </div>
+                              ) : (
+                                renderPopKeterangan(r.popData?.popKeterangan)
+                              )}
+                            </td>
                           </>
                         ) : (
                           <>
