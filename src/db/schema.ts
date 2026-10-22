@@ -1203,6 +1203,7 @@ export const employeeLeaveRequests = pgTable('employee_leave_requests', {
   catatan: text('catatan'),
   source: text('source').default('web'),
   sheetRowId: text('sheet_row_id'),
+  kategoriIzin: text('kategori_izin'), // 'I' | 'IK' | 'SS' | 'SL'
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 }, (t) => [
