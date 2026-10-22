@@ -932,6 +932,52 @@ xrfRouter.post("/verifications", async (req, res) => {
       };
     });
 
+    // Smart Upsert: jika user menginput verifikasi di tanggal dan alat yang sudah ada,
+    // replace data lama standar tersebut sehingga 1 hari hanya terdapat 1 data per standar & alat
+    const incomingStandardCodes = Array.from(new Set(processedItems.map(p => p.standardCode).filter(Boolean)));
+
+    const existingBatches = await db.select({ id: xrfVerifications.id })
+      .from(xrfVerifications)
+      .where(
+        and(
+          eq(xrfVerifications.instrumentCode, instrumentCode),
+          eq(xrfVerifications.verificationDate, verificationDate)
+        )
+      );
+
+    if (existingBatches.length > 0) {
+      const existingIds = existingBatches.map(b => b.id);
+      
+      // Hapus item-item dengan standar yang sama dari batch yang sudah ada pada tanggal & alat tersebut
+      if (incomingStandardCodes.length > 0) {
+        await db.delete(xrfVerificationItems)
+          .where(
+            and(
+              sql`${xrfVerificationItems.verificationId} IN (${sql.join(existingIds.map(id => sql`${id}`), sql`, `)})`,
+              sql`${xrfVerificationItems.standardCode} IN (${sql.join(incomingStandardCodes.map(s => sql`${s}`), sql`, `)})`
+            )
+          );
+      } else {
+        await db.delete(xrfVerificationItems)
+          .where(sql`${xrfVerificationItems.verificationId} IN (${sql.join(existingIds.map(id => sql`${id}`), sql`, `)})`);
+      }
+
+      // Hapus batch yang sudah kosong setelah item lama dihapus
+      const remainingItems = await db.select({
+        verificationId: xrfVerificationItems.verificationId
+      })
+      .from(xrfVerificationItems)
+      .where(sql`${xrfVerificationItems.verificationId} IN (${sql.join(existingIds.map(id => sql`${id}`), sql`, `)})`)
+      .groupBy(xrfVerificationItems.verificationId);
+
+      const remainingSet = new Set(remainingItems.map(r => r.verificationId));
+      const emptyIds = existingIds.filter(id => !remainingSet.has(id));
+      if (emptyIds.length > 0) {
+        await db.delete(xrfVerifications)
+          .where(sql`${xrfVerifications.id} IN (${sql.join(emptyIds.map(id => sql`${id}`), sql`, `)})`);
+      }
+    }
+
     // Insert Header
     const [insertedHeader] = await db.insert(xrfVerifications).values({
       batchCode,
@@ -2057,23 +2103,47 @@ xrfRouter.post("/bulk-import-paste", async (req, res) => {
       const cleanTime = vTime.replace(/[^0-9]/g, '').padEnd(4, '0').slice(0, 4);
       const batchCode = b.batchCode || `VRF-${dateFormatted}-${instCode.replace('_', '')}-${cleanTime}-${String(i + 1).padStart(3, '0')}`;
 
-      // Smart Upsert: Check if batch on the same date, time, and instrument already exists
+      // Smart Upsert: Check if batch on the same date and instrument already exists -> replace so 1 day 1 data
+      const incomingStdCodes = Array.from(new Set(b.items.map((it: any) => it.standardCode).filter(Boolean)));
+
       const existing = await db.select({ id: xrfVerifications.id })
         .from(xrfVerifications)
         .where(
           and(
             eq(xrfVerifications.instrumentCode, instCode),
-            eq(xrfVerifications.verificationDate, vDate),
-            eq(xrfVerifications.verificationTime, vTime)
+            eq(xrfVerifications.verificationDate, vDate)
           )
         );
 
       if (existing.length > 0) {
         const oldIds = existing.map(e => e.id);
-        await db.delete(xrfVerificationItems)
-          .where(sql`${xrfVerificationItems.verificationId} IN (${sql.join(oldIds.map(id => sql`${id}`), sql`, `)})`);
-        await db.delete(xrfVerifications)
-          .where(sql`${xrfVerifications.id} IN (${sql.join(oldIds.map(id => sql`${id}`), sql`, `)})`);
+        if (incomingStdCodes.length > 0) {
+          await db.delete(xrfVerificationItems)
+            .where(
+              and(
+                sql`${xrfVerificationItems.verificationId} IN (${sql.join(oldIds.map(id => sql`${id}`), sql`, `)})`,
+                sql`${xrfVerificationItems.standardCode} IN (${sql.join(incomingStdCodes.map(s => sql`${s}`), sql`, `)})`
+              )
+            );
+        } else {
+          await db.delete(xrfVerificationItems)
+            .where(sql`${xrfVerificationItems.verificationId} IN (${sql.join(oldIds.map(id => sql`${id}`), sql`, `)})`);
+        }
+
+        // Hapus batch yang sudah kosong setelah item lama dihapus
+        const remainingItems = await db.select({
+          verificationId: xrfVerificationItems.verificationId
+        })
+        .from(xrfVerificationItems)
+        .where(sql`${xrfVerificationItems.verificationId} IN (${sql.join(oldIds.map(id => sql`${id}`), sql`, `)})`)
+        .groupBy(xrfVerificationItems.verificationId);
+
+        const remainingSet = new Set(remainingItems.map(r => r.verificationId));
+        const emptyIds = oldIds.filter(id => !remainingSet.has(id));
+        if (emptyIds.length > 0) {
+          await db.delete(xrfVerifications)
+            .where(sql`${xrfVerifications.id} IN (${sql.join(emptyIds.map(id => sql`${id}`), sql`, `)})`);
+        }
       }
 
       // Evaluate items against standard references
