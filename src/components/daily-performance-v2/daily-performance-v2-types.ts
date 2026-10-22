@@ -86,3 +86,21 @@ export interface ShiftHandoverNote {
   notes: string;
   updatedAt: string;
 }
+
+export interface BatchBreakdownItem {
+  pt: string;
+  batchCount: number;
+  sampleCount?: number;
+}
+
+export interface SampleBatchRecord {
+  id: string;
+  date: string;
+  stationKey: 'weighing' | 'fusion' | 'loi';
+  pt: string;
+  batchNumber: number;
+  sampleCount: number;
+  isFinished: boolean;
+  shiftCreated: 'DAY' | 'NIGHT' | 'LS';
+  shiftFinished?: 'DAY' | 'NIGHT' | 'LS';
+}

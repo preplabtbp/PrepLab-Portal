@@ -582,7 +582,9 @@ export const quizQuestions = pgTable('quiz_questions', {
   id: serial('id').primaryKey(),
   category: text('category').notNull(),
   text: text('text').notNull(),
+  imageUrl: text('image_url'),
   options: text('options').array().notNull(),
+  optionImages: text('option_images').array(),
   correctAnswerIndex: integer('correct_answer_index').notNull(),
   createdAt: timestamp('created_at').defaultNow(),
 });

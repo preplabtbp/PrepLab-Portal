@@ -132,6 +132,8 @@ async function initDbSchema() {
     await db.execute(sql`ALTER TABLE bulletin_comments ADD COLUMN IF NOT EXISTS reply_to_nik TEXT;`);
     await db.execute(sql`ALTER TABLE bulletin_comments ADD COLUMN IF NOT EXISTS reply_to_name TEXT;`);
     await db.execute(sql`ALTER TABLE bulletin_comments ADD COLUMN IF NOT EXISTS reply_to_content TEXT;`);
+    await db.execute(sql`ALTER TABLE quiz_questions ADD COLUMN IF NOT EXISTS image_url TEXT;`);
+    await db.execute(sql`ALTER TABLE quiz_questions ADD COLUMN IF NOT EXISTS option_images TEXT[];`);
     
     await db.execute(sql`CREATE TABLE IF NOT EXISTS employee_attendance (
       id SERIAL PRIMARY KEY,
@@ -1936,6 +1938,7 @@ const app = express();
     '/api/health',
     '/api/drive/view',
     '/api/drive/download',
+    '/api/files',
     '/api/labbot/chat',
     '/api/p5m/flyer',
     '/api/p5m/schedules/user-assignment',

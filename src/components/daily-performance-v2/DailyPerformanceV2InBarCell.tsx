@@ -99,7 +99,7 @@ export const DailyPerformanceV2InBarCell: React.FC<InBarCellProps> = ({
   return (
     <div 
       onClick={onClick}
-      title={`${label ? `${label}: ` : ''}${prefix}${formatNumber(value)} ${unit} (${pct}% dari rekor bulanan ${formatNumber(maxValue)})`}
+      title={`${pct}% dibanding tertinggi di bulan ini (${formatNumber(maxValue)} ${unit})`}
       className={`relative w-full ${heightClass} rounded-xl overflow-hidden bg-slate-100/90 dark:bg-slate-800/80 border border-slate-200/70 dark:border-slate-700/70 flex items-center shadow-inner group transition-all duration-200 ${
         onClick ? 'cursor-pointer hover:border-slate-400 dark:hover:border-slate-500' : ''
       } ${className}`}
@@ -129,13 +129,9 @@ export const DailyPerformanceV2InBarCell: React.FC<InBarCellProps> = ({
         </div>
 
         <div className="flex items-center gap-1 font-mono shrink-0">
-          {isFullBar && isHighlightPeak ? (
-            <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-400 text-amber-950 shadow-xs flex items-center gap-0.5 ring-1 ring-amber-300 animate-pulse">
+          {isFullBar && isHighlightPeak && (
+            <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-400 text-amber-950 shadow-xs flex items-center gap-0.5 ring-1 ring-amber-300 animate-pulse" title="Rekor tertinggi di bulan ini">
               Rekor Bln
-            </span>
-          ) : (
-            <span className={`text-[10px] font-bold ${currentTheme.sub}`}>
-              {pct}% bln
             </span>
           )}
         </div>

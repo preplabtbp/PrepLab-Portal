@@ -119,7 +119,32 @@ export const DailyPerformanceV2ForemanRekapTable: React.FC<ForemanRekapProps> = 
                 <td className="py-1 text-right">{recordToDisplay.fuseBead.osExp}</td>
                 <td className="py-1 text-right">+{recordToDisplay.sampleReceived.exp.shift}</td>
                 <td className="py-1 text-right">{recordToDisplay.fuseBead.finishShift}</td>
-                <td className="py-1 text-right font-bold text-teal-600">{recordToDisplay.fuseBead.balExp}</td>
+                <td className="py-1 text-right font-bold text-teal-600 relative group cursor-help">
+                  <span>{recordToDisplay.fuseBead.balExp}</span>
+                  {recordToDisplay.fuseBead.balExp > 0 && (
+                    <span 
+                      className="w-0 h-0 border-t-[7px] border-t-rose-500 border-l-[7px] border-l-transparent absolute top-0.5 right-0.5"
+                      title="Catatan Mandor"
+                    />
+                  )}
+                  {/* Tooltip Excel Note Box */}
+                  {recordToDisplay.fuseBead.balExp > 0 && (
+                    <div className="absolute z-50 right-0 top-full mt-1.5 hidden group-hover:block p-2.5 rounded-lg bg-amber-50 dark:bg-amber-950/95 border-2 border-amber-300 dark:border-amber-600 shadow-xl text-left whitespace-nowrap min-w-[130px] font-sans pointer-events-none">
+                      <div className="text-[10px] font-black uppercase text-amber-900 dark:text-amber-200 border-b border-amber-200 dark:border-amber-800 pb-0.5 mb-1">
+                        User:
+                      </div>
+                      <div className="text-xs font-mono font-black text-slate-900 dark:text-amber-100">
+                        4 BATCH TBP
+                      </div>
+                      <div className="text-xs font-mono font-black text-slate-900 dark:text-amber-100">
+                        3 BATCH GPS
+                      </div>
+                      <div className="mt-1.5 pt-1 border-t border-amber-200 dark:border-amber-800 text-[10px] font-mono text-amber-800 dark:text-amber-300">
+                        Total: {recordToDisplay.fuseBead.balExp} spl
+                      </div>
+                    </div>
+                  )}
+                </td>
               </tr>
               <tr>
                 <td className="py-1 font-sans text-slate-500">SMELTER HPL</td>
@@ -386,7 +411,31 @@ export const DailyPerformanceV2ForemanRekapTable: React.FC<ForemanRekapProps> = 
                 <td className="py-1 text-right">208</td>
                 <td className="py-1 text-right">+52</td>
                 <td className="py-1 text-right">{recordToDisplay.loi.finLoiShift}</td>
-                <td className="py-1 text-right font-bold text-rose-600">{recordToDisplay.loi.bal}</td>
+                <td className="py-1 text-right font-bold text-rose-600 relative group cursor-help">
+                  <span>{recordToDisplay.loi.bal}</span>
+                  {recordToDisplay.loi.bal > 0 && (
+                    <span 
+                      className="w-0 h-0 border-t-[7px] border-t-rose-500 border-l-[7px] border-l-transparent absolute top-0.5 right-0.5"
+                      title="Catatan Mandor"
+                    />
+                  )}
+                  {recordToDisplay.loi.bal > 0 && (
+                    <div className="absolute z-50 right-0 top-full mt-1.5 hidden group-hover:block p-2.5 rounded-lg bg-amber-50 dark:bg-amber-950/95 border-2 border-amber-300 dark:border-amber-600 shadow-xl text-left whitespace-nowrap min-w-[130px] font-sans pointer-events-none">
+                      <div className="text-[10px] font-black uppercase text-amber-900 dark:text-amber-200 border-b border-amber-200 dark:border-amber-800 pb-0.5 mb-1">
+                        User:
+                      </div>
+                      <div className="text-xs font-mono font-black text-slate-900 dark:text-amber-100">
+                        2 BATCH TBP
+                      </div>
+                      <div className="text-xs font-mono font-black text-slate-900 dark:text-amber-100">
+                        1 BATCH GPS
+                      </div>
+                      <div className="mt-1.5 pt-1 border-t border-amber-200 dark:border-amber-800 text-[10px] font-mono text-amber-800 dark:text-amber-300">
+                        Total: {recordToDisplay.loi.bal} spl
+                      </div>
+                    </div>
+                  )}
+                </td>
               </tr>
               <tr className="font-bold bg-slate-50 dark:bg-slate-800/50">
                 <td className="py-1 font-sans text-slate-900 dark:text-white">TOTAL</td>

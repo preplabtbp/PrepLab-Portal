@@ -1,13 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { Card, Button, Input } from './ui';
-import { ArrowLeft, Plus, Edit2, Trash2, Check, X, Folder, Settings, Eye, RefreshCcw, TrendingUp, Activity } from 'lucide-react';
+import { 
+  ArrowLeft, Plus, Edit2, Trash2, Check, X, Folder, Settings, Eye, 
+  RefreshCcw, TrendingUp, Activity, ImagePlus, Loader2, Image as ImageIcon 
+} from 'lucide-react';
 import { toast } from 'sonner';
+import { PortalImagePickerModal } from './PortalImagePickerModal';
 
 interface Question {
   id: number;
   category: string;
   text: string;
+  imageUrl?: string | null;
   options: string[];
+  optionImages?: (string | null)[];
   correctAnswerIndex: number;
 }
 
@@ -179,15 +185,47 @@ export function QuizAdminScreen({ onBack, userSection }: { onBack: () => void, u
   };
 
   const handleSave = async (id?: number) => {
-    if (!editForm.text || !editForm.category || !editForm.options || editForm.options.some(o => !o)) {
-      toast.error('Mohon lengkapi semua field');
+    const category = editForm.category?.trim();
+    const text = editForm.text?.trim();
+    const options = editForm.options || ['', '', '', ''];
+    const optionImages = editForm.optionImages || ['', '', '', ''];
+
+    // Every option must have either text or an image
+    const isOptionsValid = options.length >= 2 && options.every((opt, i) => {
+      const hasText = !!opt?.trim();
+      const hasImg = !!optionImages[i]?.trim();
+      return hasText || hasImg;
+    });
+
+    if (!category || !text || !isOptionsValid) {
+      toast.error('Mohon lengkapi kategori, pertanyaan, dan pilihan jawaban (teks atau gambar)');
       return;
     }
+
+    const cleanOptions = [0, 1, 2, 3].map(i => {
+      const txt = options[i]?.trim();
+      const img = optionImages[i]?.trim();
+      if (txt) return txt;
+      if (img) return `(Pilihan Gambar ${String.fromCharCode(65 + i)})`;
+      return '';
+    });
+
+    const cleanOptionImages = [0, 1, 2, 3].map(i => optionImages[i]?.trim() || null);
+
+    const payload = {
+      category,
+      text,
+      imageUrl: editForm.imageUrl?.trim() || null,
+      options: cleanOptions,
+      optionImages: cleanOptionImages,
+      correctAnswerIndex: editForm.correctAnswerIndex ?? 0
+    };
+
     try {
       const res = await fetch(id ? `/api/quiz-questions/${id}` : '/api/quiz-questions', {
         method: id ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(editForm)
+        body: JSON.stringify(payload)
       });
       if (res.ok) {
         toast.success(id ? 'Pertanyaan diperbarui' : 'Pertanyaan ditambahkan');
@@ -196,10 +234,11 @@ export function QuizAdminScreen({ onBack, userSection }: { onBack: () => void, u
         setEditForm({});
         fetchQuestions();
       } else {
-        toast.error('Gagal menyimpan');
+        const errorData = await res.json().catch(() => ({}));
+        toast.error(errorData.error || errorData.details || 'Gagal menyimpan pertanyaan');
       }
     } catch (err) {
-      toast.error('Terjadi kesalahan');
+      toast.error('Terjadi kesalahan saat menyimpan');
     }
   };
 
@@ -261,11 +300,11 @@ export function QuizAdminScreen({ onBack, userSection }: { onBack: () => void, u
             </Button>
           )}
           {selectedCategory ? (
-            <Button onClick={() => { setIsAdding(true); setEditForm({ category: selectedCategory, text: '', options: ['', '', '', ''], correctAnswerIndex: 0 }); }} className="gap-2">
+            <Button onClick={() => { setIsAdding(true); setEditForm({ category: selectedCategory, text: '', imageUrl: '', options: ['', '', '', ''], optionImages: ['', '', '', ''], correctAnswerIndex: 0 }); }} className="gap-2">
               <Plus className="w-4 h-4" /> Tambah Soal
             </Button>
           ) : (
-            <Button onClick={() => { setIsAdding(true); setEditForm({ category: '', text: '', options: ['', '', '', ''], correctAnswerIndex: 0 }); }} className="gap-2">
+            <Button onClick={() => { setIsAdding(true); setEditForm({ category: '', text: '', imageUrl: '', options: ['', '', '', ''], optionImages: ['', '', '', ''], correctAnswerIndex: 0 }); }} className="gap-2">
               <Plus className="w-4 h-4" /> Tambah Kategori
             </Button>
           )}
@@ -320,19 +359,62 @@ export function QuizAdminScreen({ onBack, userSection }: { onBack: () => void, u
                       {q.category}
                     </div>
                     <p className="font-medium text-slate-800">{q.text}</p>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
-                      {q.options.map((opt, i) => (
-                        <div key={i} className={`p-2 text-sm rounded border ${i === q.correctAnswerIndex ? 'bg-emerald-50 border-emerald-200 text-emerald-800 font-medium' : 'bg-slate-50 border-slate-200 text-slate-600'}`}>
-                          {String.fromCharCode(65 + i)}. {opt}
+                    
+                    {/* Gambar Soal (jika ada) */}
+                    {q.imageUrl && (
+                      <div className="my-2 inline-block">
+                        <div className="relative group max-w-sm rounded-xl overflow-hidden border border-slate-200 bg-slate-50 shadow-2xs">
+                          <img 
+                            src={q.imageUrl} 
+                            alt="Gambar Soal" 
+                            className="max-h-48 w-auto object-contain bg-slate-100 rounded-lg cursor-pointer hover:opacity-95 transition-opacity" 
+                            onClick={() => window.open(q.imageUrl || '', '_blank')}
+                          />
+                          <span className="absolute bottom-1 right-1 bg-black/60 text-white text-[10px] px-1.5 py-0.5 rounded backdrop-blur-xs flex items-center gap-1">
+                            <Eye className="w-3 h-3" /> Klik perbesar
+                          </span>
                         </div>
-                      ))}
+                      </div>
+                    )}
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
+                      {q.options.map((opt, i) => {
+                        const optImg = q.optionImages?.[i];
+                        return (
+                          <div key={i} className={`p-2.5 text-sm rounded-lg border flex items-center gap-2.5 ${i === q.correctAnswerIndex ? 'bg-emerald-50 border-emerald-200 text-emerald-800 font-medium' : 'bg-slate-50 border-slate-200 text-slate-600'}`}>
+                            <span className="font-bold shrink-0">{String.fromCharCode(65 + i)}.</span>
+                            {optImg && (
+                              <img 
+                                src={optImg} 
+                                alt={`Pilihan ${String.fromCharCode(65 + i)}`}
+                                className="w-12 h-12 object-cover rounded-md border border-slate-300 bg-white shrink-0 cursor-pointer hover:scale-105 transition-transform"
+                                onClick={() => window.open(optImg, '_blank')}
+                                title="Klik untuk perbesar"
+                              />
+                            )}
+                            <span className="flex-1 break-words">{opt}</span>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                   <div className="flex flex-col gap-2">
-                    <Button variant="secondary"  onClick={() => { setEditingId(q.id); setEditForm(q); }} className="w-10 px-0">
+                    <Button 
+                      variant="secondary" 
+                      onClick={() => { 
+                        setEditingId(q.id); 
+                        setEditForm({ 
+                          ...q, 
+                          imageUrl: q.imageUrl || '', 
+                          options: [...q.options], 
+                          optionImages: q.optionImages ? [...q.optionImages] : ['', '', '', ''] 
+                        }); 
+                      }} 
+                      className="w-10 px-0"
+                    >
                       <Edit2 className="w-4 h-4 text-blue-600" />
                     </Button>
-                    <Button variant="secondary"  onClick={() => handleDelete(q.id)} className="w-10 px-0">
+                    <Button variant="secondary" onClick={() => handleDelete(q.id)} className="w-10 px-0">
                       <Trash2 className="w-4 h-4 text-rose-600" />
                     </Button>
                   </div>
@@ -475,23 +557,48 @@ export function QuizAdminScreen({ onBack, userSection }: { onBack: () => void, u
             </div>
             <div className="flex-1 overflow-y-auto space-y-4 p-2">
               {questions.filter(q => previewCategory === "ALL" || q.category === previewCategory).map((q, index) => (
-                <div key={q.id} className="p-4 border rounded-lg bg-slate-50">
+                <div key={q.id} className="p-4 border rounded-xl bg-slate-50 space-y-2">
                   <div className="flex gap-2 items-start mb-2">
                     <span className="font-bold text-slate-500">{index + 1}.</span>
-                    <div>
+                    <div className="flex-1">
                       <div className="inline-block px-2 py-0.5 bg-blue-100 text-[10px] font-bold text-blue-800 rounded mb-1 uppercase tracking-wider">
                         {q.category}
                       </div>
                       <p className="font-medium text-slate-800">{q.text}</p>
                     </div>
                   </div>
-                  <div className="ml-6 space-y-1">
-                    {q.options.map((opt, i) => (
-                      <div key={i} className={`text-sm p-1.5 rounded ${i === q.correctAnswerIndex ? 'bg-emerald-100 text-emerald-800 font-medium' : 'text-slate-600'}`}>
-                        {String.fromCharCode(65 + i)}. {opt}
-                        {i === q.correctAnswerIndex && <Check className="inline-block w-4 h-4 ml-2" />}
-                      </div>
-                    ))}
+
+                  {/* Gambar Soal di Preview */}
+                  {q.imageUrl && (
+                    <div className="ml-6 my-2">
+                      <img 
+                        src={q.imageUrl} 
+                        alt="Gambar Soal" 
+                        className="max-h-40 max-w-xs object-contain rounded-lg border border-slate-300 bg-white shadow-2xs cursor-pointer"
+                        onClick={() => window.open(q.imageUrl || '', '_blank')}
+                      />
+                    </div>
+                  )}
+
+                  <div className="ml-6 space-y-1.5">
+                    {q.options.map((opt, i) => {
+                      const optImg = q.optionImages?.[i];
+                      return (
+                        <div key={i} className={`text-sm p-2 rounded-lg flex items-center gap-2.5 border ${i === q.correctAnswerIndex ? 'bg-emerald-100/80 border-emerald-300 text-emerald-900 font-medium' : 'bg-white border-slate-200 text-slate-600'}`}>
+                          <span className="font-bold shrink-0">{String.fromCharCode(65 + i)}.</span>
+                          {optImg && (
+                            <img 
+                              src={optImg} 
+                              alt={`Pilihan ${String.fromCharCode(65 + i)}`}
+                              className="w-10 h-10 object-cover rounded border border-slate-300 bg-white shrink-0 cursor-pointer"
+                              onClick={() => window.open(optImg, '_blank')}
+                            />
+                          )}
+                          <span className="flex-1 break-words">{opt}</span>
+                          {i === q.correctAnswerIndex && <Check className="w-4 h-4 ml-auto text-emerald-700 shrink-0" />}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               ))}
@@ -506,51 +613,345 @@ export function QuizAdminScreen({ onBack, userSection }: { onBack: () => void, u
   );
 }
 
-function QuestionForm({ form, setForm, onSave, onCancel }: { form: Partial<Question>, setForm: any, onSave: () => void, onCancel: () => void }) {
+function QuestionForm({ 
+  form, 
+  setForm, 
+  onSave, 
+  onCancel 
+}: { 
+  form: Partial<Question>, 
+  setForm: any, 
+  onSave: () => void, 
+  onCancel: () => void 
+}) {
+  const [uploadingTarget, setUploadingTarget] = useState<'question' | number | null>(null);
+  const [pickerTarget, setPickerTarget] = useState<'question' | number | null>(null);
+
+  const handleDirectUpload = async (e: React.ChangeEvent<HTMLInputElement>, target: 'question' | number) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      toast.error('File harus berupa gambar (JPG, PNG, WEBP, GIF)');
+      return;
+    }
+    if (file.size > 20 * 1024 * 1024) {
+      toast.error('Ukuran gambar maksimal 20 MB');
+      return;
+    }
+
+    setUploadingTarget(target);
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        const base64Data = reader.result as string;
+        const res = await fetch('/api/upload', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            base64Data,
+            filename: file.name,
+            mimeType: file.type,
+            folderName: 'Quiz'
+          })
+        });
+        const data = await res.json();
+        if (res.ok && data.url) {
+          if (target === 'question') {
+            setForm({ ...form, imageUrl: data.url });
+          } else {
+            const newOptionImages = [...(form.optionImages || ['', '', '', ''])];
+            newOptionImages[target] = data.url;
+            setForm({ ...form, optionImages: newOptionImages });
+          }
+          toast.success('Gambar berhasil diunggah');
+        } else {
+          toast.error(data.error || 'Gagal mengunggah gambar');
+        }
+      } catch (err) {
+        toast.error('Terjadi kesalahan saat mengunggah');
+      } finally {
+        setUploadingTarget(null);
+        e.target.value = '';
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const options = form.options || ['', '', '', ''];
+  const optionImages = form.optionImages || ['', '', '', ''];
+
   return (
     <div className="space-y-4">
       <div>
         <label className="block text-sm font-medium text-slate-700 mb-1">Kategori</label>
-        <Input value={form.category || ''} onChange={(e) => setForm({ ...form, category: e.target.value })} placeholder="Kategori soal..." />
+        <Input 
+          value={form.category || ''} 
+          onChange={(e) => setForm({ ...form, category: e.target.value })} 
+          placeholder="Kategori soal..." 
+        />
       </div>
+
       <div>
-        <label className="block text-sm font-medium text-slate-700 mb-1">Pertanyaan</label>
+        <div className="flex items-center justify-between mb-1">
+          <label className="block text-sm font-medium text-slate-700">Pertanyaan</label>
+          <span className="text-xs text-slate-400">Teks soal & gambar pendukung</span>
+        </div>
         <textarea 
           value={form.text || ''} 
           onChange={(e) => setForm({ ...form, text: e.target.value })}
-          className="w-full p-2 border border-slate-300 rounded-lg text-sm min-h-[80px]"
+          className="w-full p-2.5 border border-slate-300 rounded-xl text-sm min-h-[85px] focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-white"
           placeholder="Tuliskan pertanyaan..."
         />
+
+        {/* Gambar Soal */}
+        <div className="mt-2">
+          {form.imageUrl ? (
+            <div className="flex items-start gap-3 p-3 bg-white rounded-xl border border-slate-200 shadow-2xs">
+              <div className="relative group rounded-lg overflow-hidden border border-slate-300 bg-slate-100 shrink-0">
+                <img 
+                  src={form.imageUrl} 
+                  alt="Preview Gambar Soal" 
+                  className="w-24 h-20 object-contain rounded bg-slate-50" 
+                />
+                <button 
+                  type="button"
+                  onClick={() => window.open(form.imageUrl || '', '_blank')}
+                  className="absolute inset-0 bg-black/40 text-white opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity cursor-pointer"
+                  title="Perbesar gambar"
+                >
+                  <Eye className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="flex-1 min-w-0 space-y-1">
+                <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-700">
+                  <Check className="w-3.5 h-3.5" /> Gambar Soal Terlampir
+                </div>
+                <p className="text-xs text-slate-500 truncate" title={form.imageUrl}>{form.imageUrl}</p>
+                <div className="flex items-center gap-2 pt-1">
+                  <Button 
+                    type="button" 
+                    size="sm" 
+                    variant="secondary" 
+                    onClick={() => setPickerTarget('question')}
+                    className="text-xs h-7 px-2.5 gap-1.5"
+                  >
+                    <RefreshCcw className="w-3 h-3" /> Ganti Gambar
+                  </Button>
+                  <Button 
+                    type="button" 
+                    size="sm" 
+                    variant="secondary" 
+                    onClick={() => setForm({ ...form, imageUrl: '' })}
+                    className="text-xs h-7 px-2.5 gap-1.5 text-rose-600 hover:text-rose-700 hover:bg-rose-50"
+                  >
+                    <Trash2 className="w-3 h-3" /> Hapus
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 flex-wrap">
+              <input 
+                type="file" 
+                id="question-img-upload-input" 
+                className="hidden" 
+                accept="image/*"
+                onChange={(e) => handleDirectUpload(e, 'question')}
+              />
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => document.getElementById('question-img-upload-input')?.click()}
+                disabled={uploadingTarget === 'question'}
+                className="gap-2 text-xs text-slate-700 border-dashed border-slate-300 hover:border-emerald-500 hover:bg-emerald-50/50"
+              >
+                {uploadingTarget === 'question' ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <ImagePlus className="w-3.5 h-3.5 text-emerald-600" />
+                )}
+                <span>{uploadingTarget === 'question' ? 'Mengunggah...' : 'Upload Gambar Soal'}</span>
+              </Button>
+
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => setPickerTarget('question')}
+                className="gap-1.5 text-xs text-slate-600 hover:text-slate-800"
+              >
+                <Folder className="w-3.5 h-3.5 text-blue-500" />
+                <span>Pilih dari Galeri / URL</span>
+              </Button>
+            </div>
+          )}
+        </div>
       </div>
-      <div className="space-y-2">
-        <label className="block text-sm font-medium text-slate-700">Pilihan Jawaban</label>
-        {(form.options || ['', '', '', '']).map((opt, i) => (
-          <div key={i} className="flex items-center gap-2">
-            <input 
-              type="radio" 
-              name="correctAnswer" 
-              checked={form.correctAnswerIndex === i}
-              onChange={() => setForm({ ...form, correctAnswerIndex: i })}
-              className="w-4 h-4 text-emerald-600"
-            />
-            <Input 
-              value={opt} 
-              onChange={(e) => {
-                const newOpts = [...(form.options || [])];
-                newOpts[i] = e.target.value;
-                setForm({ ...form, options: newOpts });
-              }}
-              placeholder={`Pilihan ${String.fromCharCode(65 + i)}`}
-            />
-          </div>
-        ))}
+
+      {/* Pilihan Jawaban */}
+      <div className="space-y-2.5 pt-2 border-t border-slate-200">
+        <div className="flex items-center justify-between">
+          <label className="block text-sm font-medium text-slate-700">Pilihan Jawaban</label>
+          <span className="text-xs text-slate-400">Pilih radio button untuk kunci jawaban benar</span>
+        </div>
+
+        {options.map((opt, i) => {
+          const optImg = optionImages[i];
+          const isCorrect = form.correctAnswerIndex === i;
+
+          return (
+            <div 
+              key={i} 
+              className={`p-2.5 rounded-xl border transition-all ${
+                isCorrect 
+                  ? 'border-emerald-300 bg-emerald-50/40 ring-1 ring-emerald-500/20' 
+                  : 'border-slate-200 bg-white hover:border-slate-300'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <input 
+                  type="radio" 
+                  name="correctAnswer" 
+                  checked={isCorrect}
+                  onChange={() => setForm({ ...form, correctAnswerIndex: i })}
+                  className="w-4 h-4 text-emerald-600 shrink-0 cursor-pointer accent-emerald-600"
+                  title="Tandai sebagai kunci jawaban benar"
+                />
+
+                <span className={`w-6 h-6 rounded-md flex items-center justify-center text-xs font-extrabold shrink-0 ${
+                  isCorrect ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-700'
+                }`}>
+                  {String.fromCharCode(65 + i)}
+                </span>
+
+                <Input 
+                  value={opt} 
+                  onChange={(e) => {
+                    const newOpts = [...options];
+                    newOpts[i] = e.target.value;
+                    setForm({ ...form, options: newOpts });
+                  }}
+                  placeholder={`Pilihan ${String.fromCharCode(65 + i)} (teks atau keterangan)`}
+                  className="flex-1 text-sm h-9"
+                />
+
+                <input 
+                  type="file" 
+                  id={`option-file-input-${i}`} 
+                  className="hidden" 
+                  accept="image/*"
+                  onChange={(e) => handleDirectUpload(e, i)}
+                />
+
+                {/* Upload Image for Option Button */}
+                <button
+                  type="button"
+                  onClick={() => document.getElementById(`option-file-input-${i}`)?.click()}
+                  disabled={uploadingTarget === i}
+                  title="Upload gambar dari komputer/HP"
+                  className={`p-2 rounded-lg border text-xs flex items-center justify-center transition-colors shrink-0 cursor-pointer ${
+                    optImg 
+                      ? 'bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100' 
+                      : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  {uploadingTarget === i ? (
+                    <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
+                  ) : (
+                    <ImagePlus className="w-4 h-4" />
+                  )}
+                </button>
+
+                {/* Open Modal Picker for Option */}
+                <button
+                  type="button"
+                  onClick={() => setPickerTarget(i)}
+                  title="Pilih gambar dari Galeri / URL"
+                  className="p-2 rounded-lg border border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 text-xs flex items-center justify-center shrink-0 cursor-pointer"
+                >
+                  <Folder className="w-4 h-4 text-amber-500" />
+                </button>
+              </div>
+
+              {/* Option Image Thumbnail if present */}
+              {optImg && (
+                <div className="ml-8 mt-2 flex items-center gap-3 p-2 bg-slate-50 rounded-lg border border-slate-200">
+                  <div className="relative group rounded overflow-hidden border border-slate-300 bg-white shrink-0">
+                    <img 
+                      src={optImg} 
+                      alt={`Pilihan ${String.fromCharCode(65 + i)}`}
+                      className="w-12 h-12 object-contain bg-slate-50 cursor-pointer"
+                      onClick={() => window.open(optImg, '_blank')}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => window.open(optImg, '_blank')}
+                      className="absolute inset-0 bg-black/40 text-white opacity-0 group-hover:opacity-100 flex items-center justify-center cursor-pointer"
+                      title="Perbesar"
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <span className="text-xs font-semibold text-slate-700 block">Gambar Pilihan {String.fromCharCode(65 + i)}</span>
+                    <span className="text-[11px] text-slate-400 block truncate" title={optImg}>{optImg}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const newOptionImages = [...optionImages];
+                      newOptionImages[i] = '';
+                      setForm({ ...form, optionImages: newOptionImages });
+                    }}
+                    className="p-1 hover:bg-rose-100 text-rose-600 rounded transition-colors cursor-pointer"
+                    title="Hapus gambar pilihan"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
-      <div className="flex justify-end gap-2 pt-2">
+
+      <div className="flex justify-end gap-2 pt-3 border-t border-slate-200">
         <Button variant="secondary" onClick={onCancel}>Batal</Button>
         <Button onClick={onSave} className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2">
           <Check className="w-4 h-4" /> Simpan
         </Button>
       </div>
+
+      {/* Portal Image Picker Modal */}
+      {pickerTarget !== null && (
+        <PortalImagePickerModal
+          isOpen={true}
+          onClose={() => setPickerTarget(null)}
+          onSelectImage={(url) => {
+            if (pickerTarget === 'question') {
+              setForm({ ...form, imageUrl: url });
+            } else if (typeof pickerTarget === 'number') {
+              const newOptionImages = [...optionImages];
+              newOptionImages[pickerTarget] = url;
+              setForm({ ...form, optionImages: newOptionImages });
+            }
+            setPickerTarget(null);
+          }}
+          currentImage={
+            pickerTarget === 'question' 
+              ? (form.imageUrl || '') 
+              : (optionImages[pickerTarget as number] || '')
+          }
+          title={
+            pickerTarget === 'question' 
+              ? 'Pilih Gambar Soal' 
+              : `Pilih Gambar Pilihan ${typeof pickerTarget === 'number' ? String.fromCharCode(65 + pickerTarget) : ''}`
+          }
+          description="Pilih dari galeri Google Drive, upload baru, atau masukkan link URL gambar."
+        />
+      )}
     </div>
   );
 }
