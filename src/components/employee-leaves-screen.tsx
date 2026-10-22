@@ -43,7 +43,7 @@ import { toast } from 'sonner';
 import { EmployeeLeavesAnalyticsChart } from './employee-leaves-analytics-chart';
 
 export type DownloadScopeType = 'filtered' | 'today' | 'last_4_days' | 'last_7_days' | 'this_month' | 'all';
-export type PeriodShortcut = 'ALL' | 'WEEK' | 'MONTH' | 'YEAR';
+export type PeriodShortcut = 'ALL' | 'TODAY' | 'WEEK' | 'MONTH' | 'YEAR' | 'CUSTOM';
 export type SortOption = 'date-desc' | 'date-asc' | 'name-asc' | 'name-desc' | 'duration-desc';
 
 
@@ -527,6 +527,7 @@ export function EmployeeLeavesScreen({
   const [filterShift, setFilterShift] = useState('ALL');
   const [filterAcc, setFilterAcc] = useState('ALL');
   const [filterSource, setFilterSource] = useState('ALL');
+  const [filterKategoriIzin, setFilterKategoriIzin] = useState('ALL');
   const [filterStartDate, setFilterStartDate] = useState('');
   const [filterEndDate, setFilterEndDate] = useState('');
 
@@ -539,6 +540,13 @@ export function EmployeeLeavesScreen({
   const [selectedYear, setSelectedYear] = useState<string>(() => {
     return getTodayWitDate().slice(0, 4);
   });
+
+  const handlePeriodChange = (period: PeriodShortcut) => {
+    setFilterPeriod(period);
+    setFilterStartDate('');
+    setFilterEndDate('');
+    setCurrentPage(1);
+  };
 
   // List of available years & months from leaves
   const availableYears = useMemo(() => {
@@ -567,16 +575,62 @@ export function EmployeeLeavesScreen({
     return Array.from(months).sort().reverse();
   }, [leaves]);
 
-  // Processed Leaves: Periode Filter (Per Minggu, Per Bulan, Per Tahun) & Sorting
+  // Processed Leaves: Periode Filter, Kategori, Custom Dates & Sorting
   const processedLeaves = useMemo(() => {
     let result = [...leaves];
 
-    // Filter Periode
-    if (filterPeriod !== 'ALL') {
+    // Filter Section (jika belum di-filter server)
+    if (filterSection !== 'ALL') {
+      const secTerm = filterSection.toLowerCase();
+      result = result.filter(item => 
+        (item.section && item.section.toLowerCase().includes(secTerm)) ||
+        (item.penempatan && item.penempatan.toLowerCase().includes(secTerm))
+      );
+    }
+
+    // Filter Shift (jika belum di-filter server)
+    if (filterShift !== 'ALL') {
+      const shiftTerm = filterShift.toLowerCase();
+      result = result.filter(item => 
+        item.shift && item.shift.toLowerCase().includes(shiftTerm)
+      );
+    }
+
+    // Filter Kategori Izin / Status Finger
+    if (filterKategoriIzin !== 'ALL') {
+      const val = filterKategoriIzin.toLowerCase();
+      if (['i', 'ik', 'ss', 'sl'].includes(val)) {
+        result = result.filter(item => (item.kategoriIzin || 'I').toLowerCase() === val);
+      } else {
+        result = result.filter(item => (item.acc || '').toLowerCase().includes(val));
+      }
+    }
+
+    // Filter Custom Date (Dari Tanggal & Sampai Tanggal)
+    if (filterStartDate) {
+      result = result.filter(item => {
+        const itemDate = toIsoDate(item.awalAbsensi) || (item.createdAt ? item.createdAt.slice(0, 10) : '');
+        return itemDate >= filterStartDate;
+      });
+    }
+    if (filterEndDate) {
+      result = result.filter(item => {
+        const itemDate = toIsoDate(item.awalAbsensi) || (item.createdAt ? item.createdAt.slice(0, 10) : '');
+        return itemDate <= filterEndDate;
+      });
+    }
+
+    // Filter Periode Preset (Hanya aktif jika tidak memilih custom date)
+    if (!filterStartDate && !filterEndDate && filterPeriod !== 'ALL' && filterPeriod !== 'CUSTOM') {
       const todayWit = getTodayWitDate();
       const nowWit = new Date(todayWit + 'T00:00:00');
 
-      if (filterPeriod === 'WEEK') {
+      if (filterPeriod === 'TODAY') {
+        result = result.filter(item => {
+          const itemDate = toIsoDate(item.awalAbsensi) || (item.createdAt ? item.createdAt.slice(0, 10) : '');
+          return itemDate === todayWit;
+        });
+      } else if (filterPeriod === 'WEEK') {
         const dayOfWeek = nowWit.getDay(); // 0 is Sunday
         const diffToMonday = (dayOfWeek === 0 ? -6 : 1) - dayOfWeek;
         const monday = new Date(nowWit);
@@ -587,14 +641,10 @@ export function EmployeeLeavesScreen({
         const mondayStr = monday.toISOString().slice(0, 10);
         const sundayStr = sunday.toISOString().slice(0, 10);
 
-        const d7 = new Date(nowWit);
-        d7.setDate(nowWit.getDate() - 7);
-        const d7Str = d7.toISOString().slice(0, 10);
-
         result = result.filter(item => {
           const itemDate = toIsoDate(item.awalAbsensi) || (item.createdAt ? item.createdAt.slice(0, 10) : '');
           if (!itemDate) return false;
-          return (itemDate >= mondayStr && itemDate <= sundayStr) || (itemDate >= d7Str && itemDate <= todayWit);
+          return itemDate >= mondayStr && itemDate <= sundayStr;
         });
       } else if (filterPeriod === 'MONTH') {
         const targetMonth = selectedMonth || todayWit.slice(0, 7);
@@ -639,7 +689,7 @@ export function EmployeeLeavesScreen({
     });
 
     return result;
-  }, [leaves, filterPeriod, sortBy, selectedMonth, selectedYear]);
+  }, [leaves, filterSection, filterShift, filterKategoriIzin, filterStartDate, filterEndDate, filterPeriod, sortBy, selectedMonth, selectedYear]);
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -1542,6 +1592,7 @@ export function EmployeeLeavesScreen({
     setSearchQuery('');
     setFilterSection('ALL');
     setFilterShift('ALL');
+    setFilterKategoriIzin('ALL');
     setFilterAcc('ALL');
     setFilterSource('ALL');
     setFilterStartDate('');
@@ -2043,204 +2094,199 @@ export function EmployeeLeavesScreen({
       {/* ==================================================== */}
       {/* FILTER & SEARCH PANEL                               */}
       {/* ==================================================== */}
-      <div className="bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-800 space-y-3">
-        {/* Shortcut & Filter Periode: Per Minggu, Per Bulan, Per Tahun & Pengurutan */}
-        <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1 mr-1">
-              <Calendar className="w-3.5 h-3.5 text-[#2298A7]" />
-              Periode Izin:
-            </span>
-            <div className="inline-flex items-center p-1 rounded-2xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700 gap-1 flex-wrap">
+      {/* ==================================================== */}
+      {/* FILTER & SEARCH PANEL (Format Seperti Rekap Keterlambatan) */}
+      {/* ==================================================== */}
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 sm:p-5 shadow-xs space-y-4">
+        {/* Top Controls: Search Box & Quick Period Buttons */}
+        <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
+          {/* Search Box */}
+          <div className="relative flex-1">
+            <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Cari nama karyawan, NIK, jabatan, pengawas, atau alasan izin..."
+              value={searchQuery}
+              onChange={e => {
+                setSearchQuery(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="w-full pl-10 pr-9 py-2 rounded-xl text-xs sm:text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#2298A7]/20 focus:border-[#2298A7]"
+            />
+            {searchQuery && (
               <button
                 type="button"
                 onClick={() => {
-                  setFilterPeriod('ALL');
+                  setSearchQuery('');
                   setCurrentPage(1);
                 }}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                  filterPeriod === 'ALL'
-                    ? 'bg-[#2298A7] text-white shadow-xs'
-                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                }`}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
               >
-                Semua Data
+                <X className="w-4 h-4" />
               </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setFilterPeriod('WEEK');
-                  setCurrentPage(1);
-                }}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                  filterPeriod === 'WEEK'
-                    ? 'bg-[#2298A7] text-white shadow-xs'
-                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                }`}
-              >
-                Per Minggu
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setFilterPeriod('MONTH');
-                  setCurrentPage(1);
-                }}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                  filterPeriod === 'MONTH'
-                    ? 'bg-[#2298A7] text-white shadow-xs'
-                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                }`}
-              >
-                Per Bulan
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setFilterPeriod('YEAR');
-                  setCurrentPage(1);
-                }}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                  filterPeriod === 'YEAR'
-                    ? 'bg-[#2298A7] text-white shadow-xs'
-                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                }`}
-              >
-                Per Tahun
-              </button>
-            </div>
-
-            {/* Sub-selector for Month */}
-            {filterPeriod === 'MONTH' && (
-              <select
-                value={selectedMonth}
-                onChange={(e) => {
-                  setSelectedMonth(e.target.value);
-                  setCurrentPage(1);
-                }}
-                className="px-2.5 py-1.5 text-xs font-bold rounded-xl bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 outline-none cursor-pointer"
-              >
-                {availableMonths.map(m => {
-                  const [y, mon] = m.split('-');
-                  const monIdx = parseInt(mon, 10) - 1;
-                  const monthName = INDO_MONTHS_SHORT[monIdx] || mon;
-                  return (
-                    <option key={m} value={m}>
-                      {monthName} {y}
-                    </option>
-                  );
-                })}
-              </select>
-            )}
-
-            {/* Sub-selector for Year */}
-            {filterPeriod === 'YEAR' && (
-              <select
-                value={selectedYear}
-                onChange={(e) => {
-                  setSelectedYear(e.target.value);
-                  setCurrentPage(1);
-                }}
-                className="px-2.5 py-1.5 text-xs font-bold rounded-xl bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 outline-none cursor-pointer"
-              >
-                {availableYears.map(yr => (
-                  <option key={yr} value={yr}>
-                    Tahun {yr}
-                  </option>
-                ))}
-              </select>
             )}
           </div>
 
-          {/* Quick Sort Dropdown */}
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1">
-              <ArrowUpDown className="w-3.5 h-3.5 text-indigo-500" />
-              Short / Urutkan:
-            </span>
+          {/* Quick Period Buttons */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 lg:pb-0">
+            <span className="text-xs font-medium text-slate-400 mr-1 hidden sm:inline">Periode:</span>
+            {(['ALL', 'TODAY', 'WEEK', 'MONTH', 'YEAR'] as const).map(p => (
+              <button
+                key={p}
+                type="button"
+                onClick={() => handlePeriodChange(p)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
+                  filterPeriod === p && !filterStartDate && !filterEndDate
+                    ? 'bg-[#2298A7] text-white shadow-xs'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                }`}
+              >
+                {p === 'ALL' ? 'Semua' : p === 'TODAY' ? 'Hari Ini' : p === 'WEEK' ? 'Minggu Ini' : p === 'MONTH' ? 'Bulan Ini' : 'Tahun Ini'}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Dropdown Filters (6 Kolom Persis Seperti Gambar) */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 pt-2 border-t border-slate-100 dark:border-slate-800">
+          {/* 1. SECTION */}
+          <div>
+            <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block mb-1">
+              Section
+            </label>
+            <select
+              value={filterSection}
+              onChange={e => {
+                setFilterSection(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="w-full text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-[#2298A7]"
+            >
+              <option value="ALL">Semua Section</option>
+              <option value="Preparation">Preparation</option>
+              <option value="Laboratory">Laboratory</option>
+              <option value="Maintenance">Maintenance</option>
+              <option value="Administration">Administration</option>
+            </select>
+          </div>
+
+          {/* 2. SHIFT */}
+          <div>
+            <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block mb-1">
+              Shift
+            </label>
+            <select
+              value={filterShift}
+              onChange={e => {
+                setFilterShift(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="w-full text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-[#2298A7]"
+            >
+              <option value="ALL">Semua Shift</option>
+              <option value="Shift A">Shift A</option>
+              <option value="Shift B">Shift B</option>
+              <option value="Nonshift">Nonshift</option>
+            </select>
+          </div>
+
+          {/* 3. STATUS FINGER / KATEGORI */}
+          <div>
+            <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block mb-1">
+              Status Finger
+            </label>
+            <select
+              value={filterKategoriIzin}
+              onChange={e => {
+                setFilterKategoriIzin(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="w-full text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-[#2298A7]"
+            >
+              <option value="ALL">Semua Kategori</option>
+              <option value="I">I = Izin Biasa</option>
+              <option value="IK">IK = Izin Khusus</option>
+              <option value="SS">SS = Sakit Site</option>
+              <option value="SL">SL = Sakit Luar Site</option>
+              <option value="Disetujui">Disetujui</option>
+              <option value="Izin Selesai">Izin Selesai</option>
+              <option value="Pending">Pending</option>
+              <option value="Ditolak">Ditolak</option>
+            </select>
+          </div>
+
+          {/* 4. URUTKAN */}
+          <div>
+            <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block mb-1">
+              Urutkan
+            </label>
             <select
               value={sortBy}
-              onChange={(e) => {
+              onChange={e => {
                 setSortBy(e.target.value as SortOption);
                 setCurrentPage(1);
               }}
-              className="px-3 py-1.5 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-bold text-slate-700 dark:text-slate-200 outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer shadow-2xs"
+              className="w-full text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-[#2298A7]"
             >
-              <option value="date-desc">📅 Tanggal Terbaru</option>
-              <option value="date-asc">📅 Tanggal Terlama</option>
-              <option value="name-asc">👤 Nama Karyawan (A - Z)</option>
-              <option value="name-desc">👤 Nama Karyawan (Z - A)</option>
-              <option value="duration-desc">⏱️ Durasi Terlama</option>
+              <option value="date-desc">Tanggal Terbaru</option>
+              <option value="date-asc">Tanggal Terlama</option>
+              <option value="name-asc">Nama Karyawan (A-Z)</option>
+              <option value="name-desc">Nama Karyawan (Z-A)</option>
+              <option value="duration-desc">Durasi Terlama</option>
             </select>
           </div>
-        </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
-          {/* Search Box */}
-          <div className="lg:col-span-2 relative">
-            <Search className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
+          {/* 5. DARI TANGGAL */}
+          <div>
+            <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block mb-1">
+              Dari Tanggal
+            </label>
             <input
-              type="text"
-              placeholder="Cari Nama, NIK, Jabatan, Pengawas, atau Alasan..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 font-medium"
+              type="date"
+              value={filterStartDate}
+              onChange={e => {
+                setFilterStartDate(e.target.value);
+                setFilterPeriod('CUSTOM');
+                setCurrentPage(1);
+              }}
+              className="w-full text-xs font-semibold px-2 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-[#2298A7]"
             />
           </div>
 
-          {/* Section Filter */}
+          {/* 6. SAMPAI TANGGAL */}
           <div>
-            <select
-              value={filterSection}
-              onChange={(e) => setFilterSection(e.target.value)}
-              className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 font-semibold text-slate-700 dark:text-slate-300"
-            >
-              <option value="ALL">Semua Bagian (Section)</option>
-              {SECTION_OPTIONS.filter(s => s !== 'ALL').map(sec => (
-                <option key={sec} value={sec}>{sec}</option>
-              ))}
-            </select>
+            <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block mb-1">
+              Sampai Tanggal
+            </label>
+            <input
+              type="date"
+              value={filterEndDate}
+              onChange={e => {
+                setFilterEndDate(e.target.value);
+                setFilterPeriod('CUSTOM');
+                setCurrentPage(1);
+              }}
+              className="w-full text-xs font-semibold px-2 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-[#2298A7]"
+            />
           </div>
+        </div>
 
-          {/* Shift Filter */}
-          <div>
-            <select
-              value={filterShift}
-              onChange={(e) => setFilterShift(e.target.value)}
-              className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 font-semibold text-slate-700 dark:text-slate-300"
-            >
-              <option value="ALL">Semua Shift</option>
-              {SHIFT_OPTIONS.filter(s => s !== 'ALL').map(sh => (
-                <option key={sh} value={sh}>{sh}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Sumber Data Filter */}
-          <div>
-            <select
-              value={filterSource}
-              onChange={(e) => setFilterSource(e.target.value)}
-              className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 font-semibold text-slate-700 dark:text-slate-300"
-            >
-              {SOURCE_OPTIONS.map(src => (
-                <option key={src.value} value={src.value}>{src.label}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Reset Filters */}
-          <div className="flex items-center gap-2">
+        {/* Active Filter Info & Reset Button */}
+        {(searchQuery || filterSection !== 'ALL' || filterShift !== 'ALL' || filterKategoriIzin !== 'ALL' || filterStartDate || filterEndDate || filterPeriod !== 'ALL') && (
+          <div className="flex items-center justify-between text-xs text-slate-500 pt-2 border-t border-slate-100 dark:border-slate-800">
+            <div>
+              Menampilkan <span className="font-bold text-slate-800 dark:text-slate-200">{processedLeaves.length}</span> dari {leaves.length} data rekapan izin
+            </div>
             <button
               type="button"
               onClick={resetFilters}
-              className="w-full py-2 px-3 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-bold text-slate-600 dark:text-slate-300 flex items-center justify-center gap-1.5 transition-colors"
+              className="inline-flex items-center gap-1 text-rose-600 hover:text-rose-700 font-semibold cursor-pointer"
             >
               <RotateCcw className="w-3.5 h-3.5" />
-              <span>Reset</span>
+              <span>Reset Semua Filter</span>
             </button>
           </div>
-        </div>
+        )}
       </div>
 
       {/* ==================================================== */}
