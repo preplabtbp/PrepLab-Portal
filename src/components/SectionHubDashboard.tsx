@@ -27,11 +27,26 @@ import {
   Trash2,
   Edit3,
   Settings2,
-  Loader2
+  Loader2,
+  Palette,
+  Pipette
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { PortalImagePickerModal } from './PortalImagePickerModal';
 import { BannerCover } from './BannerCover';
+
+
+export const TITLE_COLOR_PALETTE = [
+  { hex: '#0f172a', label: 'Hitam / Slate (Default)' },
+  { hex: '#0d9488', label: 'Teal Harita' },
+  { hex: '#2563eb', label: 'Biru Safir' },
+  { hex: '#0284c7', label: 'Sky Blue' },
+  { hex: '#16a34a', label: 'Hijau Emerald' },
+  { hex: '#7c3aed', label: 'Ungu Modern' },
+  { hex: '#e11d48', label: 'Rose / Merah' },
+  { hex: '#ea580c', label: 'Oranye Hangat' },
+  { hex: '#d97706', label: 'Amber / Emas' },
+];
 
 export const COVER_PRESETS = [
   { id: 'mining_site', name: 'Site Tambang Nikel', url: 'https://images.unsplash.com/photo-1578328819058-b69f3a3b0f6b?q=80&w=1600&auto=format&fit=crop' },
@@ -158,21 +173,40 @@ export function SectionHubDashboard({
     }
   };
 
-  // State for Double-Click Inline Editing of Section Title
+  // State for Double-Click Inline Editing of Section Title & Font Color
+  const getInitialTitleColor = (): string => {
+    const cleanSec = (post?.title || 'general').toLowerCase().replace(/[^a-z0-9]+/g, '_');
+    const tagColor = (post?.tags || []).find((t: string) => t.startsWith('titleColor:'))?.replace('titleColor:', '');
+    if (tagColor) return tagColor;
+    try {
+      const cached = localStorage.getItem(`preplab_hub_title_color_${cleanSec}`);
+      if (cached) return cached;
+    } catch {}
+    return '#0f172a';
+  };
+
   const [displayedTitle, setDisplayedTitle] = useState<string>(post?.title || '');
   const [isEditingTitle, setIsEditingTitle] = useState<boolean>(false);
   const [titleInput, setTitleInput] = useState<string>(post?.title || '');
   const [isSavingTitle, setIsSavingTitle] = useState<boolean>(false);
+  const [titleColor, setTitleColor] = useState<string>(getInitialTitleColor);
+  const [editingTitleColor, setEditingTitleColor] = useState<string>(getInitialTitleColor);
+  const [showColorPicker, setShowColorPicker] = useState<boolean>(false);
 
-  // Sync title when post changes
+  // Sync title & color when post changes
   React.useEffect(() => {
     setDisplayedTitle(post?.title || '');
     setTitleInput(post?.title || '');
-  }, [post?.title]);
+    const col = getInitialTitleColor();
+    setTitleColor(col);
+    setEditingTitleColor(col);
+  }, [post?.title, post?.tags]);
 
   const handleStartEditTitle = () => {
     setTitleInput(displayedTitle || post?.title || '');
+    setEditingTitleColor(titleColor);
     setIsEditingTitle(true);
+    setShowColorPicker(false);
   };
 
   const handleSaveTitle = async () => {
@@ -181,14 +215,28 @@ export function SectionHubDashboard({
       toast.error('Judul seksi tidak boleh kosong');
       return;
     }
-    if (trimmed === displayedTitle) {
+    const colorChanged = editingTitleColor !== titleColor;
+    if (trimmed === displayedTitle && !colorChanged) {
       setIsEditingTitle(false);
+      setShowColorPicker(false);
       return;
     }
+
+    const cleanSec = trimmed.toLowerCase().replace(/[^a-z0-9]+/g, '_');
+    const existingTags = (post?.tags || []).filter((t: string) => !t.startsWith('titleColor:'));
+    if (editingTitleColor && editingTitleColor !== '#0f172a' && editingTitleColor !== 'default') {
+      existingTags.push(`titleColor:${editingTitleColor}`);
+    }
+
+    try {
+      localStorage.setItem(`preplab_hub_title_color_${cleanSec}`, editingTitleColor);
+    } catch {}
+
     if (!post?.id) {
-      // Local fallback if post id is missing
       setDisplayedTitle(trimmed);
+      setTitleColor(editingTitleColor);
       setIsEditingTitle(false);
+      setShowColorPicker(false);
       return;
     }
 
@@ -199,20 +247,26 @@ export function SectionHubDashboard({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...post,
-          title: trimmed
+          title: trimmed,
+          tags: existingTags
         })
       });
       const json = await res.json();
       if (json.status === 'success') {
         setDisplayedTitle(trimmed);
-        if (post) post.title = trimmed;
+        setTitleColor(editingTitleColor);
+        if (post) {
+          post.title = trimmed;
+          post.tags = existingTags;
+        }
         setIsEditingTitle(false);
-        toast.success(`Judul berhasil diubah menjadi "${trimmed}"`);
+        setShowColorPicker(false);
+        toast.success(`Judul & warna berhasil disimpan`);
       } else {
-        toast.error(json.message || 'Gagal menyimpan perubahan judul');
+        toast.error(json.message || 'Gagal menyimpan perubahan');
       }
     } catch {
-      toast.error('Terjadi kesalahan saat menyimpan judul');
+      toast.error('Terjadi kesalahan saat menyimpan perubahan');
     } finally {
       setIsSavingTitle(false);
     }
@@ -225,7 +279,9 @@ export function SectionHubDashboard({
     } else if (e.key === 'Escape') {
       e.preventDefault();
       setIsEditingTitle(false);
+      setShowColorPicker(false);
       setTitleInput(displayedTitle);
+      setEditingTitleColor(titleColor);
     }
   };
 
@@ -1073,21 +1129,111 @@ export function SectionHubDashboard({
           </span>
         </div>
 
-        {/* Section Title (Double Click to Edit) */}
+        {/* Section Title (Double Click to Edit & Change Font Color) */}
         <div className="pt-1 group/title relative max-w-fit">
           {isEditingTitle ? (
-            <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-2 flex-wrap relative">
+              {/* Color Picker Popover Button */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    setShowColorPicker(!showColorPicker);
+                  }}
+                  className="w-9 h-9 rounded-xl border-2 shadow-xs flex items-center justify-center cursor-pointer hover:scale-105 transition-all"
+                  style={{
+                    backgroundColor: editingTitleColor,
+                    borderColor: editingTitleColor === '#ffffff' || editingTitleColor === '#0f172a' ? '#cbd5e1' : editingTitleColor
+                  }}
+                  title="Pilih Warna Font Judul"
+                >
+                  <Palette className="w-4 h-4 text-white drop-shadow-[0_1px_1px_rgba(0,0,0,0.8)]" />
+                </button>
+
+                {/* Color Palette Dropdown */}
+                {showColorPicker && (
+                  <div
+                    className="absolute top-full left-0 mt-2 p-3 bg-white rounded-2xl border border-slate-200 shadow-2xl z-50 w-64 animate-in fade-in zoom-in-95 duration-100"
+                    onMouseDown={(e) => e.preventDefault()}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-[11px] font-bold text-slate-600 uppercase tracking-wider">
+                        Warna Font Judul
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setShowColorPicker(false)}
+                        className="text-slate-400 hover:text-slate-600 p-0.5 rounded-md"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-5 gap-2 mb-2.5">
+                      {TITLE_COLOR_PALETTE.map((c) => (
+                        <button
+                          key={c.hex}
+                          type="button"
+                          onClick={() => {
+                            setEditingTitleColor(c.hex);
+                            setShowColorPicker(false);
+                          }}
+                          className={`w-7 h-7 rounded-full border transition-all hover:scale-110 cursor-pointer flex items-center justify-center ${
+                            editingTitleColor.toLowerCase() === c.hex.toLowerCase()
+                              ? 'ring-2 ring-blue-500 ring-offset-2 scale-105'
+                              : 'border-slate-200'
+                          }`}
+                          style={{ backgroundColor: c.hex }}
+                          title={c.label}
+                        >
+                          {editingTitleColor.toLowerCase() === c.hex.toLowerCase() && (
+                            <Check className="w-3.5 h-3.5 text-white drop-shadow-[0_1px_1px_rgba(0,0,0,0.8)]" />
+                          )}
+                        </button>
+                      ))}
+
+                      {/* Custom Color Selector via Native Color Picker */}
+                      <label
+                        className="w-7 h-7 rounded-full border border-dashed border-slate-400 hover:scale-110 transition-transform cursor-pointer flex items-center justify-center relative overflow-hidden bg-gradient-to-tr from-amber-400 via-rose-400 to-teal-400 shadow-2xs"
+                        title="Pilih Warna Kustom..."
+                        onMouseDown={(e) => e.preventDefault()}
+                      >
+                        <Pipette className="w-3.5 h-3.5 text-slate-800" />
+                        <input
+                          type="color"
+                          value={editingTitleColor.startsWith('#') && editingTitleColor.length === 7 ? editingTitleColor : '#0f172a'}
+                          onChange={(e) => {
+                            setEditingTitleColor(e.target.value);
+                          }}
+                          className="opacity-0 absolute inset-0 w-full h-full cursor-pointer"
+                        />
+                      </label>
+                    </div>
+
+                    <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
+                      <span>Warna terpilih:</span>
+                      <span className="font-mono font-bold uppercase" style={{ color: editingTitleColor }}>
+                        {editingTitleColor}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Title Text Input */}
               <input
                 type="text"
                 value={titleInput}
                 onChange={(e) => setTitleInput(e.target.value)}
                 onKeyDown={handleTitleKeyDown}
-                onBlur={handleSaveTitle}
                 disabled={isSavingTitle}
                 autoFocus
                 placeholder="Masukkan judul seksi..."
-                className="text-2xl md:text-3xl lg:text-4xl font-black text-slate-900 tracking-tight px-3 py-1 bg-white border-2 border-blue-500 rounded-xl focus:outline-none focus:ring-4 focus:ring-blue-100 shadow-md min-w-[280px] md:min-w-[420px]"
+                className="text-2xl md:text-3xl lg:text-4xl font-black tracking-tight px-3 py-1 bg-white border-2 border-blue-500 rounded-xl focus:outline-none focus:ring-4 focus:ring-blue-100 shadow-md min-w-[280px] md:min-w-[420px] transition-colors"
+                style={{ color: editingTitleColor }}
               />
+
               <button
                 type="button"
                 onMouseDown={(e) => {
@@ -1096,7 +1242,7 @@ export function SectionHubDashboard({
                 }}
                 disabled={isSavingTitle}
                 className="inline-flex items-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-xs transition-all cursor-pointer"
-                title="Simpan Perubahan (Enter)"
+                title="Simpan Perubahan Judul & Warna (Enter)"
               >
                 {isSavingTitle ? (
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -1105,12 +1251,15 @@ export function SectionHubDashboard({
                 )}
                 <span>Simpan</span>
               </button>
+
               <button
                 type="button"
                 onMouseDown={(e) => {
                   e.preventDefault();
                   setIsEditingTitle(false);
+                  setShowColorPicker(false);
                   setTitleInput(displayedTitle);
+                  setEditingTitleColor(titleColor);
                 }}
                 disabled={isSavingTitle}
                 className="inline-flex items-center gap-1 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition-all cursor-pointer"
@@ -1124,14 +1273,17 @@ export function SectionHubDashboard({
             <div
               onDoubleClick={handleStartEditTitle}
               className="flex items-center gap-2.5 cursor-pointer rounded-xl px-1.5 py-0.5 -mx-1.5 hover:bg-slate-100/70 transition-all select-none"
-              title="Double klik untuk mengedit judul ini"
+              title="Double klik untuk mengedit judul atau warna teks"
             >
-              <h1 className="text-3xl md:text-4xl lg:text-5xl font-black text-slate-900 tracking-tight">
+              <h1 
+                className="text-3xl md:text-4xl lg:text-5xl font-black tracking-tight transition-colors"
+                style={{ color: titleColor }}
+              >
                 {displayedTitle ? translateDisplayText(displayedTitle.toUpperCase().trim()) : translateDisplayText(sectionTitle)}
               </h1>
               <span className="opacity-0 group-hover/title:opacity-100 p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all text-xs font-semibold flex items-center gap-1 shrink-0 border border-transparent hover:border-blue-200 shadow-2xs">
                 <Pencil className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline text-[11px] text-slate-500 font-normal">Double klik untuk edit</span>
+                <span className="hidden sm:inline text-[11px] text-slate-500 font-normal">Double klik untuk edit judul & warna</span>
               </span>
             </div>
           )}
