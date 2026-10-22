@@ -83,9 +83,10 @@ safetyRekapRouter.get('/api/safety-rekap/edits', async (req, res) => {
     const year = parseInt(String(req.query.year || ''), 10);
     if (!week || !year) return res.status(400).json({ error: 'Parameter week & year wajib diisi' });
 
+    const forceRefresh = req.query.refresh === 'true';
     const cacheKey = `${year}_${week}`;
     const cached = editsCache.get(cacheKey);
-    if (cached && (Date.now() - cached.timestamp < EDITS_CACHE_TTL)) {
+    if (!forceRefresh && cached && (Date.now() - cached.timestamp < EDITS_CACHE_TTL)) {
       return res.json(cached.data);
     }
 

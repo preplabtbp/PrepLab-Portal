@@ -1408,20 +1408,24 @@ export function SafetyRekapScreen({ inspectorNik, inspectorName, inspectorRole, 
     const now = Date.now();
     const isFresh = cached && (now - cached.timestamp < 3 * 60 * 1000); // 3 minutes fresh
 
-    if (cached) {
-      setInspeksiData(cached.inspeksiData);
-      setKtaData(cached.ktaData);
-      setLeaveList(cached.leaveList);
-      setActiveInspectionSchedule(cached.activeInspectionSchedule);
-      setEdits(cached.edits);
-      if (isFresh && !refresh) {
-        setLoading(false);
-        return;
-      }
-    }
-
-    if (!cached) {
+    if (refresh) {
+      clientRekapCache.delete(week);
       setLoading(true);
+    } else {
+      if (cached) {
+        setInspeksiData(cached.inspeksiData);
+        setKtaData(cached.ktaData);
+        setLeaveList(cached.leaveList);
+        setActiveInspectionSchedule(cached.activeInspectionSchedule);
+        setEdits(cached.edits);
+        if (isFresh) {
+          setLoading(false);
+          return;
+        }
+      }
+      if (!cached) {
+        setLoading(true);
+      }
     }
 
     try {
@@ -1485,9 +1489,12 @@ export function SafetyRekapScreen({ inspectorNik, inspectorName, inspectorRole, 
         edits: currentEdits || [],
         timestamp: Date.now()
       });
+      if (refresh) {
+        toast.success('Data rekap KTA/TTA & Inspeksi berhasil disegarkan');
+      }
     } catch (err) {
       console.error('Error fetching rekap safety:', err);
-      if (!cached) toast.error('Gagal memuat rekap KTA/TTA & Inspeksi');
+      toast.error('Gagal menyegarkan data rekap KTA/TTA & Inspeksi');
     } finally {
       setLoading(false);
     }
