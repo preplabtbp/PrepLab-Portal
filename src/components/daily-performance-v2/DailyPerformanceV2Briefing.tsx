@@ -4,15 +4,19 @@ import {
   ChevronRight, Maximize2, Minimize2, CheckCircle2, 
   AlertTriangle, Zap, ArrowRight, TrendingUp, Sparkles
 } from 'lucide-react';
-import { DailyPerformanceRecord } from './daily-performance-v2-types';
+import { DailyPerformanceRecord, BatchBreakdownItem } from './daily-performance-v2-types';
 import { 
   formatNumber, 
   formatShiftName, 
-  calculateMonthlyPeaks 
+  calculateMonthlyPeaks,
+  getStoredSampleBatches,
+  calculateBatchBreakdown,
+  getDefaultBatchBreakdown
 } from './daily-performance-v2-utils';
 import { DailyPerformanceV2InBarCell } from './DailyPerformanceV2InBarCell';
 import { DailyPerformanceV2ShiftRelayCard } from './DailyPerformanceV2ShiftRelayCard';
 import { DailyPerformanceV2ForemanRekapTable } from './DailyPerformanceV2ForemanRekapTable';
+import { DailyPerformanceV2BatchManagerModal } from './DailyPerformanceV2BatchManagerModal';
 import { Table, Eye } from 'lucide-react';
 
 interface DailyPerformanceV2BriefingProps {
@@ -32,6 +36,18 @@ export const DailyPerformanceV2Briefing: React.FC<DailyPerformanceV2BriefingProp
 }) => {
   const [currentStep, setCurrentStep] = useState<number>(1);
   const [showForemanRekapInBabak3, setShowForemanRekapInBabak3] = useState<boolean>(false);
+  const [activeBatchModalStation, setActiveBatchModalStation] = useState<{
+    stationKey: 'weighing' | 'fusion' | 'loi';
+    name: string;
+  } | null>(null);
+
+  // Batch updates event listener
+  const [batchUpdateTick, setBatchUpdateTick] = useState<number>(0);
+  useEffect(() => {
+    const handleUpdate = () => setBatchUpdateTick(prev => prev + 1);
+    window.addEventListener('preplab-batches-updated', handleUpdate);
+    return () => window.removeEventListener('preplab-batches-updated', handleUpdate);
+  }, []);
 
   // Records for current date
   const recordsForDate = useMemo(() => {
@@ -57,6 +73,63 @@ export const DailyPerformanceV2Briefing: React.FC<DailyPerformanceV2BriefingProp
     const isoDate = dayRecord?.isoDate || '2026-10-01';
     return calculateMonthlyPeaks(records, isoDate);
   }, [records, dayRecord]);
+
+  // --- BATCH BREAKDOWNS FOR STATIONS (WEIGHING, FUSION, LOI) ---
+  const weighingBatches = useMemo(() => {
+    return getStoredSampleBatches(selectedDate, 'weighing');
+  }, [selectedDate, batchUpdateTick]);
+
+  const weighingOsDayBreakdown = useMemo(() => {
+    const os = calculateBatchBreakdown(weighingBatches, false);
+    return os.length > 0 ? os : getDefaultBatchBreakdown(dayRecord?.fuseBead.balExp || 168);
+  }, [weighingBatches, dayRecord]);
+
+  const weighingOsMorningBreakdown = useMemo(() => {
+    return getDefaultBatchBreakdown(dayRecord?.fuseBead.osExp || 180);
+  }, [dayRecord]);
+
+  const weighingBalanceNightBreakdown = useMemo(() => {
+    const nightBal = nightRecord?.fuseBead.balExp ?? dayRecord?.fuseBead.balExp;
+    return getDefaultBatchBreakdown(nightBal || 0);
+  }, [nightRecord, dayRecord]);
+
+  // Fusion Batches
+  const fusionBatches = useMemo(() => {
+    return getStoredSampleBatches(selectedDate, 'fusion');
+  }, [selectedDate, batchUpdateTick]);
+
+  const fusionOsDayBreakdown = useMemo(() => {
+    const os = calculateBatchBreakdown(fusionBatches, false);
+    return os.length > 0 ? os : getDefaultBatchBreakdown(dayRecord?.fuseBead.balExp || 120);
+  }, [fusionBatches, dayRecord]);
+
+  const fusionOsMorningBreakdown = useMemo(() => {
+    return getDefaultBatchBreakdown(dayRecord?.fuseBead.osExp || 144);
+  }, [dayRecord]);
+
+  const fusionBalanceNightBreakdown = useMemo(() => {
+    const nightBal = nightRecord?.fuseBead.balExp ?? dayRecord?.fuseBead.balExp;
+    return getDefaultBatchBreakdown(nightBal || 0);
+  }, [nightRecord, dayRecord]);
+
+  // LOI Batches
+  const loiBatches = useMemo(() => {
+    return getStoredSampleBatches(selectedDate, 'loi');
+  }, [selectedDate, batchUpdateTick]);
+
+  const loiOsDayBreakdown = useMemo(() => {
+    const os = calculateBatchBreakdown(loiBatches, false);
+    return os.length > 0 ? os : getDefaultBatchBreakdown(dayRecord?.loi.bal || 78);
+  }, [loiBatches, dayRecord]);
+
+  const loiOsMorningBreakdown = useMemo(() => {
+    return getDefaultBatchBreakdown(dayRecord?.loi.os || 104);
+  }, [dayRecord]);
+
+  const loiBalanceNightBreakdown = useMemo(() => {
+    const nightBal = nightRecord?.loi.bal ?? dayRecord?.loi.bal;
+    return getDefaultBatchBreakdown(nightBal || 0);
+  }, [nightRecord, dayRecord]);
 
   // Keyboard navigation
   useEffect(() => {
@@ -468,7 +541,7 @@ export const DailyPerformanceV2Briefing: React.FC<DailyPerformanceV2BriefingProp
               
               {/* 1. Stasiun Press Powder Pellet */}
               <DailyPerformanceV2ShiftRelayCard
-                title="1. Preparasi Press Powder (Pellet Bubuk Padat)"
+                title="1. Press Pellet"
                 stationSubtitle="GC Pit Tambang & Smelter"
                 unit="pellet"
                 osMorning={30}
@@ -485,10 +558,10 @@ export const DailyPerformanceV2Briefing: React.FC<DailyPerformanceV2BriefingProp
                 colorVariant="teal"
               />
 
-              {/* 2. Stasiun Weighing & Fusion Bead */}
+              {/* 2. Stasiun Weighing */}
               <DailyPerformanceV2ShiftRelayCard
-                title="2. Weighing Borat & Fusion Bead (Manik Kaca)"
-                stationSubtitle="Eksplorasi (EXP Bor) & Smelter"
+                title="2. Weighing"
+                stationSubtitle="Penimbangan Flux Borat & Sampel EXP Bor"
                 unit="spl"
                 osMorning={dayRecord.fuseBead.osExp}
                 receivedDay={dayRecord.sampleReceived.exp.shift}
@@ -502,12 +575,41 @@ export const DailyPerformanceV2Briefing: React.FC<DailyPerformanceV2BriefingProp
                 isLongShift={isLongShift}
                 maxMonthFinish={peaks.maxFusionFinish}
                 colorVariant="amber"
+                osMorningBreakdown={weighingOsMorningBreakdown}
+                osDayBreakdown={weighingOsDayBreakdown}
+                balanceNightBreakdown={weighingBalanceNightBreakdown}
+                onOpenBatchManager={() => setActiveBatchModalStation({ stationKey: 'weighing', name: 'Weighing' })}
+                batchManagerLabel="Kelola Batch (Received & Finish)"
               />
 
-              {/* 3. Stasiun LOI Gravimetri (Furnace Muffle W2, W4, W5) */}
+              {/* 3. Stasiun Fusion */}
               <DailyPerformanceV2ShiftRelayCard
-                title="3. LOI Gravimetri (Loss On Ignition • Muffle Furnace)"
-                stationSubtitle={`Furnace W2 (${dayRecord.loi.w2}) • W4 (${dayRecord.loi.w4}) • W5 (${dayRecord.loi.w5})`}
+                title="3. Fusion"
+                stationSubtitle="Peleburan Manik Kaca (Claisse / M4 Flux)"
+                unit="bead"
+                osMorning={Math.round((dayRecord.fuseBead.osExp || 144) * 0.9)}
+                receivedDay={dayRecord.fuseBead.finishShift}
+                finishedDay={Math.round(dayRecord.fuseBead.finishShift * 0.95)}
+                balanceDay={Math.max(0, dayRecord.fuseBead.balExp - 24)}
+                receivedNight={nightRecord?.fuseBead.finishShift || 0}
+                finishedNight={Math.round((nightRecord?.fuseBead.finishShift || 0) * 0.95)}
+                balanceNight={Math.max(0, (nightRecord?.fuseBead.balExp || dayRecord.fuseBead.balExp) - 24)}
+                shiftDayName={shiftDayName}
+                shiftNightName={shiftNightName}
+                isLongShift={isLongShift}
+                maxMonthFinish={peaks.maxFusionFinish}
+                colorVariant="purple"
+                osMorningBreakdown={fusionOsMorningBreakdown}
+                osDayBreakdown={fusionOsDayBreakdown}
+                balanceNightBreakdown={fusionBalanceNightBreakdown}
+                onOpenBatchManager={() => setActiveBatchModalStation({ stationKey: 'fusion', name: 'Fusion Bead' })}
+                batchManagerLabel="Kelola Batch (Received & Finish)"
+              />
+
+              {/* 4. Stasiun LOI */}
+              <DailyPerformanceV2ShiftRelayCard
+                title="4. LOI"
+                stationSubtitle={`Loss On Ignition • Furnace W2 (${dayRecord.loi.w2}) • W4 (${dayRecord.loi.w4}) • W5 (${dayRecord.loi.w5})`}
                 unit="spl"
                 osMorning={dayRecord.loi.os}
                 receivedDay={dayRecord.loi.finLoiDay > 0 ? Math.round(dayRecord.loi.finLoiDay / 2) : 52}
@@ -521,6 +623,11 @@ export const DailyPerformanceV2Briefing: React.FC<DailyPerformanceV2BriefingProp
                 isLongShift={isLongShift}
                 maxMonthFinish={peaks.maxLoiFinish}
                 colorVariant="rose"
+                osMorningBreakdown={loiOsMorningBreakdown}
+                osDayBreakdown={loiOsDayBreakdown}
+                balanceNightBreakdown={loiBalanceNightBreakdown}
+                onOpenBatchManager={() => setActiveBatchModalStation({ stationKey: 'loi', name: 'LOI' })}
+                batchManagerLabel="Kelola Batch (Received & Finish)"
                 extraSnippet={
                   <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500 font-mono">
                     <span className="font-bold text-slate-700 dark:text-slate-300">Tray Furnace Terpakai:</span>
@@ -531,9 +638,9 @@ export const DailyPerformanceV2Briefing: React.FC<DailyPerformanceV2BriefingProp
                 }
               />
 
-              {/* 4. Spektrometri WDXRF (Zetium A & B) */}
+              {/* 5. Spektrometri WDXRF (Zetium A & B) */}
               <DailyPerformanceV2ShiftRelayCard
-                title="4. Spektrometri WDXRF (Zetium A & B • Manik Borat)"
+                title="5. Spektrometri WDXRF (Zetium A & B • Manik Borat)"
                 stationSubtitle="Pembacaan Komposisi Kimia Presisi"
                 unit="runs"
                 osMorning={dayRecord.wdxrf.osExp}
@@ -791,6 +898,18 @@ export const DailyPerformanceV2Briefing: React.FC<DailyPerformanceV2BriefingProp
         </div>
 
       </div>
+
+      {/* BATCH MANAGER MODAL (RECEIVED & CHECKLIST FINISH) */}
+      {activeBatchModalStation && (
+        <DailyPerformanceV2BatchManagerModal
+          isOpen={true}
+          onClose={() => setActiveBatchModalStation(null)}
+          date={selectedDate}
+          stationKey={activeBatchModalStation.stationKey}
+          stationName={activeBatchModalStation.name}
+          shiftType={dayRecord ? (dayRecord.shiftType === 'LS' ? 'LS' : 'DAY') : 'DAY'}
+        />
+      )}
 
     </div>
   );

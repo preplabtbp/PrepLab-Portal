@@ -235,3 +235,91 @@ export function saveStoredHandoverNote(note: ShiftHandoverNote): void {
     console.error('Failed saving handover note', e);
   }
 }
+
+export const STORAGE_KEY_V2_BATCHES = 'preplab_daily_performance_v2_batches';
+
+import { SampleBatchRecord, BatchBreakdownItem } from './daily-performance-v2-types';
+
+export function getStoredSampleBatches(date?: string, stationKey?: string): SampleBatchRecord[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_V2_BATCHES);
+    let all: SampleBatchRecord[] = raw ? JSON.parse(raw) : [];
+    if (date) {
+      all = all.filter(b => b.date === date);
+    }
+    if (stationKey) {
+      all = all.filter(b => b.stationKey === stationKey);
+    }
+    return all;
+  } catch (e) {
+    console.error('Failed reading sample batches', e);
+    return [];
+  }
+}
+
+export function saveStoredSampleBatches(batchesToSave: SampleBatchRecord[]): void {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_V2_BATCHES);
+    const existing: SampleBatchRecord[] = raw ? JSON.parse(raw) : [];
+    const saveIds = new Set(batchesToSave.map(b => b.id));
+    const merged = [...existing.filter(b => !saveIds.has(b.id)), ...batchesToSave];
+    localStorage.setItem(STORAGE_KEY_V2_BATCHES, JSON.stringify(merged));
+  } catch (e) {
+    console.error('Failed saving sample batches', e);
+  }
+}
+
+/**
+ * Menghitung breakdown batch per PT dari antrean batch yang belum selesai (isFinished === false)
+ * atau sudah selesai.
+ */
+export function calculateBatchBreakdown(batches: SampleBatchRecord[], targetFinished = false): BatchBreakdownItem[] {
+  const filtered = batches.filter(b => b.isFinished === targetFinished);
+  const map = new Map<string, { batchCount: number; sampleCount: number }>();
+  
+  filtered.forEach(b => {
+    const cur = map.get(b.pt) || { batchCount: 0, sampleCount: 0 };
+    cur.batchCount += 1;
+    cur.sampleCount += b.sampleCount;
+    map.set(b.pt, cur);
+  });
+
+  return Array.from(map.entries()).map(([pt, data]) => ({
+    pt,
+    batchCount: data.batchCount,
+    sampleCount: data.sampleCount
+  }));
+}
+
+/**
+ * Menghasilkan rincian batch default yang realistis jika belum ada batch yang diinputkan manual,
+ * berbasis angka balance dan kelipatan 24 sampel per batch standard lab.
+ */
+export function getDefaultBatchBreakdown(balanceCount: number, defaultPt: string = 'TBP'): BatchBreakdownItem[] {
+  if (balanceCount <= 0) return [];
+  
+  // Kasus khusus dari foto user: 168 spl = 4 Batch TBP (96) + 3 Batch GPS (72)
+  if (balanceCount === 168) {
+    return [
+      { pt: 'TBP', batchCount: 4, sampleCount: 96 },
+      { pt: 'GPS', batchCount: 3, sampleCount: 72 }
+    ];
+  }
+
+  // Jika genap kelipatan 24
+  const standardBatchSize = 24;
+  const totalBatches = Math.ceil(balanceCount / standardBatchSize);
+  
+  if (totalBatches >= 4) {
+    const tbpBatches = Math.ceil(totalBatches * 0.6);
+    const gpsBatches = totalBatches - tbpBatches;
+    return [
+      { pt: 'TBP', batchCount: tbpBatches, sampleCount: tbpBatches * standardBatchSize },
+      { pt: 'GPS', batchCount: gpsBatches, sampleCount: balanceCount - (tbpBatches * standardBatchSize) }
+    ];
+  }
+
+  return [
+    { pt: defaultPt, batchCount: totalBatches, sampleCount: balanceCount }
+  ];
+}

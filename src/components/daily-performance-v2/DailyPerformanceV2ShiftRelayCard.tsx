@@ -1,10 +1,11 @@
 import React from 'react';
 import { 
   ArrowRight, Award, TrendingDown, TrendingUp, 
-  Clock, Zap, CheckCircle2, AlertTriangle 
+  Clock, Zap, CheckCircle2, AlertTriangle, Layers
 } from 'lucide-react';
 import { formatNumber } from './daily-performance-v2-utils';
 import { DailyPerformanceV2InBarCell } from './DailyPerformanceV2InBarCell';
+import { BatchBreakdownItem } from './daily-performance-v2-types';
 
 export interface ShiftRelayCardProps {
   title: string;
@@ -23,7 +24,77 @@ export interface ShiftRelayCardProps {
   maxMonthFinish?: number;
   colorVariant?: 'teal' | 'amber' | 'emerald' | 'sky' | 'indigo' | 'purple' | 'rose';
   extraSnippet?: React.ReactNode;
+  osMorningBreakdown?: BatchBreakdownItem[];
+  osDayBreakdown?: BatchBreakdownItem[];
+  balanceNightBreakdown?: BatchBreakdownItem[];
+  osNightBreakdown?: BatchBreakdownItem[];
+  onOpenBatchManager?: () => void;
+  batchManagerLabel?: string;
 }
+
+/**
+ * Komponen sel angka dengan penanda sudut segitiga merah khas Excel Note/Comment
+ * dan kartu popup kuning yang menampilkan rincian batch per PT saat kursor mouse di-hover.
+ */
+const ExcelCommentCell: React.FC<{
+  value: number;
+  unit?: string;
+  breakdown?: BatchBreakdownItem[];
+  colorClass?: string;
+  sizeClass?: string;
+}> = ({ 
+  value, 
+  unit, 
+  breakdown, 
+  colorClass = 'text-slate-800 dark:text-slate-100',
+  sizeClass = 'text-xl'
+}) => {
+  const hasBreakdown = Boolean(breakdown && breakdown.length > 0 && value > 0);
+
+  return (
+    <div className="relative group inline-block">
+      <div className="flex items-center gap-1.5 cursor-help">
+        <span className={`font-black font-mono mt-0.5 ${sizeClass} ${colorClass}`}>
+          {formatNumber(value)} <span className="text-xs font-normal opacity-70">{unit}</span>
+        </span>
+        {hasBreakdown && (
+          <span 
+            className="w-0 h-0 border-t-[8px] border-t-rose-500 border-l-[8px] border-l-transparent absolute -top-1 -right-2.5 cursor-pointer"
+            title="Arahkan kursor untuk melihat rincian batch"
+          />
+        )}
+      </div>
+
+      {/* Floating Excel Note Popup on Cursor Hover */}
+      {hasBreakdown && (
+        <div className="absolute z-50 left-0 top-full mt-2 hidden group-hover:block p-3 rounded-xl bg-amber-50 dark:bg-amber-950/95 border-2 border-amber-300 dark:border-amber-600 shadow-2xl text-left whitespace-nowrap min-w-[150px] font-sans pointer-events-none animate-in fade-in zoom-in-95 duration-150">
+          <div className="text-[10px] font-black uppercase text-amber-900 dark:text-amber-200 border-b border-amber-200 dark:border-amber-800 pb-1 mb-1.5 flex items-center justify-between gap-3">
+            <span>User:</span>
+            <span className="font-mono text-[9px] text-amber-700 dark:text-amber-300">
+              {breakdown!.reduce((sum, b) => sum + b.batchCount, 0)} Batch
+            </span>
+          </div>
+          <div className="space-y-1">
+            {breakdown!.map((item, idx) => (
+              <div key={idx} className="text-xs font-mono font-black text-slate-900 dark:text-amber-100 flex items-center justify-between gap-3">
+                <span>{item.batchCount} BATCH {item.pt.toUpperCase()}</span>
+                {item.sampleCount && (
+                  <span className="text-[10px] text-slate-500 dark:text-amber-300/80 font-normal">
+                    ({item.sampleCount} spl)
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+          <div className="mt-2 pt-1 border-t border-amber-200/80 dark:border-amber-800/80 text-[10px] font-mono text-amber-800 dark:text-amber-300 flex items-center justify-between">
+            <span>Total Sample:</span>
+            <span className="font-bold">{formatNumber(value)} {unit}</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 export const DailyPerformanceV2ShiftRelayCard: React.FC<ShiftRelayCardProps> = ({
   title,
@@ -41,7 +112,13 @@ export const DailyPerformanceV2ShiftRelayCard: React.FC<ShiftRelayCardProps> = (
   isLongShift = false,
   maxMonthFinish = 100,
   colorVariant = 'teal',
-  extraSnippet
+  extraSnippet,
+  osMorningBreakdown,
+  osDayBreakdown,
+  balanceNightBreakdown,
+  osNightBreakdown,
+  onOpenBatchManager,
+  batchManagerLabel = 'Kelola Batch'
 }) => {
   const totalFinished24h = finishedDay + (isLongShift ? 0 : finishedNight);
   const totalReceived24h = receivedDay + (isLongShift ? 0 : receivedNight);
@@ -87,8 +164,19 @@ export const DailyPerformanceV2ShiftRelayCard: React.FC<ShiftRelayCardProps> = (
           </div>
         </div>
 
-        {/* Top Contributor Badge */}
+        {/* Action Controls & Top Contributor Badge */}
         <div className="flex items-center gap-2">
+          {onOpenBatchManager && (
+            <button
+              onClick={onOpenBatchManager}
+              className="flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-bold bg-teal-50 hover:bg-teal-100 dark:bg-teal-950/60 dark:hover:bg-teal-900/80 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800 cursor-pointer transition-all shadow-xs"
+              title="Daftarkan batch diterima atau tandai batch selesai"
+            >
+              <Layers className="w-3.5 h-3.5 text-teal-600" />
+              <span>{batchManagerLabel}</span>
+            </button>
+          )}
+
           {isLongShift ? (
             <span className="px-2.5 py-1 rounded-xl text-xs font-bold bg-amber-100 text-amber-900 dark:bg-amber-950/70 dark:text-amber-200 border border-amber-300 dark:border-amber-700 flex items-center gap-1">
               <Zap className="w-3.5 h-3.5 text-amber-500" />
@@ -154,20 +242,19 @@ export const DailyPerformanceV2ShiftRelayCard: React.FC<ShiftRelayCardProps> = (
         isLongShift ? 'grid-cols-1 sm:grid-cols-3' : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4'
       }`}>
         
-        {/* PILAR 1: SALDO DARI HARI KEMARIN (D-1 CARRY-IN) */}
+        {/* PILAR 1: BALLANCE 07:00 WIT */}
         <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/70 dark:border-slate-800 flex flex-col justify-between space-y-2">
           <div>
             <div className="flex items-center justify-between">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                1. Saldo Awal (07:00 WITA)
-              </span>
-              <span className="text-[9px] px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 font-mono text-slate-600 dark:text-slate-300">
-                Dari Kemarin
+                Ballance 07:00 WIT
               </span>
             </div>
-            <span className="text-xl font-black font-mono text-slate-800 dark:text-slate-100 mt-1 block">
-              {formatNumber(osMorning)} <span className="text-xs font-normal text-slate-400">{unit}</span>
-            </span>
+            <ExcelCommentCell 
+              value={osMorning}
+              unit={unit}
+              breakdown={osMorningBreakdown}
+            />
           </div>
 
           <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-tight">
@@ -175,7 +262,7 @@ export const DailyPerformanceV2ShiftRelayCard: React.FC<ShiftRelayCardProps> = (
           </p>
         </div>
 
-        {/* PILAR 2: KINERJA SHIFT PAGI (DAY SHIFT) & OPERAN JAM 19:00 */}
+        {/* PILAR 2: KINERJA SHIFT PAGI & OS DAY SHIFT */}
         <div className="p-3.5 rounded-2xl bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200/80 dark:border-amber-900/50 flex flex-col justify-between space-y-2">
           <div>
             <div className="flex items-center justify-between">
@@ -199,20 +286,24 @@ export const DailyPerformanceV2ShiftRelayCard: React.FC<ShiftRelayCardProps> = (
             </div>
             {receivedDay > 0 && (
               <span className="text-[10px] font-mono text-sky-600 dark:text-sky-400 mt-1 block">
-                + Masuk siang: {formatNumber(receivedDay)} {unit}
+                Recieved Day Shift: {formatNumber(receivedDay)} {unit}
               </span>
             )}
           </div>
 
-          {/* Saldo Serah Terima Jam 19:00 */}
+          {/* Saldo Serah Terima Sore Jam 19:00: OS Day Shift */}
           <div className="pt-2 border-t border-amber-200/60 dark:border-amber-900/40">
             <div className="flex items-center justify-between">
               <span className="text-[10px] font-bold text-amber-900 dark:text-amber-300">
-                {isLongShift ? 'Sisa Saldo Jam 24:00:' : 'Operan ke Malam (19:00):'}
+                {isLongShift ? 'Ballance Long Shift (24:00):' : 'OS Day Shift:'}
               </span>
-              <span className="font-mono font-black text-amber-950 dark:text-amber-100 text-sm">
-                {formatNumber(balanceDay)} {unit}
-              </span>
+              <ExcelCommentCell 
+                value={balanceDay}
+                unit={unit}
+                breakdown={osDayBreakdown}
+                colorClass="text-amber-950 dark:text-amber-100"
+                sizeClass="text-sm font-black"
+              />
             </div>
 
             {/* Delta Shift Pagi */}
@@ -234,7 +325,7 @@ export const DailyPerformanceV2ShiftRelayCard: React.FC<ShiftRelayCardProps> = (
           </div>
         </div>
 
-        {/* PILAR 3: KINERJA SHIFT MALAM (NIGHT SHIFT) - HANYA MUNCUL JIKA BUKAN LONG SHIFT */}
+        {/* PILAR 3: KINERJA SHIFT MALAM (NIGHT SHIFT) */}
         {!isLongShift && (
           <div className="p-3.5 rounded-2xl bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-200/80 dark:border-indigo-900/50 flex flex-col justify-between space-y-2">
             <div>
@@ -262,15 +353,19 @@ export const DailyPerformanceV2ShiftRelayCard: React.FC<ShiftRelayCardProps> = (
               </span>
             </div>
 
-            {/* Saldo Penutupan Jam 07:00 */}
+            {/* Saldo Penutupan Jam 07:00: Ballance Night Shift */}
             <div className="pt-2 border-t border-indigo-200/60 dark:border-indigo-900/40">
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-bold text-indigo-900 dark:text-indigo-300">
-                  Sisa Saldo Pagi (07:00):
+                  Ballance Night Shift:
                 </span>
-                <span className="font-mono font-black text-indigo-950 dark:text-indigo-100 text-sm">
-                  {formatNumber(balanceNight)} {unit}
-                </span>
+                <ExcelCommentCell 
+                  value={balanceNight}
+                  unit={unit}
+                  breakdown={balanceNightBreakdown}
+                  colorClass="text-indigo-950 dark:text-indigo-100"
+                  sizeClass="text-sm font-black"
+                />
               </div>
 
               {/* Delta Shift Malam */}
@@ -293,7 +388,7 @@ export const DailyPerformanceV2ShiftRelayCard: React.FC<ShiftRelayCardProps> = (
           </div>
         )}
 
-        {/* PILAR 4: OUTSTANDING YANG DITINGGALKAN UNTUK HARI BERIKUTNYA (D+1 CARRY-OUT) */}
+        {/* PILAR 4: OS NIGHT SHIFT (D+1 CARRY-OUT) */}
         <div className={`p-3.5 rounded-2xl border flex flex-col justify-between space-y-2 ${
           net24hKurasBacklog 
             ? 'bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-200/80 dark:border-emerald-900/50' 
@@ -306,18 +401,16 @@ export const DailyPerformanceV2ShiftRelayCard: React.FC<ShiftRelayCardProps> = (
               <span className={`text-[10px] font-bold uppercase tracking-wider ${
                 net24hKurasBacklog ? 'text-emerald-800 dark:text-emerald-300' : 'text-slate-600 dark:text-slate-400'
               }`}>
-                {isLongShift ? '3. Beban Senin Pagi' : '4. Beban Hari Esok'}
-              </span>
-              <span className="text-[9px] px-1.5 py-0.5 rounded bg-white dark:bg-slate-900 font-mono font-bold text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
-                Oper ke D+1
+                OS Night Shift
               </span>
             </div>
 
-            <span className={`text-xl font-black font-mono mt-1 block ${
-              net24hKurasBacklog ? 'text-emerald-900 dark:text-emerald-100' : delta24h > 0 ? 'text-rose-700 dark:text-rose-300' : 'text-slate-800 dark:text-slate-100'
-            }`}>
-              {formatNumber(balanceNight)} <span className="text-xs font-normal opacity-70">{unit}</span>
-            </span>
+            <ExcelCommentCell 
+              value={balanceNight}
+              unit={unit}
+              breakdown={osNightBreakdown || balanceNightBreakdown}
+              colorClass={net24hKurasBacklog ? 'text-emerald-900 dark:text-emerald-100' : delta24h > 0 ? 'text-rose-700 dark:text-rose-300' : 'text-slate-800 dark:text-slate-100'}
+            />
           </div>
 
           {/* 24h Net Trend Indicator */}
