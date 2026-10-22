@@ -269,7 +269,7 @@ export function resolveKategoriIzin(
         foundCode = st;
         break;
       }
-      if (st === 'IK' && foundCode !== 'SS' && foundCode !== 'SL') {
+      if (st === 'IK' && foundCode !== 'IK') {
         foundCode = st;
       }
       if (st === 'I' && !foundCode) {

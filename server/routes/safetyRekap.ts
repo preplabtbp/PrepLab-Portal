@@ -151,6 +151,76 @@ safetyRekapRouter.put('/api/safety-rekap/edits', async (req, res) => {
   }
 });
 
+// Bulk upsert edits dari impor Excel (KTA/TTA atau Inspeksi)
+safetyRekapRouter.post('/api/safety-rekap/edits/bulk', async (req, res) => {
+  try {
+    await ensureSafetyRekapEditsTable();
+    const b = req.body || {};
+    const week = normalizeWeek(b.week);
+    const year = parseInt(String(b.year || ''), 10);
+    const items = Array.isArray(b.items) ? b.items : [];
+    if (!week || !year) return res.status(400).json({ error: 'Parameter week & year wajib diisi' });
+    if (items.length === 0) return res.json({ success: true, count: 0 });
+
+    const editor = (req as any).user;
+    if (!(await canEditSafety(editor))) {
+      return res.status(403).json({ error: 'Import rekap hanya untuk Administration, Developer & Manager' });
+    }
+
+    let updatedCount = 0;
+    for (const item of items) {
+      const nik = String(item.nik || '').trim();
+      if (!nik) continue;
+
+      // Ambil record yang sudah ada agar tidak menghapus kolom lainnya
+      const existing = await db.select().from(safetyRekapEdits)
+        .where(and(
+          eq(safetyRekapEdits.week, week),
+          eq(safetyRekapEdits.year, year),
+          eq(safetyRekapEdits.nik, nik)
+        ))
+        .limit(1);
+
+      const prev = (existing[0] || {}) as any;
+
+      const values = {
+        week,
+        year,
+        nik,
+        name: item.name ? String(item.name) : prev.name || null,
+        isCuti: null,
+        absenceStatus: item.absenceStatus !== undefined ? cleanAbsence(item.absenceStatus) : prev.absenceStatus,
+        ktaDone: item.ktaDone !== undefined ? cleanBool(item.ktaDone) : prev.ktaDone,
+        tglKta: item.tglKta !== undefined ? cleanDateValue(item.tglKta) : prev.tglKta,
+        tglTta1: item.tglTta1 !== undefined ? cleanDateValue(item.tglTta1) : prev.tglTta1,
+        tglTta2: item.tglTta2 !== undefined ? cleanDateValue(item.tglTta2) : prev.tglTta2,
+        inspeksiDone: item.inspeksiDone !== undefined ? cleanBool(item.inspeksiDone) : prev.inspeksiDone,
+        keteranganInspeksi: item.keteranganInspeksi !== undefined 
+          ? (item.keteranganInspeksi === null ? null : String(item.keteranganInspeksi).slice(0, 300))
+          : prev.keteranganInspeksi,
+        tglInspeksi: item.tglInspeksi !== undefined ? cleanDateValue(item.tglInspeksi) : prev.tglInspeksi,
+        catatan: prev.catatan || null,
+        updatedByNik: String(editor?.nik || ''),
+        updatedByName: editor?.name ? String(editor.name) : (b.editorName ? String(b.editorName) : null),
+        updatedAt: new Date(),
+      };
+
+      await db.insert(safetyRekapEdits).values(values)
+        .onConflictDoUpdate({
+          target: [safetyRekapEdits.year, safetyRekapEdits.week, safetyRekapEdits.nik],
+          set: values,
+        });
+      updatedCount++;
+    }
+
+    editsCache.delete(`${year}_${week}`);
+    res.json({ success: true, count: updatedCount });
+  } catch (e: any) {
+    console.error('[SafetyRekap] POST bulk edits failed:', e.message);
+    res.status(500).json({ error: 'Gagal melakukan bulk update rekap' });
+  }
+});
+
 // Reset baris ke data otomatis
 safetyRekapRouter.delete('/api/safety-rekap/edits', async (req, res) => {
   try {

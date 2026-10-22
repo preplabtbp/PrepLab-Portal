@@ -12,6 +12,7 @@ import { PageHeader } from './PageHeader';
 import { Select } from './ui';
 import { GroupReportScreen, getKtaObligation } from './GroupReportScreen';
 import { SafetyRekapDiagram } from './SafetyRekapDiagram';
+import { SafetyRekapExcelImportModal, ImportSafetyMode } from './SafetyRekapExcelImportModal';
 import { getISOWeek, getISOWeekYear, getISOWeekRange } from '../utils/iso-week';
 
 interface SafetyRekapScreenProps {
@@ -1330,6 +1331,8 @@ export function SafetyRekapScreen({ inspectorNik, inspectorName, inspectorRole, 
   }, [weekRange]);
 
     const [savingNik, setSavingNik] = useState<string | null>(null);
+  const [importModalOpen, setImportModalOpen] = useState<boolean>(false);
+  const [importMode, setImportMode] = useState<ImportSafetyMode>('kta');
 
   const handleInlineSave = async (row: RekapRow, fieldUpdates: Partial<{
     absenceStatus: string | null;
@@ -1912,6 +1915,7 @@ export function SafetyRekapScreen({ inspectorNik, inspectorName, inspectorRole, 
           inspectorRole={inspectorRole}
           inspectorSection={inspectorSection}
           initialWeek={selectedWeek}
+          onWeekChange={setSelectedWeek}
         />
       ) : (
         <>
@@ -1979,7 +1983,7 @@ export function SafetyRekapScreen({ inspectorNik, inspectorName, inspectorRole, 
                     className="w-full h-10 pl-9 pr-3 rounded-xl border border-[var(--border-main)] bg-[var(--input-bg)] text-sm text-[var(--text-main)] outline-none focus:ring-2 focus:ring-[var(--primary)]/30"
                   />
                 </div>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   <button
                     onClick={() => fetchData(selectedWeek, true)}
                     disabled={loading}
@@ -1987,6 +1991,32 @@ export function SafetyRekapScreen({ inspectorNik, inspectorName, inspectorRole, 
                   >
                     <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} /> Segarkan
                   </button>
+
+                  {/* Tombol Input Data Excel KTA/TTA & Inspeksi */}
+                  {canEdit && (
+                    <>
+                      <button
+                        onClick={() => { setImportMode('kta'); setImportModalOpen(true); }}
+                        disabled={loading}
+                        className="h-10 flex-1 sm:flex-none px-3.5 rounded-xl bg-[#F5A623] hover:bg-amber-600 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm cursor-pointer disabled:opacity-60 transition-all"
+                        title="Import data Excel KTA / TTA ke Tabel Rekap"
+                      >
+                        <ShieldCheck className="w-3.5 h-3.5" />
+                        <span>Input Excel KTA/TTA</span>
+                      </button>
+
+                      <button
+                        onClick={() => { setImportMode('inspeksi'); setImportModalOpen(true); }}
+                        disabled={loading}
+                        className="h-10 flex-1 sm:flex-none px-3.5 rounded-xl bg-[#24A1B2] hover:bg-teal-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm cursor-pointer disabled:opacity-60 transition-all"
+                        title="Import data Excel Inspeksi Terencana ke Tabel Rekap"
+                      >
+                        <ClipboardCheck className="w-3.5 h-3.5" />
+                        <span>Input Excel Inspeksi</span>
+                      </button>
+                    </>
+                  )}
+
                   <button
                     onClick={handleDownloadExcel}
                     disabled={loading || rows.length === 0}
@@ -2242,6 +2272,21 @@ export function SafetyRekapScreen({ inspectorNik, inspectorName, inspectorRole, 
           onSaved={() => { setEditingRow(null); fetchEdits(selectedWeek); }}
         />
       )}
+
+      {/* Modal Input Data Excel (KTA/TTA & Inspeksi) */}
+      <SafetyRekapExcelImportModal
+        isOpen={importModalOpen}
+        onClose={() => setImportModalOpen(false)}
+        defaultMode={importMode}
+        currentWeek={selectedWeek}
+        currentYear={currentYear}
+        allRows={allRows}
+        onSuccess={async () => {
+          await fetchData(selectedWeek, true);
+        }}
+        inspectorNik={inspectorNik}
+        inspectorName={inspectorName}
+      />
     </div>
   );
 }
