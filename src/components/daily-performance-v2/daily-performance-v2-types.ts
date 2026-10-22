@@ -146,7 +146,12 @@ export interface SampleBatchRecord {
   sampleGroup?: SampleGroupType;
   batchNumber?: number;
   sampleCount: number;
-  isFinished: boolean;
+  isFinished: boolean; // Alias untuk Finish Fusion (kompatibilitas backward)
+  fusionFinished?: boolean;
+  wdxrfFinished?: boolean;
+  qcFinished?: boolean;
+  reportingFinished?: boolean;
+  isBatchExploration?: boolean;
   shiftCreated?: 'DAY' | 'NIGHT' | 'LS';
   shiftFinished?: 'DAY' | 'NIGHT' | 'LS';
   // Additional ergonomic fields
@@ -156,3 +161,78 @@ export interface SampleBatchRecord {
   station?: string;
   createdAt?: string;
 }
+
+export interface DirectSampleIntakeRecord {
+  id: string;
+  code: string;
+  group: SampleGroupType;
+  sampleCount: number;
+  shift: ShiftType;
+  date: string;
+  createdAt: string;
+  notes?: string;
+}
+
+export type DiscrepancyRootCauseType = 
+  | 'FINISHED_MISMATCH' // Kesalahan penginputan selesai (finished) di shift sebelumnya
+  | 'RECEIVED_MISMATCH' // Kesalahan penginputan sampel masuk (received / intake) di shift sebelumnya atau stasiun hulu
+  | 'PHYSICAL_COUNT_MISMATCH'; // Kesalahan hitung fisik saat handover serah terima shift / stock opname
+
+export interface BalanceReconciliationDetail {
+  rootCause: DiscrepancyRootCauseType;
+  upstreamStation?: string;
+  originalIntake?: number;
+  correctedIntake?: number;
+  originalFinished?: number;
+  correctedFinished?: number;
+  originalOs: number;
+  correctedOs: number;
+  physicalCountAtHandover: number;
+  variance: number; // physical - originalOs
+  reconcilePreviousShiftRecord: boolean; // apakah shift sebelumnya di-update
+}
+
+export interface StationTracebackContext {
+  stationKey: 'press' | 'edxrf' | 'fusion' | 'loi' | 'wdxrf' | 'qc' | 'report';
+  stationName: string;
+  upstreamStationName: string;
+  date: string;
+  shift: ShiftType;
+  regu: string;
+  foreman: string;
+  initialBalance: number;
+  receivedCount: number;
+  finishedCount: number;
+  officialOs: number;
+  toolBreakdown?: Record<string, number>;
+  recordId?: string;
+}
+
+export interface BalanceOverrideAuditLog {
+  id: string;
+  timestamp: string;
+  date: string;
+  shift: ShiftType;
+  regu: string;
+  stationKey: 'press' | 'edxrf' | 'fusion' | 'loi' | 'wdxrf' | 'qc' | 'report';
+  stationName: string;
+  previousShiftInfo: {
+    date: string;
+    shift: string;
+    regu: string;
+    foreman: string;
+    originalBalance: number;
+    intake?: number;
+    finished?: number;
+  };
+  originalValue: number;
+  correctedValue: number;
+  modifiedBy: string;
+  reason: string;
+  investigationNotes?: string;
+  // Enhanced Traceback Fields
+  rootCauseType?: DiscrepancyRootCauseType;
+  reconciliationDetail?: BalanceReconciliationDetail;
+  isBackwardReconciled?: boolean;
+}
+

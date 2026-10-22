@@ -50,6 +50,15 @@ export const DailyPerformanceV2Briefing: React.FC<DailyPerformanceV2BriefingProp
     return () => window.removeEventListener('preplab-batches-updated', handleUpdate);
   }, []);
 
+  // Sinkronisasi dinamis jumlah personil tidak hadir dari roster
+  const [dayAbsenteeCounts, setDayAbsenteeCounts] = useState<{ cuti: number; izin: number; sakit: number; alfa: number; total: number } | null>(null);
+  const [nightAbsenteeCounts, setNightAbsenteeCounts] = useState<{ cuti: number; izin: number; sakit: number; alfa: number; total: number } | null>(null);
+
+  useEffect(() => {
+    setDayAbsenteeCounts(null);
+    setNightAbsenteeCounts(null);
+  }, [selectedDate]);
+
   // Records for current date
   const recordsForDate = useMemo(() => {
     return records.filter(r => r.date === selectedDate);
@@ -298,12 +307,17 @@ export const DailyPerformanceV2Briefing: React.FC<DailyPerformanceV2BriefingProp
                   <div className="p-3 rounded-xl bg-white dark:bg-slate-900 border border-amber-100 dark:border-slate-800">
                     <span className="text-[10px] text-slate-400 block font-medium">Tidak Hadir</span>
                     <span className="text-lg font-black font-mono text-rose-600 dark:text-rose-400 mt-0.5 block">
-                      {dayRecord.manpower.staff.cuti + dayRecord.manpower.crew.cuti + 
+                      {dayAbsenteeCounts ? dayAbsenteeCounts.total : (
+                       dayRecord.manpower.staff.cuti + dayRecord.manpower.crew.cuti + 
                        dayRecord.manpower.staff.izin + dayRecord.manpower.crew.izin + 
-                       dayRecord.manpower.staff.sakit + dayRecord.manpower.crew.sakit}
+                       dayRecord.manpower.staff.sakit + dayRecord.manpower.crew.sakit)}
                     </span>
                     <span className="text-[9px] text-slate-400">
-                      C:{dayRecord.manpower.staff.cuti + dayRecord.manpower.crew.cuti} • I:{dayRecord.manpower.staff.izin + dayRecord.manpower.crew.izin} • S:{dayRecord.manpower.staff.sakit + dayRecord.manpower.crew.sakit}
+                      {dayAbsenteeCounts ? (
+                        `C:${dayAbsenteeCounts.cuti} • I:${dayAbsenteeCounts.izin} • S:${dayAbsenteeCounts.sakit}`
+                      ) : (
+                        `C:${dayRecord.manpower.staff.cuti + dayRecord.manpower.crew.cuti} • I:${dayRecord.manpower.staff.izin + dayRecord.manpower.crew.izin} • S:${dayRecord.manpower.staff.sakit + dayRecord.manpower.crew.sakit}`
+                      )}
                     </span>
                   </div>
                 </div>
@@ -314,6 +328,16 @@ export const DailyPerformanceV2Briefing: React.FC<DailyPerformanceV2BriefingProp
                     {dayRecord.manpowerNotes}
                   </div>
                 )}
+
+                {/* List Detail Personil Tidak Hadir (Alfa, Izin, Sakit, Cuti) Shift Pagi / Long Shift */}
+                <DailyPerformanceV2AbsenteeList
+                  selectedDate={selectedDate}
+                  shiftType={isLongShift ? 'LS' : 'DAY'}
+                  userPt={userPt}
+                  dayRecord={dayRecord}
+                  nightRecord={nightRecord || undefined}
+                  onCountsCalculated={setDayAbsenteeCounts}
+                />
               </div>
 
               {/* Night Card: Strictly hidden on Long Shift */}
@@ -352,12 +376,17 @@ export const DailyPerformanceV2Briefing: React.FC<DailyPerformanceV2BriefingProp
                     <div className="p-3 rounded-xl bg-white dark:bg-slate-900 border border-indigo-100 dark:border-slate-800">
                       <span className="text-[10px] text-slate-400 block font-medium">Tidak Hadir</span>
                       <span className="text-lg font-black font-mono text-rose-600 dark:text-rose-400 mt-0.5 block">
-                        {nightRecord.manpower.staff.cuti + nightRecord.manpower.crew.cuti + 
+                        {nightAbsenteeCounts ? nightAbsenteeCounts.total : (
+                         nightRecord.manpower.staff.cuti + nightRecord.manpower.crew.cuti + 
                          nightRecord.manpower.staff.izin + nightRecord.manpower.crew.izin + 
-                         nightRecord.manpower.staff.sakit + nightRecord.manpower.crew.sakit}
+                         nightRecord.manpower.staff.sakit + nightRecord.manpower.crew.sakit)}
                       </span>
                       <span className="text-[9px] text-slate-400">
-                        C:{nightRecord.manpower.staff.cuti + nightRecord.manpower.crew.cuti} • I:{nightRecord.manpower.staff.izin + nightRecord.manpower.crew.izin} • S:{nightRecord.manpower.staff.sakit + nightRecord.manpower.crew.sakit}
+                        {nightAbsenteeCounts ? (
+                          `C:${nightAbsenteeCounts.cuti} • I:${nightAbsenteeCounts.izin} • S:${nightAbsenteeCounts.sakit}`
+                        ) : (
+                          `C:${nightRecord.manpower.staff.cuti + nightRecord.manpower.crew.cuti} • I:${nightRecord.manpower.staff.izin + nightRecord.manpower.crew.izin} • S:${nightRecord.manpower.staff.sakit + nightRecord.manpower.crew.sakit}`
+                        )}
                       </span>
                     </div>
                   </div>
@@ -368,6 +397,16 @@ export const DailyPerformanceV2Briefing: React.FC<DailyPerformanceV2BriefingProp
                       {nightRecord.manpowerNotes}
                     </div>
                   )}
+
+                  {/* List Detail Personil Tidak Hadir (Alfa, Izin, Sakit, Cuti) Shift Malam */}
+                  <DailyPerformanceV2AbsenteeList
+                    selectedDate={selectedDate}
+                    shiftType="NIGHT"
+                    userPt={userPt}
+                    dayRecord={dayRecord}
+                    nightRecord={nightRecord}
+                    onCountsCalculated={setNightAbsenteeCounts}
+                  />
                 </div>
               )}
 
