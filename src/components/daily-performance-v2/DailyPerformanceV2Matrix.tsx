@@ -12,6 +12,7 @@ import {
   calculateMonthlyPeaks 
 } from './daily-performance-v2-utils';
 import { DailyPerformanceV2InBarCell } from './DailyPerformanceV2InBarCell';
+import { DailyPerformanceV2AbsenteeList } from './DailyPerformanceV2AbsenteeList';
 
 interface DailyPerformanceV2MatrixProps {
   records: DailyPerformanceRecord[];
@@ -229,6 +230,15 @@ export const DailyPerformanceV2Matrix: React.FC<DailyPerformanceV2MatrixProps> =
                     {dayRecord.manpowerNotes}
                   </div>
                 )}
+
+                {/* List Detail Personil Tidak Hadir (Alfa, Izin, Sakit, Cuti) Shift Pagi / Long Shift */}
+                <DailyPerformanceV2AbsenteeList
+                  selectedDate={selectedDate}
+                  shiftType={isLongShift ? 'LS' : 'DAY'}
+                  userPt={userPt}
+                  dayRecord={dayRecord}
+                  nightRecord={nightRecord || undefined}
+                />
               </div>
 
               {/* Card Shift Malam: HANYA DITAMPILKAN JIKA BUKAN HARI LONG SHIFT */}
@@ -281,6 +291,15 @@ export const DailyPerformanceV2Matrix: React.FC<DailyPerformanceV2MatrixProps> =
                       {nightRecord.manpowerNotes}
                     </div>
                   )}
+
+                  {/* List Detail Personil Tidak Hadir (Alfa, Izin, Sakit, Cuti) Shift Malam */}
+                  <DailyPerformanceV2AbsenteeList
+                    selectedDate={selectedDate}
+                    shiftType="NIGHT"
+                    userPt={userPt}
+                    dayRecord={dayRecord}
+                    nightRecord={nightRecord}
+                  />
                 </div>
               )}
 

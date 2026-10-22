@@ -146,7 +146,12 @@ export interface SampleBatchRecord {
   sampleGroup?: SampleGroupType;
   batchNumber?: number;
   sampleCount: number;
-  isFinished: boolean;
+  isFinished: boolean; // Alias untuk Finish Fusion (kompatibilitas backward)
+  fusionFinished?: boolean;
+  wdxrfFinished?: boolean;
+  qcFinished?: boolean;
+  reportingFinished?: boolean;
+  isBatchExploration?: boolean;
   shiftCreated?: 'DAY' | 'NIGHT' | 'LS';
   shiftFinished?: 'DAY' | 'NIGHT' | 'LS';
   // Additional ergonomic fields
@@ -156,3 +161,39 @@ export interface SampleBatchRecord {
   station?: string;
   createdAt?: string;
 }
+
+export interface DirectSampleIntakeRecord {
+  id: string;
+  code: string;
+  group: SampleGroupType;
+  sampleCount: number;
+  shift: ShiftType;
+  date: string;
+  createdAt: string;
+  notes?: string;
+}
+
+export interface BalanceOverrideAuditLog {
+  id: string;
+  timestamp: string;
+  date: string;
+  shift: ShiftType;
+  regu: string;
+  stationKey: 'press' | 'edxrf' | 'fusion' | 'loi' | 'wdxrf' | 'qc' | 'report';
+  stationName: string;
+  previousShiftInfo: {
+    date: string;
+    shift: string;
+    regu: string;
+    foreman: string;
+    originalBalance: number;
+    intake?: number;
+    finished?: number;
+  };
+  originalValue: number;
+  correctedValue: number;
+  modifiedBy: string;
+  reason: string;
+  investigationNotes?: string;
+}
+

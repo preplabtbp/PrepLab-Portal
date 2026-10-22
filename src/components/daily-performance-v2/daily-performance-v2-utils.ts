@@ -3,10 +3,14 @@ import {
   ShiftType, 
   MonthlyPeakRecords, 
   StationBottleneckStatus,
-  ShiftHandoverNote 
+  ShiftHandoverNote,
+  BalanceOverrideAuditLog,
+  DirectSampleIntakeRecord
 } from './daily-performance-v2-types';
 
 export const STORAGE_KEY_V2_HANDOVERS = 'preplab_daily_performance_v2_handovers';
+export const STORAGE_KEY_BALANCE_AUDIT = 'preplab_balance_override_audit_logs';
+export const STORAGE_KEY_DIRECT_INTAKES = 'preplab_daily_direct_intakes';
 
 export function formatShiftName(regu?: string): string {
   if (!regu) return 'Shift -';
@@ -323,3 +327,97 @@ export function getDefaultBatchBreakdown(balanceCount: number, defaultPt: string
     { pt: defaultPt, batchCount: totalBatches, sampleCount: balanceCount }
   ];
 }
+
+/**
+ * Menyimpan & membaca catatan jejak audit (Audit Trail) ketika personil melakukan
+ * koreksi/override terhadap saldo awal (balance) yang ditarik otomatis dari shift sebelumnya.
+ */
+export function getStoredBalanceAuditLogs(): BalanceOverrideAuditLog[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_BALANCE_AUDIT);
+    return raw ? JSON.parse(raw) : [];
+  } catch (e) {
+    console.error('Failed reading balance audit logs', e);
+    return [];
+  }
+}
+
+export function saveBalanceAuditLog(log: BalanceOverrideAuditLog): void {
+  try {
+    const existing = getStoredBalanceAuditLogs();
+    const updated = [log, ...existing];
+    localStorage.setItem(STORAGE_KEY_BALANCE_AUDIT, JSON.stringify(updated));
+  } catch (e) {
+    console.error('Failed saving balance audit log', e);
+  }
+}
+
+/**
+ * Menyimpan penerimaan sampel non-eksplorasi (Smelter, Production, Khusus)
+ * yang dicatat secara langsung (Direct Intake) tanpa sistem batching.
+ */
+export function getStoredDirectSampleIntakes(date?: string, shift?: ShiftType): DirectSampleIntakeRecord[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_DIRECT_INTAKES);
+    let all: DirectSampleIntakeRecord[] = raw ? JSON.parse(raw) : [];
+    if (date) {
+      all = all.filter(r => r.date === date);
+    }
+    if (shift) {
+      all = all.filter(r => r.shift === shift);
+    }
+    return all;
+  } catch (e) {
+    console.error('Failed reading direct sample intakes', e);
+    return [];
+  }
+}
+
+export function saveStoredDirectSampleIntakes(recordsToSave: DirectSampleIntakeRecord[]): void {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_DIRECT_INTAKES);
+    const existing: DirectSampleIntakeRecord[] = raw ? JSON.parse(raw) : [];
+    const saveIds = new Set(recordsToSave.map(r => r.id));
+    const merged = [...existing.filter(r => !saveIds.has(r.id)), ...recordsToSave];
+    localStorage.setItem(STORAGE_KEY_DIRECT_INTAKES, JSON.stringify(merged));
+  } catch (e) {
+    console.error('Failed saving direct sample intakes', e);
+  }
+}
+
+/**
+ * Menemukan data record laporan harian shift sebelumnya untuk menarik saldo sisa akhir (OS)
+ * secara otomatis menjadi saldo awal shift yang sedang berjalan.
+ */
+export function getPreviousShiftRecord(
+  records: DailyPerformanceRecord[],
+  currentDate: string,
+  currentShift: ShiftType
+): DailyPerformanceRecord | null {
+  if (!records || records.length === 0) return null;
+
+  // Urutkan records berdasarkan tanggal dan shift
+  const sorted = [...records].sort((a, b) => {
+    const cmp = (a.isoDate || '').localeCompare(b.isoDate || '');
+    if (cmp !== 0) return cmp;
+    const shiftWeight = (s: string) => s === 'DAY' ? 1 : s === 'NIGHT' ? 2 : 3;
+    return shiftWeight(a.shiftType) - shiftWeight(b.shiftType);
+  });
+
+  const currentIndex = sorted.findIndex(
+    r => (r.date === currentDate || r.isoDate === currentDate) && r.shiftType === currentShift
+  );
+
+  if (currentIndex > 0) {
+    return sorted[currentIndex - 1];
+  }
+
+  // Jika tidak ditemukan exact index, ambil record terakhir sebelum tanggal/shift ini
+  if (currentIndex === -1) {
+    // Ambil record terakhir yang ada di sistem
+    return sorted[sorted.length - 1] || null;
+  }
+
+  return null;
+}
+

@@ -314,6 +314,15 @@ export const DailyPerformanceV2Briefing: React.FC<DailyPerformanceV2BriefingProp
                     {dayRecord.manpowerNotes}
                   </div>
                 )}
+
+                {/* List Detail Personil Tidak Hadir (Alfa, Izin, Sakit, Cuti) Shift Pagi / Long Shift */}
+                <DailyPerformanceV2AbsenteeList
+                  selectedDate={selectedDate}
+                  shiftType={isLongShift ? 'LS' : 'DAY'}
+                  userPt={userPt}
+                  dayRecord={dayRecord}
+                  nightRecord={nightRecord || undefined}
+                />
               </div>
 
               {/* Night Card: Strictly hidden on Long Shift */}
@@ -368,6 +377,15 @@ export const DailyPerformanceV2Briefing: React.FC<DailyPerformanceV2BriefingProp
                       {nightRecord.manpowerNotes}
                     </div>
                   )}
+
+                  {/* List Detail Personil Tidak Hadir (Alfa, Izin, Sakit, Cuti) Shift Malam */}
+                  <DailyPerformanceV2AbsenteeList
+                    selectedDate={selectedDate}
+                    shiftType="NIGHT"
+                    userPt={userPt}
+                    dayRecord={dayRecord}
+                    nightRecord={nightRecord}
+                  />
                 </div>
               )}
 
