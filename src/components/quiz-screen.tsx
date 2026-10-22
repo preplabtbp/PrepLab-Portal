@@ -12,7 +12,9 @@ interface Question {
   id: number;
   category: string;
   text: string;
+  imageUrl?: string | null;
   options: string[];
+  optionImages?: (string | null)[];
   correctAnswerIndex: number;
 }
 
@@ -37,6 +39,7 @@ export function QuizScreen({
   const [loading, setLoading] = useState(true);
   const [timeLeft, setTimeLeft] = useState(30 * 60);
   const [quizVersion, setQuizVersion] = useState<string>('');
+  const [zoomImageUrl, setZoomImageUrl] = useState<string | null>(null);
   
   // Enterprise UI Controls
   const [fontSize, setFontSize] = useState<'sm' | 'base' | 'lg'>('base');
@@ -598,12 +601,25 @@ export function QuizScreen({
                       {q.text}
                     </p>
 
+                    {/* Question Image in Review Mode */}
+                    {q.imageUrl && (
+                      <div className="my-2.5">
+                        <img 
+                          src={q.imageUrl} 
+                          alt="Gambar Soal" 
+                          className="max-h-56 max-w-md object-contain rounded-xl border border-slate-200 bg-white shadow-2xs cursor-pointer hover:opacity-95 transition-opacity"
+                          onClick={() => setZoomImageUrl(q.imageUrl || null)}
+                        />
+                      </div>
+                    )}
+
                     {/* Options in Review Mode */}
                     <div className="space-y-2.5 pt-1">
                       {q.options.map((opt, optIdx) => {
                         const letter = ['A', 'B', 'C', 'D'][optIdx] || optIdx + 1;
                         const isUserChoice = userAns === optIdx;
                         const isTheCorrectAnswer = q.correctAnswerIndex === optIdx;
+                        const optImg = q.optionImages?.[optIdx];
 
                         let cardStyle = 'bg-slate-50 border-slate-200 text-slate-700';
                         let badgeStyle = 'bg-slate-200 text-slate-700 font-bold';
@@ -625,9 +641,21 @@ export function QuizScreen({
                               {letter}
                             </span>
                             
-                            <span className="flex-1 break-words leading-relaxed pt-0.5">
-                              {opt}
-                            </span>
+                            <div className="flex-1 min-w-0 space-y-2 pt-0.5">
+                              {optImg && (
+                                <img 
+                                  src={optImg} 
+                                  alt={`Pilihan ${letter}`}
+                                  className="w-16 h-16 object-contain rounded-lg border border-slate-200 bg-white cursor-pointer hover:scale-105 transition-transform"
+                                  onClick={() => setZoomImageUrl(optImg)}
+                                />
+                              )}
+                              {opt && (
+                                <span className="block break-words leading-relaxed font-medium">
+                                  {opt}
+                                </span>
+                              )}
+                            </div>
 
                             {isTheCorrectAnswer && (
                               <span className="text-[11px] bg-emerald-600 text-white font-bold px-2 py-0.5 rounded-md shrink-0 self-center">
@@ -787,11 +815,32 @@ export function QuizScreen({
             {currentQ?.text}
           </h2>
 
+          {/* Question Image (if present) */}
+          {currentQ?.imageUrl && (
+            <div className="pt-1">
+              <div 
+                onClick={() => setZoomImageUrl(currentQ.imageUrl || null)}
+                className="relative group max-w-lg rounded-2xl overflow-hidden border border-slate-200 bg-slate-50 cursor-pointer shadow-xs hover:border-blue-400 transition-all"
+              >
+                <img 
+                  src={currentQ.imageUrl} 
+                  alt="Ilustrasi Soal" 
+                  className="max-h-72 w-full object-contain bg-slate-100 p-1 group-hover:scale-[1.01] transition-transform" 
+                />
+                <div className="absolute bottom-2 right-2 bg-black/60 hover:bg-black/80 text-white text-xs px-2.5 py-1 rounded-lg backdrop-blur-xs flex items-center gap-1.5 transition-colors">
+                  <Eye className="w-3.5 h-3.5" />
+                  <span>Perbesar Gambar</span>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Options Container (Mobile-first Touch Friendly) */}
           <div className="space-y-3 pt-2">
             {currentQ?.options.map((optionText, optIdx) => {
               const letter = ['A', 'B', 'C', 'D'][optIdx] || String(optIdx + 1);
               const isSelected = selectedAnswer === optIdx;
+              const optImg = currentQ?.optionImages?.[optIdx];
 
               return (
                 <button
@@ -812,12 +861,38 @@ export function QuizScreen({
                     {letter}
                   </span>
 
-                  {/* Option Text with Safe Line-Wrap & Deep High Contrast */}
-                  <span className={`flex-1 ${optionFontClass} leading-relaxed break-words whitespace-normal pt-1.5 ${
-                    isSelected ? 'text-blue-950 font-bold' : 'text-slate-800 group-hover:text-slate-950 font-medium'
-                  }`}>
-                    {optionText}
-                  </span>
+                  {/* Option Content: text and/or image */}
+                  <div className="flex-1 min-w-0 space-y-2 pt-0.5">
+                    {/* Option Image (if present) */}
+                    {optImg && (
+                      <div className="relative inline-block rounded-xl overflow-hidden border border-slate-200 bg-slate-50">
+                        <img 
+                          src={optImg} 
+                          alt={`Pilihan ${letter}`}
+                          className="max-h-40 max-w-xs sm:max-w-sm object-contain bg-white rounded-lg p-1"
+                        />
+                        <span
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setZoomImageUrl(optImg);
+                          }}
+                          className="absolute bottom-1.5 right-1.5 bg-black/60 hover:bg-black/80 text-white text-[10px] px-1.5 py-0.5 rounded backdrop-blur-xs flex items-center gap-1 cursor-pointer"
+                          title="Perbesar gambar pilihan"
+                        >
+                          <Eye className="w-3 h-3" />
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Option Text */}
+                    {optionText && (
+                      <p className={`${optionFontClass} leading-relaxed break-words whitespace-normal ${
+                        isSelected ? 'text-blue-950 font-bold' : 'text-slate-800 group-hover:text-slate-950 font-medium'
+                      }`}>
+                        {optionText}
+                      </p>
+                    )}
+                  </div>
 
                   {/* Radio / Checkmark Indicator */}
                   <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 mt-2 transition-colors ${
@@ -1064,6 +1139,30 @@ export function QuizScreen({
                 Periksa Kembali Jawaban
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Lightbox / Zoom Modal for Question or Option Images */}
+      {zoomImageUrl && (
+        <div 
+          className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 cursor-pointer"
+          onClick={() => setZoomImageUrl(null)}
+        >
+          <div className="relative max-w-4xl max-h-[90vh] flex flex-col items-center" onClick={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              onClick={() => setZoomImageUrl(null)}
+              className="absolute -top-12 right-0 p-2 text-white/80 hover:text-white bg-white/10 hover:bg-white/20 rounded-full transition-colors cursor-pointer"
+              title="Tutup preview"
+            >
+              <X className="w-6 h-6" />
+            </button>
+            <img 
+              src={zoomImageUrl} 
+              alt="Perbesar Gambar" 
+              className="max-w-full max-h-[85vh] object-contain rounded-2xl shadow-2xl bg-white p-2"
+            />
           </div>
         </div>
       )}

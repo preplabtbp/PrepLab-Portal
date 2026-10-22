@@ -117,8 +117,10 @@ router.get("/api/files/:id", async (req, res) => {
       if (file.length === 0) return res.status(404).send('Not found');
       
       const f = file[0];
-      const buffer = Buffer.from(f.base64Data, 'base64');
-      res.setHeader('Content-Type', f.mimeType);
+      const base64Clean = (f.base64Data || '').replace(/^data:.*?;base64,/, "");
+      const buffer = Buffer.from(base64Clean, 'base64');
+      res.setHeader('Content-Type', f.mimeType || 'image/jpeg');
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
       res.send(buffer);
     } catch (err) {
       console.error(err);

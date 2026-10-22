@@ -184,6 +184,23 @@ export const DEV_USERS: Record<string, any> = {
     isAdmin: true,
     isDeveloper: true
   },
+  '04D24000042': {
+    id: 119,
+    nik: '04D24000042',
+    username: 'Juna',
+    name: 'Junjunan Muhammad Syukur',
+    jabatan: 'Quality Assurance Specialist',
+    jobGrade: 'P2.8',
+    section: 'QA',
+    department: 'Preparation & Laboratory',
+    gol: 'III',
+    pt: 'TBP',
+    avatar: '/images/junjunan.jpg',
+    photo: '/images/junjunan.jpg',
+    firstLoginComplete: true,
+    isAdmin: true,
+    isDeveloper: true
+  },
   'PREPLABADMIN': {
     id: 100,
     nik: 'PREPLABADMIN',
@@ -202,6 +219,14 @@ export const DEV_USERS: Record<string, any> = {
 };
 
 function resolveDevFallbackUser(normalized: string) {
+  if (
+    normalized === '04D24000042' ||
+    normalized === 'JUNA' ||
+    normalized === 'JUNJUNAN' ||
+    normalized === 'JUNJUNAN MUHAMMAD SYUKUR'
+  ) {
+    return DEV_USERS['04D24000042'];
+  }
   return Object.values(DEV_USERS).find(
     (u) => u.nik.toUpperCase() === normalized || (u.username && u.username.toUpperCase() === normalized)
   ) || null;
