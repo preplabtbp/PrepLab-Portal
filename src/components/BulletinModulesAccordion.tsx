@@ -138,6 +138,8 @@ export function BulletinModulesAccordion({ onNav }: BulletinModulesAccordionProp
         { id: 'agenda', title: "Agenda Personal", desc: "Jadwal & kegiatan", icon: <Calendar className="w-5 h-5" />, color: 'indigo', action: () => handleNavigate('agenda?tab=Private') },
         { id: 'pelaporan-izin', title: "Form Pelaporan Izin", desc: "Formulir izin karyawan (Google Form)", icon: <FileText className="w-5 h-5" />, color: 'indigo', action: () => handleNavigate('pelaporan-izin') },
         { id: 'employee-leaves', title: "Rekapan Izin Karyawan", desc: "Rekapan data izin (Google Sheet)", icon: <FileSpreadsheet className="w-5 h-5" />, color: 'indigo', action: () => handleNavigate('employee-leaves') },
+        { id: 'form-keterlambatan', title: "Form Keterlambatan & Pulang Cepat", desc: "Formulir keterlambatan (Google Form)", icon: <Clock className="w-5 h-5" />, color: 'indigo', action: () => handleNavigate('form-keterlambatan') },
+        { id: 'keterlambatan', title: "Rekapan Keterlambatan & Pulang Cepat", desc: "Rekapan keterlambatan (Google Sheet)", icon: <FileSpreadsheet className="w-5 h-5" />, color: 'indigo', action: () => handleNavigate('keterlambatan') },
         { id: 'roster-admin', title: "Roster & Cuti", desc: "Informasi kehadiran", icon: <Clock className="w-5 h-5" />, color: 'indigo', action: () => handleNavigate('roster-admin') },
         { id: 'meal-orders', title: "Orderan Makanan", desc: "Order harian Kantin & Lapangan", icon: <Utensils className="w-5 h-5" />, color: 'indigo', action: () => handleNavigate('meal-orders') },
       ]

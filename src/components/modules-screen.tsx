@@ -5,7 +5,7 @@ import {
   CheckSquare, Eye, AlertTriangle, ClipboardCheck, Package, Box, FileText, FileSpreadsheet, 
   Settings, BookOpen, Info, Briefcase, Users, Calendar, Clock, Utensils, 
   Receipt, LayoutDashboard, User, Search, X, ArrowRight, LayoutGrid, UploadCloud, ExternalLink, Sparkles,
-  ClipboardList, BriefcaseMedical, GraduationCap, Award, Sliders, TrendingUp, BarChart3
+  ClipboardList, BriefcaseMedical, GraduationCap, Award, Sliders, TrendingUp, BarChart3, Layers, Beaker
 } from 'lucide-react';
 import { Button } from './ui';
 import { FoodReportModal } from './food-report-modal';
@@ -76,6 +76,8 @@ export function ModulesScreen({ onNav, inspectorNik = '', inspectorName = '', us
         { id: 'inspect', title: "Inspeksi Harian", desc: "Checklist P2H harian", icon: <CheckSquare className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'teal', action: () => onNav('inspect') },
         { id: 'screen-test-smelter', title: "Screen Test Smelter", desc: "Uji ayakan 200 mesh sample smelter HPL & peta kendali mutu", icon: <TrendingUp className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'teal', action: () => onNav('screen-test-smelter') },
         { id: 'daily-performance', title: "Daily Performance Lab", desc: "Pipeline throughput hulu-hilir, bottleneck & WDXRF/EDXRF meeting", icon: <BarChart3 className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'teal', action: () => onNav('daily-performance') },
+        { id: 'daily-performance-2', title: "Daily Performance Lab 2.0", desc: "Cockpit operasional 360°, matriks neraca terpadu & briefing interaktif", icon: <Layers className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'teal', action: () => onNav('daily-performance-2') },
+        { id: 'daily-report-laboratory', title: "Daily Report Laboratory", desc: "Workstation input data foreman: Weighing, Press/EDXRF, WDXRF, QC & CoA", icon: <Beaker className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'teal', action: () => onNav('daily-report-laboratory') },
         { id: 'xrf-calibration', title: "Kalibrasi & QC XRF", desc: "Rekap kalibrasi, verifikasi & Shewhart chart", icon: <Sliders className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'teal', action: () => onNav('xrf-calibration') },
         { id: 'logbook', title: "Log Book Section", desc: "Logbook Seksi Terpadu & Planning Kegiatan Harian", icon: <ClipboardList className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'teal', action: () => onNav('logbook') },
         ...(isLab ? [{ id: 'pemantauan', title: "Pantau Parameter", desc: "Suhu, kelembapan & gas", icon: <ThermometerSun className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'teal', action: () => onNav('pemantauan') }] : []),
@@ -139,6 +141,8 @@ export function ModulesScreen({ onNav, inspectorNik = '', inspectorName = '', us
         { id: 'agenda', title: "Agenda Personal", desc: "Jadwal & kegiatan", icon: <Calendar className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'indigo', action: () => onNav('agenda?tab=Private') },
         { id: 'pelaporan-izin', title: "Form Pelaporan Izin", desc: "Formulir izin karyawan (Google Form)", icon: <FileText className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'indigo', action: () => onNav('pelaporan-izin') },
         { id: 'employee-leaves', title: "Rekapan Izin Karyawan", desc: "Rekapan data izin (Google Sheet)", icon: <FileSpreadsheet className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'indigo', action: () => onNav('employee-leaves') },
+        { id: 'form-keterlambatan', title: "Form Keterlambatan & Pulang Cepat", desc: "Formulir keterlambatan (Google Form)", icon: <Clock className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'indigo', action: () => onNav('form-keterlambatan') },
+        { id: 'keterlambatan', title: "Rekapan Keterlambatan & Pulang Cepat", desc: "Rekapan keterlambatan (Google Sheet)", icon: <FileSpreadsheet className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'indigo', action: () => onNav('keterlambatan') },
         { id: 'roster-admin', title: "Roster & Cuti", desc: "Informasi kehadiran", icon: <Clock className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'indigo', action: () => onNav('roster-admin') },
         { id: 'meal-orders', title: "Orderan Makanan", desc: "Order harian Kantin & Lapangan", icon: <Utensils className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'indigo', action: () => onNav('meal-orders') },
         // { id: 'food-report', title: "Lapor Makan", desc: "Status konsumsi", icon: <Utensils className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'indigo', action: () => setShowFoodReportModal(true) }, // Di-hide sementara (belum operasional)

@@ -582,7 +582,9 @@ export const quizQuestions = pgTable('quiz_questions', {
   id: serial('id').primaryKey(),
   category: text('category').notNull(),
   text: text('text').notNull(),
+  imageUrl: text('image_url'),
   options: text('options').array().notNull(),
+  optionImages: text('option_images').array(),
   correctAnswerIndex: integer('correct_answer_index').notNull(),
   createdAt: timestamp('created_at').defaultNow(),
 });
@@ -1203,6 +1205,7 @@ export const employeeLeaveRequests = pgTable('employee_leave_requests', {
   catatan: text('catatan'),
   source: text('source').default('web'),
   sheetRowId: text('sheet_row_id'),
+  kategoriIzin: text('kategori_izin'), // 'I' | 'IK' | 'SS' | 'SL'
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 }, (t) => [
@@ -1211,3 +1214,32 @@ export const employeeLeaveRequests = pgTable('employee_leave_requests', {
   index('idx_leave_requests_section').on(t.section),
   index('idx_leave_requests_acc').on(t.acc),
 ]);
+
+// Define 'employee_tardiness_records' table (Rekapan Keterlambatan & Pulang Cepat Karyawan)
+export const employeeTardinessRecords = pgTable('employee_tardiness_records', {
+  id: serial('id').primaryKey(),
+  nik: text('nik'),
+  name: text('name').notNull(),
+  jabatan: text('jabatan'),
+  shift: text('shift'),
+  section: text('section'),
+  tanggal: text('tanggal').notNull(), // 'YYYY-MM-DD'
+  waktuFinger: text('waktu_finger'), // e.g. '07:45'
+  statusFinger: text('status_finger').notNull(), // 'Masuk' | 'Pulang'
+  fotoFinger: text('foto_finger'),
+  alasan: text('alasan'),
+  acc: text('acc').default('Disetujui'),
+  accBy: text('acc_by'),
+  accAt: text('acc_at'),
+  catatan: text('catatan'),
+  source: text('source').default('web'),
+  sheetRowId: text('sheet_row_id'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (t) => [
+  index('idx_tardiness_name').on(t.name),
+  index('idx_tardiness_tanggal').on(t.tanggal),
+  index('idx_tardiness_section').on(t.section),
+  index('idx_tardiness_status').on(t.statusFinger),
+]);
+

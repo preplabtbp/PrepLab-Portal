@@ -112,20 +112,20 @@ export const DailyPerformanceManpowerRosterModal: React.FC<DailyPerformanceManpo
 const FALLBACK_ROSTER_EMPLOYEES: RosterEmployeeItem[] = [
   { nik: 'LAB-001', name: 'Alvin Pratama', jabatan: 'Supervisor Laboratory', section: 'Staff Management', department: 'QA/QC & Lab', regu: 'Non-Shift', pt: 'TBP', statusShift: 'D', statusCategory: 'hadir', roleCategory: 'staff' },
   { nik: 'LAB-002', name: 'Aldy Setyawan', jabatan: 'Senior Chemist & QA/QC', section: 'QA/QC & Reporting', department: 'QA/QC & Lab', regu: 'Non-Shift', pt: 'TBP', statusShift: 'D', statusCategory: 'hadir', roleCategory: 'staff' },
-  { nik: 'LAB-003', name: 'Rian Hidayat', jabatan: 'Foreman Preparation', section: 'Sample Preparation', department: 'QA/QC & Lab', regu: 'Regu A', pt: 'TBP', statusShift: 'D', statusCategory: 'hadir', roleCategory: 'staff' },
-  { nik: 'LAB-004', name: 'Bambang Kusuma', jabatan: 'Crew, Preparation & Laboratory', section: 'Sample Preparation', department: 'QA/QC & Lab', regu: 'Regu A', pt: 'TBP', statusShift: 'D', statusCategory: 'hadir', roleCategory: 'crew' },
-  { nik: 'LAB-005', name: 'Dedi Saputra', jabatan: 'Crew, Preparation & Laboratory', section: 'Sample Preparation', department: 'QA/QC & Lab', regu: 'Regu A', pt: 'TBP', statusShift: 'D', statusCategory: 'hadir', roleCategory: 'crew' },
-  { nik: 'LAB-006', name: 'Eko Wahyudi', jabatan: 'Crew, Preparation & Laboratory', section: 'Sample Preparation', department: 'QA/QC & Lab', regu: 'Regu A', pt: 'TBP', statusShift: 'D', statusCategory: 'hadir', roleCategory: 'crew' },
-  { nik: 'LAB-007', name: 'Fajar Nugroho', jabatan: 'Crew, Preparation & Laboratory', section: 'Sample Preparation', department: 'QA/QC & Lab', regu: 'Regu A', pt: 'TBP', statusShift: 'D', statusCategory: 'hadir', roleCategory: 'crew' },
-  { nik: 'LAB-008', name: 'Gunawan Prasetyo', jabatan: 'Crew, Preparation & Laboratory', section: 'Instrument Analysis', department: 'QA/QC & Lab', regu: 'Regu A', pt: 'TBP', statusShift: 'D', statusCategory: 'hadir', roleCategory: 'crew' },
-  { nik: 'LAB-009', name: 'Hadi Wijaya', jabatan: 'Crew, Preparation & Laboratory', section: 'Instrument Analysis', department: 'QA/QC & Lab', regu: 'Regu A', pt: 'TBP', statusShift: 'D', statusCategory: 'hadir', roleCategory: 'crew' },
+  { nik: 'LAB-003', name: 'Rian Hidayat', jabatan: 'Foreman Preparation', section: 'Sample Preparation', department: 'QA/QC & Lab', regu: 'Shift A', pt: 'TBP', statusShift: 'D', statusCategory: 'hadir', roleCategory: 'staff' },
+  { nik: 'LAB-004', name: 'Bambang Kusuma', jabatan: 'Crew, Preparation & Laboratory', section: 'Sample Preparation', department: 'QA/QC & Lab', regu: 'Shift A', pt: 'TBP', statusShift: 'D', statusCategory: 'hadir', roleCategory: 'crew' },
+  { nik: 'LAB-005', name: 'Dedi Saputra', jabatan: 'Crew, Preparation & Laboratory', section: 'Sample Preparation', department: 'QA/QC & Lab', regu: 'Shift A', pt: 'TBP', statusShift: 'D', statusCategory: 'hadir', roleCategory: 'crew' },
+  { nik: 'LAB-006', name: 'Eko Wahyudi', jabatan: 'Crew, Preparation & Laboratory', section: 'Sample Preparation', department: 'QA/QC & Lab', regu: 'Shift A', pt: 'TBP', statusShift: 'D', statusCategory: 'hadir', roleCategory: 'crew' },
+  { nik: 'LAB-007', name: 'Fajar Nugroho', jabatan: 'Crew, Preparation & Laboratory', section: 'Sample Preparation', department: 'QA/QC & Lab', regu: 'Shift A', pt: 'TBP', statusShift: 'D', statusCategory: 'hadir', roleCategory: 'crew' },
+  { nik: 'LAB-008', name: 'Gunawan Prasetyo', jabatan: 'Crew, Preparation & Laboratory', section: 'Instrument Analysis', department: 'QA/QC & Lab', regu: 'Shift A', pt: 'TBP', statusShift: 'D', statusCategory: 'hadir', roleCategory: 'crew' },
+  { nik: 'LAB-009', name: 'Hadi Wijaya', jabatan: 'Crew, Preparation & Laboratory', section: 'Instrument Analysis', department: 'QA/QC & Lab', regu: 'Shift A', pt: 'TBP', statusShift: 'D', statusCategory: 'hadir', roleCategory: 'crew' },
   { nik: 'LAB-010', name: 'Ilham Ramadhan', jabatan: 'Quality Assurance Officer', section: 'QA/QC & Reporting', department: 'QA/QC & Lab', regu: 'Non-Shift', pt: 'TBP', statusShift: 'D', statusCategory: 'hadir', roleCategory: 'staff' },
-  { nik: 'LAB-011', name: 'Joko Susanto', jabatan: 'Crew, Preparation & Laboratory', section: 'Sample Preparation', department: 'QA/QC & Lab', regu: 'Regu B', pt: 'TBP', statusShift: 'N', statusCategory: 'hadir', roleCategory: 'crew' },
-  { nik: 'LAB-012', name: 'Kurnia Sandy', jabatan: 'Crew, Preparation & Laboratory', section: 'Instrument Analysis', department: 'QA/QC & Lab', regu: 'Regu B', pt: 'TBP', statusShift: 'N', statusCategory: 'hadir', roleCategory: 'crew' },
+  { nik: 'LAB-011', name: 'Joko Susanto', jabatan: 'Crew, Preparation & Laboratory', section: 'Sample Preparation', department: 'QA/QC & Lab', regu: 'Shift B', pt: 'TBP', statusShift: 'N', statusCategory: 'hadir', roleCategory: 'crew' },
+  { nik: 'LAB-012', name: 'Kurnia Sandy', jabatan: 'Crew, Preparation & Laboratory', section: 'Instrument Analysis', department: 'QA/QC & Lab', regu: 'Shift B', pt: 'TBP', statusShift: 'N', statusCategory: 'hadir', roleCategory: 'crew' },
   { nik: 'LAB-013', name: 'Lukman Hakim', jabatan: 'Admin, Preparation & Laboratory', section: 'Administration', department: 'QA/QC & Lab', regu: 'Non-Shift', pt: 'TBP', statusShift: 'D', statusCategory: 'hadir', roleCategory: 'staff' },
-  { nik: 'LAB-014', name: 'Muhammad Ridwan', jabatan: 'Crew, Preparation & Laboratory', section: 'Sample Preparation', department: 'QA/QC & Lab', regu: 'Regu C', pt: 'TBP', statusShift: 'CT', statusCategory: 'cuti', roleCategory: 'crew' },
-  { nik: 'LAB-015', name: 'Nurul Huda', jabatan: 'Crew, Preparation & Laboratory', section: 'Instrument Analysis', department: 'QA/QC & Lab', regu: 'Regu C', pt: 'TBP', statusShift: 'CR', statusCategory: 'cuti', roleCategory: 'crew' },
-  { nik: 'LAB-016', name: 'Oki Setiawan', jabatan: 'Crew, Preparation & Laboratory', section: 'Sample Preparation', department: 'QA/QC & Lab', regu: 'Regu D', pt: 'TBP', statusShift: 'SL', statusCategory: 'izin_sakit', roleCategory: 'crew' },
+  { nik: 'LAB-014', name: 'Muhammad Ridwan', jabatan: 'Crew, Preparation & Laboratory', section: 'Sample Preparation', department: 'QA/QC & Lab', regu: 'Shift C', pt: 'TBP', statusShift: 'CT', statusCategory: 'cuti', roleCategory: 'crew' },
+  { nik: 'LAB-015', name: 'Nurul Huda', jabatan: 'Crew, Preparation & Laboratory', section: 'Instrument Analysis', department: 'QA/QC & Lab', regu: 'Shift C', pt: 'TBP', statusShift: 'CR', statusCategory: 'cuti', roleCategory: 'crew' },
+  { nik: 'LAB-016', name: 'Oki Setiawan', jabatan: 'Crew, Preparation & Laboratory', section: 'Sample Preparation', department: 'QA/QC & Lab', regu: 'Shift D', pt: 'TBP', statusShift: 'SL', statusCategory: 'izin_sakit', roleCategory: 'crew' },
 ];
 // Map employees with their shift status on selectedDate, strictly excluding GTS
   const parsedEmployees = useMemo<RosterEmployeeItem[]>(() => {
@@ -481,7 +481,7 @@ const FALLBACK_ROSTER_EMPLOYEES: RosterEmployeeItem[] = [
                         <span className="truncate">{emp.jabatan}</span>
                       </div>
                       <div className="text-[10px] text-slate-400 truncate mt-0.5">
-                        {emp.section} {emp.regu !== '-' && `• Regu ${emp.regu}`}
+                        {emp.section} {emp.regu !== '-' && `• Shift ${emp.regu.replace(/^(Regu|Shift)\s*/i, '')}`}
                       </div>
                     </div>
                   </div>

@@ -79,6 +79,7 @@ import { gamificationRouter } from "./server/routes/gamification.js";
 import { logbookRouter } from "./server/routes/logbook.js";
 import { clinicRouter } from "./server/routes/clinic.js";
 import { employeeLeavesRouter } from "./server/routes/employeeLeaves.js";
+import { employeeTardinessRouter } from "./server/routes/employeeTardiness.js";
 import { safetyRekapRouter } from "./server/routes/safetyRekap.js";
 import { inspectionPlannerRouter } from "./server/routes/inspectionPlanner.js";
 import { trainingRouter, ensureTrainingRecordsTable, initTrainingNotificationCron } from "./server/routes/training.js";
@@ -131,6 +132,8 @@ async function initDbSchema() {
     await db.execute(sql`ALTER TABLE bulletin_comments ADD COLUMN IF NOT EXISTS reply_to_nik TEXT;`);
     await db.execute(sql`ALTER TABLE bulletin_comments ADD COLUMN IF NOT EXISTS reply_to_name TEXT;`);
     await db.execute(sql`ALTER TABLE bulletin_comments ADD COLUMN IF NOT EXISTS reply_to_content TEXT;`);
+    await db.execute(sql`ALTER TABLE quiz_questions ADD COLUMN IF NOT EXISTS image_url TEXT;`);
+    await db.execute(sql`ALTER TABLE quiz_questions ADD COLUMN IF NOT EXISTS option_images TEXT[];`);
     
     await db.execute(sql`CREATE TABLE IF NOT EXISTS employee_attendance (
       id SERIAL PRIMARY KEY,
@@ -1934,6 +1937,8 @@ const app = express();
     '/api/config/env',
     '/api/health',
     '/api/drive/view',
+    '/api/drive/download',
+    '/api/files',
     '/api/labbot/chat',
     '/api/p5m/flyer',
     '/api/p5m/schedules/user-assignment',
@@ -1964,7 +1969,7 @@ const app = express();
     if (isPublic) {
       return next();
     }
-    // Allow public read-only (GET) access to P5M schedules, pool, materi, bulletin posts, agenda, APD, and training database
+    // Allow public read-only (GET) access to P5M schedules, pool, materi, bulletin posts, agenda, APD, training database, and inspection PDFs
     if (req.method === 'GET' && (
       url.startsWith('/api/p5m/materi') || 
       url.startsWith('/api/p5m/schedules') || 
@@ -1978,7 +1983,9 @@ const app = express();
       url.startsWith('/api/xrf') ||
       url.startsWith('/api/training-records') ||
       url.startsWith('/api/training-certifications') ||
-      url.startsWith('/api/employees')
+      url.startsWith('/api/employees') ||
+      url.startsWith('/api/drive/download') ||
+      (url.startsWith('/api/inspections') && url.includes('/pdf'))
     )) {
       return next();
     }
@@ -2015,6 +2022,7 @@ const app = express();
   app.use(logbookRouter);
   app.use(clinicRouter);
   app.use(employeeLeavesRouter);
+  app.use(employeeTardinessRouter);
   app.use(safetyRekapRouter);
   app.use(inspectionPlannerRouter);
   app.use(trainingRouter);

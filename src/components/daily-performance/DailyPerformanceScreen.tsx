@@ -58,6 +58,21 @@ export const DailyPerformanceScreen: React.FC<DailyPerformanceScreenProps> = ({
     return Array.from(map.entries()).map(([date, isoDate]) => ({ date, isoDate }));
   }, [records]);
 
+  // Dynamic month title derived from selected date
+  const selectedPeriodLabel = useMemo(() => {
+    if (!selectedDate) return 'September - Oktober 2026';
+    const parts = selectedDate.split('/');
+    if (parts.length === 3) {
+      const monthMap: Record<string, string> = {
+        '01': 'Januari', '02': 'Februari', '03': 'Maret', '04': 'April',
+        '05': 'Mei', '06': 'Juni', '07': 'Juli', '08': 'Agustus',
+        '09': 'September', '10': 'Oktober', '11': 'November', '12': 'Desember'
+      };
+      return `${monthMap[parts[1]] || parts[1]} ${parts[2]}`;
+    }
+    return '2026';
+  }, [selectedDate]);
+
   // Handle adding new record
   const handleSaveRecord = (newRec: DailyPerformanceRecord) => {
     const updated = [newRec, ...records.filter(r => r.id !== newRec.id)];
@@ -68,7 +83,7 @@ export const DailyPerformanceScreen: React.FC<DailyPerformanceScreenProps> = ({
 
   // Reset to initial seed
   const handleResetToSeed = () => {
-    if (window.confirm('Reset seluruh data ke data master Oktober 2026 awal?')) {
+    if (window.confirm('Reset seluruh data ke data master September & Oktober 2026 awal?')) {
       localStorage.removeItem(STORAGE_KEY_DAILY_PERFORMANCE);
       setRecords(INITIAL_DAILY_PERFORMANCE_RECORDS);
       saveStoredRecords(INITIAL_DAILY_PERFORMANCE_RECORDS);
@@ -99,7 +114,7 @@ export const DailyPerformanceScreen: React.FC<DailyPerformanceScreenProps> = ({
                 <span className="text-xs font-bold uppercase tracking-wider text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-teal-950/60 px-2.5 py-0.5 rounded-md border border-teal-200 dark:border-teal-800">
                   {userPt || 'TBP'} Laboratory
                 </span>
-                <span className="text-xs text-slate-400">• Periode Oktober 2026</span>
+                <span className="text-xs text-slate-400">• Periode {selectedPeriodLabel}</span>
               </div>
               <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
                 Daily Performance Laboratorium
@@ -215,64 +230,6 @@ export const DailyPerformanceScreen: React.FC<DailyPerformanceScreenProps> = ({
           </div>
         </div>
 
-        {/* EXECUTIVE KPI SUMMARY CARDS */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
-          
-          <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-teal-50 dark:bg-teal-950/60 text-teal-600 dark:text-teal-400">
-              <Layers className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white font-mono">
-                {formatNumber(kpis.totalReceived)}
-              </div>
-              <div className="text-[11px] text-slate-500">Total Sampel Diterima</div>
-            </div>
-          </div>
-
-          <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400">
-              <Cpu className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white font-mono">
-                {formatNumber(kpis.totalEdxrfRun + kpis.totalWdxrfRun)}
-              </div>
-              <div className="text-[11px] text-slate-500">Total Run (EDXRF + WDXRF)</div>
-            </div>
-          </div>
-
-          <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs flex items-center gap-3">
-            <div className={`p-2.5 rounded-xl ${
-              kpis.activeBottleneck.severity === 'critical'
-                ? 'bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400'
-                : 'bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400'
-            }`}>
-              <AlertCircle className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="text-xl sm:text-2xl font-black font-mono text-rose-600 dark:text-rose-400">
-                {formatNumber(kpis.activeBottleneck.backlog)}
-              </div>
-              <div className="text-[11px] text-slate-500 truncate max-w-[130px]">
-                {kpis.activeBottleneck.station}
-              </div>
-            </div>
-          </div>
-
-          <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400">
-              <Users className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white font-mono">
-                {kpis.manpowerAttendanceRate}%
-              </div>
-              <div className="text-[11px] text-slate-500">Attendance Manpower</div>
-            </div>
-          </div>
-
-        </div>
 
         {/* MAIN BODY VIEW ACCORDING TO VIEW MODE */}
         {viewMode === 'presentation' && (

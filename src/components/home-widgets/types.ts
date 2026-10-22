@@ -87,7 +87,7 @@ export const DEFAULT_WIDGET_CONFIGS: WidgetItemConfig[] = [
   {
     id: 'clock',
     size: '1x',
-    enabled: false,
+    enabled: true,
     order: 0,
     settings: {
       mode: 'digital',
@@ -99,34 +99,34 @@ export const DEFAULT_WIDGET_CONFIGS: WidgetItemConfig[] = [
   {
     id: 'weather',
     size: '1x',
-    enabled: false,
+    enabled: true,
     order: 1
   },
   {
     id: 'calendar',
     size: '2x',
-    enabled: false,
+    enabled: true,
     order: 2
+  },
+  {
+    id: 'trivia_quote',
+    size: '2x',
+    enabled: true,
+    order: 3
   },
   {
     id: 'notes',
     size: '2x',
-    enabled: false,
-    order: 3,
+    enabled: true,
+    order: 4,
     settings: {
-      color: 'amber'
+      color: 'dusk'
     } as StickyNotesSettings
   },
   {
     id: 'streak',
-    size: '1x',
-    enabled: false,
-    order: 4
-  },
-  {
-    id: 'trivia_quote',
-    size: '1x',
-    enabled: false,
+    size: '2x',
+    enabled: true,
     order: 5
   },
   {

@@ -279,6 +279,7 @@ export interface EmployeeLeaveItem {
   akhirAbsensi: string;
   lamanyaIzin: string;
   jumlah: number;
+  kategoriIzin?: 'I' | 'IK' | 'SS' | 'SL' | string;
   alasanAbsensi: string;
   pengawasMengetahui: string;
   lampiran: string;
@@ -289,6 +290,40 @@ export interface EmployeeLeaveItem {
   createdAt: string;
   updatedAt?: string;
 }
+
+export interface KategoriIzinMeta {
+  code: 'I' | 'IK' | 'SS' | 'SL';
+  label: string;
+  badgeClass: string;
+  dotColor: string;
+}
+
+export const KATEGORI_IZIN_CONFIG: Record<string, KategoriIzinMeta> = {
+  'I': {
+    code: 'I',
+    label: 'Izin Biasa',
+    badgeClass: 'bg-sky-50 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300 border-sky-300 dark:border-sky-700',
+    dotColor: '#0284c7'
+  },
+  'IK': {
+    code: 'IK',
+    label: 'Izin Khusus',
+    badgeClass: 'bg-purple-50 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300 border-purple-300 dark:border-purple-700',
+    dotColor: '#9333ea'
+  },
+  'SS': {
+    code: 'SS',
+    label: 'Sakit Site',
+    badgeClass: 'bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300 border-rose-300 dark:border-rose-700',
+    dotColor: '#e11d48'
+  },
+  'SL': {
+    code: 'SL',
+    label: 'Sakit Luar Site',
+    badgeClass: 'bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 border-amber-300 dark:border-amber-700',
+    dotColor: '#d97706'
+  }
+};
 
 interface EmployeeLeavesScreenProps {
   userProfile?: any;
@@ -629,6 +664,7 @@ export function EmployeeLeavesScreen({
     akhirAbsensi: '',
     jumlah: 1,
     lamanyaIzin: '',
+    kategoriIzin: 'I',
     alasanAbsensi: '',
     pengawasMengetahui: '',
     acc: '',
@@ -654,6 +690,7 @@ export function EmployeeLeavesScreen({
       akhirAbsensi: item.akhirAbsensi || item.awalAbsensi || '',
       jumlah: item.jumlah || 1,
       lamanyaIzin: item.lamanyaIzin || `${item.jumlah || 1} Hari`,
+      kategoriIzin: item.kategoriIzin || 'I',
       alasanAbsensi: item.alasanAbsensi || '',
       pengawasMengetahui: item.pengawasMengetahui || '-',
       acc: item.acc || 'Disetujui',
@@ -905,6 +942,7 @@ export function EmployeeLeavesScreen({
       'Mulai Izin': formatLeaveDateIndo(item.awalAbsensi) || item.awalAbsensi,
       'Tanggal Izin': formatLeaveDateIndo(item.awalAbsensi) || item.awalAbsensi,
       'Jumlah Izin': item.lamanyaIzin || `${item.jumlah || 1} Hari`,
+      'Kategori Izin': item.kategoriIzin ? `${item.kategoriIzin} (${KATEGORI_IZIN_CONFIG[item.kategoriIzin]?.label || item.kategoriIzin})` : 'I (Izin Biasa)',
       'Selesai Izin': formatLeaveDateIndo(item.akhirAbsensi) || item.akhirAbsensi,
       'Durasi Izin': item.lamanyaIzin || `${item.jumlah || 1} Hari`,
       'Alasan Izin': item.alasanAbsensi,
@@ -988,7 +1026,7 @@ export function EmployeeLeavesScreen({
 
     const headers = [
       'No', 'Tanggal Input', 'NIK', 'Nama Karyawan', 'Jabatan', 'Bagian', 
-      'Shift', 'Tanggal Izin', 'Jumlah Izin', 'Selesai Izin', 'Alasan Izin', 
+      'Shift', 'Tanggal Izin', 'Jumlah Izin', 'Kategori Izin', 'Selesai Izin', 'Alasan Izin', 
       'Pengawas Mengetahui', 'Status ACC'
     ];
 
@@ -1002,6 +1040,7 @@ export function EmployeeLeavesScreen({
       `"${item.shift || ''}"`,
       formatLeaveDateIndo(item.awalAbsensi) || item.awalAbsensi || '',
       `"${item.lamanyaIzin || `${item.jumlah || 1} Hari`}"`,
+      `"${item.kategoriIzin ? `${item.kategoriIzin} (${KATEGORI_IZIN_CONFIG[item.kategoriIzin]?.label || item.kategoriIzin})` : 'I (Izin Biasa)'}"`,
       formatLeaveDateIndo(item.akhirAbsensi) || item.akhirAbsensi || '',
       `"${(item.alasanAbsensi || '').replace(/"/g, '""')}"`,
       `"${(item.pengawasMengetahui || '').replace(/"/g, '""')}"`,
@@ -1105,6 +1144,7 @@ export function EmployeeLeavesScreen({
                 <th style="padding: 8px 6px; border: 1px solid #cbd5e1; width: 100px;">Bagian / Shift</th>
                 <th style="padding: 8px 6px; border: 1px solid #cbd5e1; width: 110px;">Tanggal Izin</th>
                 <th style="padding: 8px 6px; border: 1px solid #cbd5e1; width: 65px; text-align: center;">Jumlah Izin</th>
+                <th style="padding: 8px 6px; border: 1px solid #cbd5e1; width: 55px; text-align: center;">Kategori</th>
                 <th style="padding: 8px 6px; border: 1px solid #cbd5e1;">Alasan Izin</th>
                 <th style="padding: 8px 6px; border: 1px solid #cbd5e1; width: 120px;">Pengawas Mengetahui</th>
                 <th style="padding: 8px 6px; border: 1px solid #cbd5e1; width: 65px; text-align: center;">Status</th>
@@ -1119,6 +1159,7 @@ export function EmployeeLeavesScreen({
                   <td style="padding: 6px; border: 1px solid #cbd5e1;">${r.penempatan || r.section}<br/><span style="color:#64748b; font-size: 9.5px;">${r.shift}</span></td>
                   <td style="padding: 6px; border: 1px solid #cbd5e1; font-family: monospace; font-weight: 600;">${formatLeaveDateIndo(r.awalAbsensi)}</td>
                   <td style="padding: 6px; border: 1px solid #cbd5e1; text-align: center; font-weight: bold;">${r.lamanyaIzin || `${r.jumlah || 1} Hr`}</td>
+                  <td style="padding: 6px; border: 1px solid #cbd5e1; text-align: center; font-weight: 900; color: #0284c7;">${r.kategoriIzin || 'I'}</td>
                   <td style="padding: 6px; border: 1px solid #cbd5e1;">${r.alasanAbsensi}</td>
                   <td style="padding: 6px; border: 1px solid #cbd5e1; font-weight: 600;">${r.pengawasMengetahui || '-'}</td>
                   <td style="padding: 6px; border: 1px solid #cbd5e1; text-align: center; font-weight: bold; color: ${r.acc === 'Disetujui' ? '#15803d' : '#b45309'};">
@@ -1376,6 +1417,7 @@ export function EmployeeLeavesScreen({
                 <th style="padding: 7px 6px; border: 1px solid #0f766e; width: 110px;">Bagian / Shift</th>
                 <th style="padding: 7px 6px; border: 1px solid #0f766e; width: 105px;">Tanggal Izin</th>
                 <th style="padding: 7px 5px; border: 1px solid #0f766e; width: 60px; text-align: center;">Durasi</th>
+                <th style="padding: 7px 5px; border: 1px solid #0f766e; width: 50px; text-align: center;">Kategori</th>
                 <th style="padding: 7px 6px; border: 1px solid #0f766e;">Alasan Izin</th>
                 <th style="padding: 7px 6px; border: 1px solid #0f766e; width: 115px;">Pengawas Mengetahui</th>
                 <th style="padding: 7px 6px; border: 1px solid #0f766e; width: 68px; text-align: center;">Status ACC</th>
@@ -1402,6 +1444,9 @@ export function EmployeeLeavesScreen({
                     </td>
                     <td style="padding: 5px 4px; border: 1px solid #cbd5e1; text-align: center; font-weight: 800; color: #0f172a;">
                       ${r.lamanyaIzin || `${r.jumlah || 1} Hari`}
+                    </td>
+                    <td style="padding: 5px 4px; border: 1px solid #cbd5e1; text-align: center; font-weight: 900; color: #0284c7;">
+                      ${r.kategoriIzin || 'I'}
                     </td>
                     <td style="padding: 5px 6px; border: 1px solid #cbd5e1; color: #334155;">
                       ${r.alasanAbsensi || '-'}
@@ -2290,6 +2335,7 @@ export function EmployeeLeavesScreen({
                 <th className="py-3 px-3.5">Bagian & Shift</th>
                 <th className="py-3 px-3.5 whitespace-nowrap">Tanggal Izin</th>
                 <th className="py-3 px-3.5 text-center whitespace-nowrap">Jumlah Izin</th>
+                <th className="py-3 px-3.5 text-center whitespace-nowrap min-w-[130px]">Kategori Izin</th>
                 <th className="py-3 px-3.5">Alasan Izin</th>
                 <th className="py-3 px-3.5 whitespace-nowrap min-w-[200px]">Pengawas Mengetahui</th>
                 <th className="py-3 px-3.5 text-center">Bukti / Lampiran</th>
@@ -2301,7 +2347,7 @@ export function EmployeeLeavesScreen({
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-medium">
               {isLoading ? (
                 <tr>
-                  <td colSpan={12} className="py-12 text-center text-slate-400">
+                  <td colSpan={13} className="py-12 text-center text-slate-400">
                     <div className="flex flex-col items-center justify-center gap-2">
                       <RefreshCw className="w-6 h-6 animate-spin text-indigo-500" />
                       <span className="text-xs font-semibold">Memuat rekapan izin karyawan dari Google Sheet...</span>
@@ -2310,7 +2356,7 @@ export function EmployeeLeavesScreen({
                 </tr>
               ) : paginatedLeaves.length === 0 ? (
                 <tr>
-                  <td colSpan={12} className="py-12 text-center text-slate-400">
+                  <td colSpan={13} className="py-12 text-center text-slate-400">
                     <div className="flex flex-col items-center justify-center gap-2">
                       <FileSpreadsheet className="w-8 h-8 text-slate-300 dark:text-slate-700" />
                       <p className="text-sm font-bold text-slate-600 dark:text-slate-300">Tidak ada catatan izin yang cocok.</p>
@@ -2336,16 +2382,13 @@ export function EmployeeLeavesScreen({
                         {rowNumber}
                       </td>
 
-                      {/* Karyawan (Name & NIK) */}
+                      {/* Karyawan (Name & Jabatan) */}
                       <td className="py-3 px-3.5">
                         <div className="font-bold text-slate-900 dark:text-white leading-tight">
                           {item.name}
                         </div>
                         <div className="flex items-center gap-1.5 mt-0.5">
-                          <span className="text-[10px] text-slate-500 font-mono bg-slate-100 dark:bg-slate-800 px-1 rounded">
-                            {item.nik}
-                          </span>
-                          <span className="text-[10px] text-slate-400 truncate max-w-[140px]">
+                          <span className="text-[10px] text-slate-400 truncate max-w-[180px]">
                             {item.jabatan}
                           </span>
                         </div>
@@ -2444,6 +2487,33 @@ export function EmployeeLeavesScreen({
                             className="w-16 px-1 py-0.5 text-xs font-bold text-center text-purple-700 dark:text-purple-300 rounded bg-white dark:bg-slate-800/90 border border-purple-200 dark:border-purple-700 focus:border-purple-500 focus:ring-1 focus:ring-purple-400 outline-none transition-all"
                             title="Edit jumlah / durasi izin (contoh: 1 Hari, 2 Hari)"
                           />
+                        </div>
+                      </td>
+
+                      {/* Kategori Izin - Sinkronisasi Google Sheet Database Rooster Prep & Lab */}
+                      <td className="py-3 px-3 text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                        <div className="inline-flex items-center justify-center">
+                          <select
+                            value={item.kategoriIzin || 'I'}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              handleInlineUpdate(item.id, 'kategoriIzin', val);
+                            }}
+                            className={`px-2.5 py-1 text-xs font-black rounded-lg border shadow-2xs cursor-pointer transition-all ${
+                              KATEGORI_IZIN_CONFIG[item.kategoriIzin || 'I']?.badgeClass || 'bg-slate-50 text-slate-700 border-slate-200'
+                            }`}
+                            title={
+                              item.kategoriIzin === 'IK' ? 'IK = Izin Khusus (Sinkron Database Rooster)' :
+                              item.kategoriIzin === 'SS' ? 'SS = Sakit Site (Sinkron Database Rooster)' :
+                              item.kategoriIzin === 'SL' ? 'SL = Sakit Luar Site (Sinkron Database Rooster)' :
+                              'I = Izin Biasa (Sinkron Database Rooster)'
+                            }
+                          >
+                            <option value="I" className="font-bold text-sky-700 bg-white dark:bg-slate-800 dark:text-sky-300">I = Izin Biasa</option>
+                            <option value="IK" className="font-bold text-purple-700 bg-white dark:bg-slate-800 dark:text-purple-300">IK = Izin Khusus</option>
+                            <option value="SS" className="font-bold text-rose-700 bg-white dark:bg-slate-800 dark:text-rose-300">SS = Sakit Site</option>
+                            <option value="SL" className="font-bold text-amber-700 bg-white dark:bg-slate-800 dark:text-amber-300">SL = Sakit Luar Site</option>
+                          </select>
                         </div>
                       </td>
 
@@ -3205,6 +3275,17 @@ export function EmployeeLeavesScreen({
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">Jumlah Izin</span>
                   <span className="font-bold text-purple-600 dark:text-purple-400 font-mono">{selectedLeave.lamanyaIzin || `${selectedLeave.jumlah || 1} Hari`}</span>
                 </div>
+                <div className="col-span-2 p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                  <div>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">Kategori Izin (Sinkron Database Rooster)</span>
+                    <span className="font-extrabold text-sm text-slate-900 dark:text-white">
+                      {selectedLeave.kategoriIzin ? `${selectedLeave.kategoriIzin} - ${KATEGORI_IZIN_CONFIG[selectedLeave.kategoriIzin]?.label || selectedLeave.kategoriIzin}` : 'I - Izin Biasa'}
+                    </span>
+                  </div>
+                  <span className={`px-2.5 py-1 text-xs font-black rounded-lg border shadow-2xs ${KATEGORI_IZIN_CONFIG[selectedLeave.kategoriIzin || 'I']?.badgeClass || 'bg-slate-100 text-slate-700'}`}>
+                    {selectedLeave.kategoriIzin || 'I'}
+                  </span>
+                </div>
               </div>
 
               {/* Alasan */}
@@ -3524,19 +3605,35 @@ export function EmployeeLeavesScreen({
                 />
               </div>
 
-              {/* Pengawas Mengetahui & Status ACC */}
+              {/* Pengawas Mengetahui, Kategori Izin & Status ACC */}
+              <div>
+                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Pengawas yang Mengetahui
+                </label>
+                <input
+                  type="text"
+                  value={editForm.pengawasMengetahui}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, pengawasMengetahui: e.target.value }))}
+                  placeholder="Nama Pengawas Gol II - V"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500 outline-none"
+                />
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
-                    Pengawas yang Mengetahui
+                    Kategori Izin (Sinkron Database Rooster)
                   </label>
-                  <input
-                    type="text"
-                    value={editForm.pengawasMengetahui}
-                    onChange={(e) => setEditForm(prev => ({ ...prev, pengawasMengetahui: e.target.value }))}
-                    placeholder="Nama Pengawas Gol II - V"
-                    className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500 outline-none"
-                  />
+                  <select
+                    value={editForm.kategoriIzin || 'I'}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, kategoriIzin: e.target.value }))}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500 outline-none font-bold"
+                  >
+                    <option value="I">I = Izin Biasa</option>
+                    <option value="IK">IK = Izin Khusus</option>
+                    <option value="SS">SS = Sakit Site</option>
+                    <option value="SL">SL = Sakit Luar Site</option>
+                  </select>
                 </div>
                 <div>
                   <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">

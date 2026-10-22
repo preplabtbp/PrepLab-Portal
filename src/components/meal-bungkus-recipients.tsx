@@ -363,9 +363,20 @@ export function MealBungkusRecipientsTable({
     1
   );
 
-  // Karyawan belum lapor
+  // Karyawan belum lapor / wajib lapor
   const belumLaporList = rows
-    .filter(r => r.keteranganLapor === 'Belum Lapor' || /belum\s*lapor/i.test(String(r.status || '')))
+    .filter(r => {
+      const kl = String(r.keteranganLapor || '').trim();
+      const st = String(r.status || '').trim();
+      const sk = String(r.statusKerja || '').trim();
+      return (
+        /belum\s*lapor|wajib\s*lapor/i.test(kl) ||
+        kl === 'Wajib Lapor' ||
+        kl === 'Belum Lapor' ||
+        /belum\s*lapor|wajib\s*lapor/i.test(st) ||
+        /belum\s*lapor|wajib\s*lapor/i.test(sk)
+      );
+    })
     .sort((a, b) => (a.sortNo ?? 9999) - (b.sortNo ?? 9999) || a.nama.localeCompare(b.nama));
 
   const titleText = `Daftar penerimaan Bungkusan karyawan Prep&Lab  ${dayName(date).toUpperCase()}, ${longDate(date).toUpperCase()}`;
@@ -431,7 +442,7 @@ export function MealBungkusRecipientsTable({
           r.nama,
           r.statusKerja || r.status || 'Cuti',
           `${dayName(date)}, ${longDate(date)}`,
-          'Belum Lapor',
+          r.keteranganLapor && r.keteranganLapor !== '-' ? r.keteranganLapor : 'Wajib Lapor',
         ]);
       });
 
@@ -492,7 +503,7 @@ export function MealBungkusRecipientsTable({
     });
 
     if (belumLaporList.length > 0) {
-      t += `*KARYAWAN BELUM LAPOR (${belumLaporList.length})*\n` + belumLaporList.map((r, i) => `${i + 1}. ${r.nama} (${r.statusKerja || r.status || 'Cuti'})`).join('\n') + '\n';
+      t += `*KARYAWAN BELUM LAPOR / WAJIB LAPOR (${belumLaporList.length})*\n` + belumLaporList.map((r, i) => `${i + 1}. ${r.nama} (${r.keteranganLapor || r.statusKerja || r.status || 'Wajib Lapor'})`).join('\n') + '\n';
     }
     navigator.clipboard.writeText(t);
     setCopied(true);
@@ -505,7 +516,7 @@ export function MealBungkusRecipientsTable({
     padding: '7px 8px',
     textAlign: 'center',
     verticalAlign: 'middle',
-    fontSize: '12px',
+    fontSize: `${fontSize + 1}px`,
     fontWeight: 800,
     letterSpacing: '0.6px',
     color: '#ffffff',
@@ -517,7 +528,7 @@ export function MealBungkusRecipientsTable({
     padding: '6px 8px',
     textAlign: 'center',
     verticalAlign: 'middle',
-    fontSize: '11px',
+    fontSize: `${fontSize}px`,
     fontWeight: 700,
     color: '#1e293b',
     backgroundColor: '#f1f5f9',
@@ -532,7 +543,7 @@ export function MealBungkusRecipientsTable({
     textAlign: 'center',
     verticalAlign: 'middle',
     fontFamily: 'monospace',
-    fontSize: '10px',
+    fontSize: `${Math.max(9, fontSize - 1)}px`,
     fontWeight: 700,
     color: '#64748b',
     padding: '4px 1px',
@@ -1127,7 +1138,7 @@ export function MealBungkusRecipientsTable({
               marginBottom: '10px',
             }}>
               <div style={{
-                fontSize: '12px',
+                fontSize: `${Math.max(11, fontSize + 1)}px`,
                 fontWeight: 900,
                 color: '#991b1b',
                 letterSpacing: '0.4px',
@@ -1146,7 +1157,7 @@ export function MealBungkusRecipientsTable({
                 Karyawan yang Belum Lapor Balik (Cuti Roster / Site, Izin, Sakit)
               </div>
               <span style={{
-                fontSize: '11px',
+                fontSize: `${fontSize}px`,
                 fontWeight: 800,
                 color: '#991b1b',
                 backgroundColor: '#fee2e2',
@@ -1162,41 +1173,41 @@ export function MealBungkusRecipientsTable({
               width: '100%',
               borderCollapse: 'collapse',
               tableLayout: 'fixed',
-              fontSize: '11px',
+              fontSize: `${fontSize}px`,
               border: '1px solid #fecdd3',
               backgroundColor: '#ffffff',
               borderRadius: '6px',
               overflow: 'hidden',
             }}>
               <thead>
-                <tr style={{ backgroundColor: '#fee2e2', height: '28px', color: '#991b1b' }}>
-                  <th style={{ width: 44, textAlign: 'center', verticalAlign: 'middle', fontWeight: 800, borderRight: '1px solid #fecdd3' }}>NO</th>
-                  <th style={{ width: 220, textAlign: 'center', verticalAlign: 'middle', fontWeight: 800, borderRight: '1px solid #fecdd3' }}>Nama Karyawan</th>
-                  <th style={{ width: 140, textAlign: 'center', verticalAlign: 'middle', fontWeight: 800, borderRight: '1px solid #fecdd3' }}>Status</th>
-                  <th style={{ width: 200, textAlign: 'center', verticalAlign: 'middle', fontWeight: 800, borderRight: '1px solid #fecdd3' }}>Tanggal Absensi / Onsite</th>
-                  <th style={{ width: 130, textAlign: 'center', verticalAlign: 'middle', fontWeight: 800 }}>Keterangan</th>
+                <tr style={{ backgroundColor: '#fee2e2', height: `${Math.max(26, Math.round(fontSize * 2.3))}px`, color: '#991b1b' }}>
+                  <th style={{ width: 44, textAlign: 'center', verticalAlign: 'middle', fontWeight: 800, fontSize: `${fontSize}px`, borderRight: '1px solid #fecdd3' }}>NO</th>
+                  <th style={{ width: 220, textAlign: 'center', verticalAlign: 'middle', fontWeight: 800, fontSize: `${fontSize}px`, borderRight: '1px solid #fecdd3' }}>Nama Karyawan</th>
+                  <th style={{ width: 140, textAlign: 'center', verticalAlign: 'middle', fontWeight: 800, fontSize: `${fontSize}px`, borderRight: '1px solid #fecdd3' }}>Status</th>
+                  <th style={{ width: 200, textAlign: 'center', verticalAlign: 'middle', fontWeight: 800, fontSize: `${fontSize}px`, borderRight: '1px solid #fecdd3' }}>Tanggal Absensi / Onsite</th>
+                  <th style={{ width: 130, textAlign: 'center', verticalAlign: 'middle', fontWeight: 800, fontSize: `${fontSize}px` }}>Keterangan</th>
                 </tr>
               </thead>
               <tbody>
                 {belumLaporList.length === 0 ? (
                   <tr>
-                    <td colSpan={5} style={{ textAlign: 'center', padding: '10px', color: '#64748b', fontStyle: 'italic', fontSize: '11px' }}>
+                    <td colSpan={5} style={{ textAlign: 'center', padding: '10px', color: '#64748b', fontStyle: 'italic', fontSize: `${fontSize}px` }}>
                       Semua karyawan telah melapor secara tertib (Tidak ada yang berstatus belum lapor).
                     </td>
                   </tr>
                 ) : (
                   belumLaporList.map((r, idx) => (
-                    <tr key={r.id || r.nik || idx} style={{ height: '26px', borderTop: '1px solid #fecdd3' }}>
-                      <td style={{ textAlign: 'center', verticalAlign: 'middle', fontFamily: 'monospace', fontWeight: 700, color: '#991b1b', borderRight: '1px solid #fecdd3' }}>
+                    <tr key={r.id || r.nik || idx} style={{ height: `${Math.max(24, Math.round(fontSize * 2.2))}px`, borderTop: '1px solid #fecdd3' }}>
+                      <td style={{ textAlign: 'center', verticalAlign: 'middle', fontFamily: 'monospace', fontWeight: 700, color: '#991b1b', fontSize: `${Math.max(9, fontSize - 1)}px`, borderRight: '1px solid #fecdd3' }}>
                         {idx + 1}
                       </td>
-                      <td style={{ textAlign: 'center', verticalAlign: 'middle', fontWeight: 700, color: '#991b1b', borderRight: '1px solid #fecdd3' }}>
+                      <td style={{ textAlign: 'center', verticalAlign: 'middle', fontWeight: 700, color: '#991b1b', fontSize: `${fontSize}px`, borderRight: '1px solid #fecdd3' }}>
                         {r.nama}
                       </td>
-                      <td style={{ textAlign: 'center', verticalAlign: 'middle', color: '#7f1d1d', borderRight: '1px solid #fecdd3' }}>
+                      <td style={{ textAlign: 'center', verticalAlign: 'middle', color: '#7f1d1d', fontSize: `${fontSize}px`, borderRight: '1px solid #fecdd3' }}>
                         {r.statusKerja && r.statusKerja !== '-' ? r.statusKerja : (r.status || 'Cuti')}
                       </td>
-                      <td style={{ textAlign: 'center', verticalAlign: 'middle', color: '#7f1d1d', borderRight: '1px solid #fecdd3' }}>
+                      <td style={{ textAlign: 'center', verticalAlign: 'middle', color: '#7f1d1d', fontSize: `${fontSize}px`, borderRight: '1px solid #fecdd3' }}>
                         {dayName(date)}, {longDate(date)}
                       </td>
                       <td style={{ textAlign: 'center', verticalAlign: 'middle', padding: '3px' }}>
@@ -1207,10 +1218,10 @@ export function MealBungkusRecipientsTable({
                           borderRadius: '4px',
                           padding: '2px 8px',
                           fontWeight: 800,
-                          fontSize: '10px',
+                          fontSize: `${Math.max(9, fontSize - 1)}px`,
                           display: 'inline-block',
                         }}>
-                          Belum Lapor
+                          {r.keteranganLapor && r.keteranganLapor !== '-' ? r.keteranganLapor : 'Wajib Lapor'}
                         </span>
                       </td>
                     </tr>

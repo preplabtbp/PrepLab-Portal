@@ -87,15 +87,18 @@ export const DailyPerformancePipelineFunnel: React.FC<DailyPerformancePipelineFu
         <div className="flex items-center gap-2">
           {dayShift && (
             <div className="px-3 py-1.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs shadow-xs">
-              <span className="text-slate-400">Siang:</span>{' '}
-              <span className="font-bold text-teal-600 dark:text-teal-400">Regu {dayShift.regu}</span>
-              <span className="text-slate-400 text-[10px] ml-1">({dayShift.shiftType})</span>
+              <span className="text-slate-400">{dayShift.shiftType === 'LS' ? 'Long Shift:' : 'Pagi:'}</span>{' '}
+              <span className="font-bold text-teal-600 dark:text-teal-400">Shift {dayShift.regu}</span>
+              <span className="text-slate-400 text-[10px] ml-1">
+                ({dayShift.shiftType === 'LS' ? '07:00 - 24:00' : '07:00 - 19:00'})
+              </span>
             </div>
           )}
-          {nightShift && (
+          {nightShift && dayShift?.shiftType !== 'LS' && (
             <div className="px-3 py-1.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs shadow-xs">
               <span className="text-slate-400">Malam:</span>{' '}
-              <span className="font-bold text-indigo-600 dark:text-indigo-400">Regu {nightShift.regu}</span>
+              <span className="font-bold text-indigo-600 dark:text-indigo-400">Shift {nightShift.regu}</span>
+              <span className="text-slate-400 text-[10px] ml-1">(19:00 - 07:00)</span>
             </div>
           )}
           <div className="px-3 py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-xs text-emerald-700 dark:text-emerald-400 flex items-center gap-1.5 font-medium">

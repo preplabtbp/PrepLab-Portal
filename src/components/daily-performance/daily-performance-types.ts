@@ -30,11 +30,15 @@ export interface DailySampleReceived {
 }
 
 export interface DailyPressPowder {
+  os?: number;
   received: { shift: number; day: number; wkly: number };
   finish: { shift: number; day: number; wkly: number };
+  bal?: number;
 }
 
 export interface DailyEDXRF {
+  os?: number;
+  received?: number;
   epsC: number;
   epsD: number;
   epsE: number;
@@ -45,6 +49,7 @@ export interface DailyEDXRF {
   shift: number;
   day: number;
   wkly: number;
+  bal?: number;
 }
 
 export interface DailyWeighingFuseBead {
@@ -57,13 +62,20 @@ export interface DailyWeighingFuseBead {
 
 export interface DailyLOI {
   os: number;
+  weighing?: number;
+  w1?: number;
   w2: number;
+  w3?: number;
   w4: number;
   w5: number;
   finLoiShift: number;
   finLoiDay: number;
   finLoiWkly: number;
   bal: number;
+  osW1?: number;
+  osW2?: number;
+  osW3?: number;
+  osW4?: number;
 }
 
 export interface DailyZetiumRuns {
@@ -89,6 +101,7 @@ export interface DailyWDXRF {
 
 export interface DailyQCData {
   os: number;
+  received?: number;
   finishShift: number;
   finishDay: number;
   finishWkly: number;

@@ -61,6 +61,7 @@ export const DailyPerformanceStationCards: React.FC<DailyPerformanceStationCards
   const ztmATbpTotal = ztmA.prod + ztmA.exp + ztmA.smelt + ztmA.rarr + ztmA.ver + ztmA.std + ztmA.blank;
   const ztmBTbpTotal = ztmB.prod + ztmB.exp + ztmB.smelt + ztmB.rarr + ztmB.ver + ztmB.std + ztmB.blank;
   const totalGtsRuns = ztmA.gts + ztmB.gts;
+  const isLongShift = dayShift?.shiftType === 'LS';
   const gtsDayRuns = (dayShift?.wdxrf.zetiumA.gts || 0) + (dayShift?.wdxrf.zetiumB.gts || 0);
   const gtsNightRuns = (nightShift?.wdxrf.zetiumA.gts || 0) + (nightShift?.wdxrf.zetiumB.gts || 0);
 
@@ -260,11 +261,19 @@ export const DailyPerformanceStationCards: React.FC<DailyPerformanceStationCards
                 <span className="text-slate-400 text-[10px] ml-1">run</span>
               </div>
               <div className="p-3 rounded-xl bg-white dark:bg-slate-800/80 border border-purple-100 dark:border-purple-900/40">
-                <span className="text-slate-400 text-[10px] block font-semibold">DISTRIBUSI SHIFT GTS</span>
+                <span className="text-slate-400 text-[10px] block font-semibold">
+                  {isLongShift ? 'OPERASIONAL SHIFT GTS' : 'DISTRIBUSI SHIFT GTS'}
+                </span>
                 <div className="flex items-center gap-2 mt-0.5 font-bold font-mono text-sm">
-                  <span className="text-amber-600">☀️ {gtsDayRuns}</span>
-                  <span className="text-slate-300">|</span>
-                  <span className="text-indigo-600">🌙 {gtsNightRuns}</span>
+                  {isLongShift ? (
+                    <span className="text-amber-600">Long Shift LS (07:00 - 24:00): {gtsDayRuns}</span>
+                  ) : (
+                    <>
+                      <span className="text-amber-600">Shift D (Pagi): {gtsDayRuns}</span>
+                      <span className="text-slate-300">|</span>
+                      <span className="text-indigo-600">Shift N (Malam): {gtsNightRuns}</span>
+                    </>
+                  )}
                 </div>
               </div>
             </div>

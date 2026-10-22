@@ -402,7 +402,7 @@ export function SectionHubDashboard({
     return null;
   };
 
-  const handleItemClick = (item: HubItem) => {
+  const handleItemClick = async (item: HubItem) => {
     if (item.linkUrl) {
       window.open(item.linkUrl, '_blank');
       return;
@@ -427,20 +427,54 @@ export function SectionHubDashboard({
       onSelectPost(target);
       return;
     }
+
     const target = findPost(item.searchKeywords || item.title);
     if (target) {
       onSelectPost(target);
-    } else {
-      const fallbackPost = {
-        id: `doc-${item.title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+      return;
+    }
+
+    // Direct fetch fallback if post is not yet loaded in memory but has an explicit numeric ID (e.g. 519 for Weekly Admin)
+    const numericId = (item.searchKeywords || []).find((k) => /^\d+$/.test(k));
+    if (numericId) {
+      const loadingToast = toast.loading(`Membuka ${item.title}...`);
+      try {
+        const res = await fetch(`/api/bulletin/${numericId}`);
+        if (res.ok) {
+          const json = await res.json();
+          if (json.status === 'success' && json.data) {
+            toast.dismiss(loadingToast);
+            onSelectPost(json.data);
+            return;
+          }
+        }
+      } catch (err) {
+        console.warn(`[SectionHub] Direct fetch for post ${numericId} notice:`, err);
+      } finally {
+        toast.dismiss(loadingToast);
+      }
+
+      const fallbackWithId = {
+        id: parseInt(numericId, 10),
         title: item.title,
         department: 'Prep & Lab',
         category: sectionTitle,
         content: `### ${item.title}\n\n*Halaman dokumentasi untuk ${item.title} (${sectionTitle}).*\n\nSilakan klik tombol **Edit Dokumen** di kanan atas untuk mulai menulis dokumen ini.`,
         pt: currentUniverse
       };
-      onSelectPost(fallbackPost);
+      onSelectPost(fallbackWithId);
+      return;
     }
+
+    const fallbackPost = {
+      id: `doc-${item.title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+      title: item.title,
+      department: 'Prep & Lab',
+      category: sectionTitle,
+      content: `### ${item.title}\n\n*Halaman dokumentasi untuk ${item.title} (${sectionTitle}).*\n\nSilakan klik tombol **Edit Dokumen** di kanan atas untuk mulai menulis dokumen ini.`,
+      pt: currentUniverse
+    };
+    onSelectPost(fallbackPost);
   };
 
   // Section configurations matching exact Notion designs from Screenshots
