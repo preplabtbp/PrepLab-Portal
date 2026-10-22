@@ -827,10 +827,10 @@ export function EmployeeLeavesAnalyticsChart({
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart
                   data={
-                    viewMode === 'week' ? weekChartData :
-                    viewMode === 'month' ? monthChartData :
-                    viewMode === 'year' ? yearChartData :
-                    monthChartData
+                    (viewMode === 'week' ? weekChartData :
+                     viewMode === 'month' ? monthChartData :
+                     viewMode === 'year' ? yearChartData :
+                     monthChartData) as any[]
                   }
                   margin={{ top: 10, right: 10, left: -20, bottom: 20 }}
                 >
