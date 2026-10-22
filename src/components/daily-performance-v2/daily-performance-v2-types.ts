@@ -173,6 +173,41 @@ export interface DirectSampleIntakeRecord {
   notes?: string;
 }
 
+export type DiscrepancyRootCauseType = 
+  | 'FINISHED_MISMATCH' // Kesalahan penginputan selesai (finished) di shift sebelumnya
+  | 'RECEIVED_MISMATCH' // Kesalahan penginputan sampel masuk (received / intake) di shift sebelumnya atau stasiun hulu
+  | 'PHYSICAL_COUNT_MISMATCH'; // Kesalahan hitung fisik saat handover serah terima shift / stock opname
+
+export interface BalanceReconciliationDetail {
+  rootCause: DiscrepancyRootCauseType;
+  upstreamStation?: string;
+  originalIntake?: number;
+  correctedIntake?: number;
+  originalFinished?: number;
+  correctedFinished?: number;
+  originalOs: number;
+  correctedOs: number;
+  physicalCountAtHandover: number;
+  variance: number; // physical - originalOs
+  reconcilePreviousShiftRecord: boolean; // apakah shift sebelumnya di-update
+}
+
+export interface StationTracebackContext {
+  stationKey: 'press' | 'edxrf' | 'fusion' | 'loi' | 'wdxrf' | 'qc' | 'report';
+  stationName: string;
+  upstreamStationName: string;
+  date: string;
+  shift: ShiftType;
+  regu: string;
+  foreman: string;
+  initialBalance: number;
+  receivedCount: number;
+  finishedCount: number;
+  officialOs: number;
+  toolBreakdown?: Record<string, number>;
+  recordId?: string;
+}
+
 export interface BalanceOverrideAuditLog {
   id: string;
   timestamp: string;
@@ -195,5 +230,9 @@ export interface BalanceOverrideAuditLog {
   modifiedBy: string;
   reason: string;
   investigationNotes?: string;
+  // Enhanced Traceback Fields
+  rootCauseType?: DiscrepancyRootCauseType;
+  reconciliationDetail?: BalanceReconciliationDetail;
+  isBackwardReconciled?: boolean;
 }
 

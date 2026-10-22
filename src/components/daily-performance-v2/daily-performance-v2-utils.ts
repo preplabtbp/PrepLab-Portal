@@ -14,7 +14,9 @@ export const STORAGE_KEY_DIRECT_INTAKES = 'preplab_daily_direct_intakes';
 
 export function formatShiftName(regu?: string): string {
   if (!regu) return 'Shift -';
-  const clean = regu.toString().trim().toUpperCase().replace(/REGU\s*/i, '').replace(/SHIFT\s*/i, '');
+  const s = regu.toString().trim();
+  if (/non/i.test(s)) return 'Non-Shift';
+  const clean = s.toUpperCase().replace(/REGU\s*/i, '').replace(/SHIFT\s*/i, '').trim();
   return `Shift ${clean}`;
 }
 

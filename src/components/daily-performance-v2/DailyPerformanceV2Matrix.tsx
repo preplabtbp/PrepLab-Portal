@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Users, Layers, Flame, Cpu, FileCheck, CheckCircle2, 
   AlertTriangle, ChevronDown, ChevronRight, Eye, 
@@ -25,6 +25,14 @@ export const DailyPerformanceV2Matrix: React.FC<DailyPerformanceV2MatrixProps> =
   selectedDate,
   userPt = 'TBP'
 }) => {
+  // Sinkronisasi dinamis jumlah personil tidak hadir dari roster
+  const [dayAbsenteeCounts, setDayAbsenteeCounts] = useState<{ cuti: number; izin: number; sakit: number; alfa: number; total: number } | null>(null);
+  const [nightAbsenteeCounts, setNightAbsenteeCounts] = useState<{ cuti: number; izin: number; sakit: number; alfa: number; total: number } | null>(null);
+
+  useEffect(() => {
+    setDayAbsenteeCounts(null);
+    setNightAbsenteeCounts(null);
+  }, [selectedDate]);
   // Filter records for the selected date
   const recordsForDate = useMemo(() => {
     return records.filter(r => r.date === selectedDate);
@@ -213,12 +221,17 @@ export const DailyPerformanceV2Matrix: React.FC<DailyPerformanceV2MatrixProps> =
                   <div className="p-2 rounded-xl bg-white dark:bg-slate-900 border border-amber-100 dark:border-slate-800">
                     <span className="text-[10px] text-slate-400 block font-medium">Cuti / Izin / Sakit</span>
                     <span className="text-sm font-black font-mono text-rose-600 dark:text-rose-400">
-                      {dayRecord.manpower.staff.cuti + dayRecord.manpower.crew.cuti + 
+                      {dayAbsenteeCounts ? dayAbsenteeCounts.total : (
+                       dayRecord.manpower.staff.cuti + dayRecord.manpower.crew.cuti + 
                        dayRecord.manpower.staff.izin + dayRecord.manpower.crew.izin + 
-                       dayRecord.manpower.staff.sakit + dayRecord.manpower.crew.sakit}
+                       dayRecord.manpower.staff.sakit + dayRecord.manpower.crew.sakit)}
                     </span>
                     <span className="text-[9px] text-slate-400 block">
-                      C:{dayRecord.manpower.staff.cuti + dayRecord.manpower.crew.cuti} • I:{dayRecord.manpower.staff.izin + dayRecord.manpower.crew.izin} • S:{dayRecord.manpower.staff.sakit + dayRecord.manpower.crew.sakit}
+                      {dayAbsenteeCounts ? (
+                        `C:${dayAbsenteeCounts.cuti} • I:${dayAbsenteeCounts.izin} • S:${dayAbsenteeCounts.sakit}`
+                      ) : (
+                        `C:${dayRecord.manpower.staff.cuti + dayRecord.manpower.crew.cuti} • I:${dayRecord.manpower.staff.izin + dayRecord.manpower.crew.izin} • S:${dayRecord.manpower.staff.sakit + dayRecord.manpower.crew.sakit}`
+                      )}
                     </span>
                   </div>
                 </div>
@@ -238,6 +251,7 @@ export const DailyPerformanceV2Matrix: React.FC<DailyPerformanceV2MatrixProps> =
                   userPt={userPt}
                   dayRecord={dayRecord}
                   nightRecord={nightRecord || undefined}
+                  onCountsCalculated={setDayAbsenteeCounts}
                 />
               </div>
 
@@ -275,12 +289,17 @@ export const DailyPerformanceV2Matrix: React.FC<DailyPerformanceV2MatrixProps> =
                     <div className="p-2 rounded-xl bg-white dark:bg-slate-900 border border-indigo-100 dark:border-slate-800">
                       <span className="text-[10px] text-slate-400 block font-medium">Cuti / Izin / Sakit</span>
                       <span className="text-sm font-black font-mono text-rose-600 dark:text-rose-400">
-                        {nightRecord.manpower.staff.cuti + nightRecord.manpower.crew.cuti + 
+                        {nightAbsenteeCounts ? nightAbsenteeCounts.total : (
+                         nightRecord.manpower.staff.cuti + nightRecord.manpower.crew.cuti + 
                          nightRecord.manpower.staff.izin + nightRecord.manpower.crew.izin + 
-                         nightRecord.manpower.staff.sakit + nightRecord.manpower.crew.sakit}
+                         nightRecord.manpower.staff.sakit + nightRecord.manpower.crew.sakit)}
                       </span>
                       <span className="text-[9px] text-slate-400 block">
-                        C:{nightRecord.manpower.staff.cuti + nightRecord.manpower.crew.cuti} • I:{nightRecord.manpower.staff.izin + nightRecord.manpower.crew.izin} • S:{nightRecord.manpower.staff.sakit + nightRecord.manpower.crew.sakit}
+                        {nightAbsenteeCounts ? (
+                          `C:${nightAbsenteeCounts.cuti} • I:${nightAbsenteeCounts.izin} • S:${nightAbsenteeCounts.sakit}`
+                        ) : (
+                          `C:${nightRecord.manpower.staff.cuti + nightRecord.manpower.crew.cuti} • I:${nightRecord.manpower.staff.izin + nightRecord.manpower.crew.izin} • S:${nightRecord.manpower.staff.sakit + nightRecord.manpower.crew.sakit}`
+                        )}
                       </span>
                     </div>
                   </div>
@@ -299,6 +318,7 @@ export const DailyPerformanceV2Matrix: React.FC<DailyPerformanceV2MatrixProps> =
                     userPt={userPt}
                     dayRecord={dayRecord}
                     nightRecord={nightRecord}
+                    onCountsCalculated={setNightAbsenteeCounts}
                   />
                 </div>
               )}

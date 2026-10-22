@@ -3,7 +3,7 @@ import {
   X, GitFork, ShieldCheck, ArrowRight, Clock, 
   CheckCircle2, AlertTriangle, Layers, Flame, Cpu, 
   FileCheck, FileSpreadsheet, Search, Filter, ShieldAlert,
-  ChevronRight
+  ChevronRight, RefreshCw, GitBranch, Check, HelpCircle
 } from 'lucide-react';
 import { BalanceOverrideAuditLog } from '../daily-performance-v2/daily-performance-v2-types';
 import { getStoredBalanceAuditLogs } from '../daily-performance-v2/daily-performance-v2-utils';
@@ -29,43 +29,43 @@ export const TracebackSchemeModal: React.FC<TracebackSchemeModalProps> = ({
       log.stationName.toLowerCase().includes(q) ||
       log.modifiedBy.toLowerCase().includes(q) ||
       log.reason.toLowerCase().includes(q) ||
-      log.previousShiftInfo.foreman.toLowerCase().includes(q) ||
+      (log.previousShiftInfo.foreman && log.previousShiftInfo.foreman.toLowerCase().includes(q)) ||
       log.date.includes(q)
     );
   });
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm animate-in fade-in duration-150">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/75 backdrop-blur-sm animate-in fade-in duration-150">
       <div 
-        className="w-full max-w-4xl bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+        className="w-full max-w-4xl bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden flex flex-col max-h-[92vh]"
         onClick={e => e.stopPropagation()}
       >
         {/* Header Modal */}
-        <div className="px-6 py-4.5 bg-gradient-to-r from-teal-500/10 via-teal-500/5 to-transparent border-b border-teal-200/50 dark:border-teal-800/40 flex items-center justify-between">
+        <div className="px-6 py-4 bg-gradient-to-r from-teal-500/15 via-teal-500/5 to-transparent border-b border-teal-200/50 dark:border-teal-800/40 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="p-2.5 rounded-2xl bg-teal-100 dark:bg-teal-900/50 text-teal-700 dark:text-teal-300">
               <GitFork className="w-5 h-5" />
             </div>
             <div>
               <h3 className="font-bold text-base text-slate-900 dark:text-white flex items-center gap-2">
-                Skema Traceback & Audit Trail Laboratorium
+                Skema Traceback & Rekonsiliasi Terintegrasi Laboratorium
               </h3>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                Transparansi alur data sampel, cascading stasiun kerja, dan penelusuran koreksi saldo
+                Pencegahan inkonsistensi data, cascading stasiun kerja, dan penelusuran akar masalah selisih saldo
               </p>
             </div>
           </div>
           <button 
             type="button"
             onClick={onClose}
-            className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Tab Navigasi Modal */}
-        <div className="px-6 pt-3 border-b border-slate-200 dark:border-slate-800 flex gap-2">
+        <div className="px-6 pt-3 border-b border-slate-200 dark:border-slate-800 flex gap-2 flex-wrap">
           <button
             type="button"
             onClick={() => setActiveTab('sample_flow')}
@@ -88,8 +88,8 @@ export const TracebackSchemeModal: React.FC<TracebackSchemeModalProps> = ({
                 : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
             }`}
           >
-            <ShieldAlert className="w-4 h-4" />
-            <span>2. Skema Telusur Koreksi Saldo (Balance Traceback)</span>
+            <GitBranch className="w-4 h-4" />
+            <span>2. Skema Traceback Akar Masalah (Root Cause & Sync)</span>
           </button>
 
           <button
@@ -105,12 +105,12 @@ export const TracebackSchemeModal: React.FC<TracebackSchemeModalProps> = ({
             }`}
           >
             <Clock className="w-4 h-4" />
-            <span>3. Rekap Audit Log ({auditLogs.length})</span>
+            <span>3. Rekap Jejak Rekonsiliasi ({auditLogs.length})</span>
           </button>
         </div>
 
         {/* Content Body */}
-        <div className="p-6 overflow-y-auto space-y-6 text-xs flex-1">
+        <div className="p-5 sm:p-6 overflow-y-auto space-y-6 text-xs flex-1">
           {/* TAB 1: ALUR TELUSUR SAMPEL */}
           {activeTab === 'sample_flow' && (
             <div className="space-y-6">
@@ -262,67 +262,90 @@ export const TracebackSchemeModal: React.FC<TracebackSchemeModalProps> = ({
             </div>
           )}
 
-          {/* TAB 2: SKEMA TELUSUR KOREKSI SALDO */}
+          {/* TAB 2: SKEMA TELUSUR KOREKSI SALDO & REKONSILIASI AKAR MASALAH */}
           {activeTab === 'balance_audit' && (
             <div className="space-y-5">
               <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/60 space-y-2">
                 <h4 className="font-bold text-amber-900 dark:text-amber-200 text-sm flex items-center gap-2">
                   <ShieldAlert className="w-4 h-4 text-amber-600" />
-                  Mekanisme Traceback Selisih Saldo Awal (Balance Discrepancy)
+                  Mengapa Mengubah 1 Angka Saldo Saja Berbahaya?
                 </h4>
                 <p className="text-[11px] text-amber-800/90 dark:text-amber-300/90 leading-relaxed">
-                  Dalam operasional serah terima shift, sering kali terjadi perbedaan antara catatan saldo sisa di sistem
-                  dengan jumlah fisik aktual di atas meja stasiun kerja. Berikut alur penelusuran jika terjadi ketidaksesuaian:
+                  Jika operator hanya mengubah 1 angka saldo awal (misal dari 0 menjadi 15), maka <strong>laporan shift kemarin tetap bernilai salah</strong>,
+                  sehingga neraca ke belakang tidak klop `(Awal Kemarin + Masuk Kemarin − Selesai Kemarin ≠ Selesai Hari Ini)`.
+                  Sistem Traceback Lab menginvestigasi <strong>akar masalah</strong> dan merekonsiliasi record shift sebelumnya.
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-2">
-                  <span className="text-xs font-bold text-slate-800 dark:text-white block">
-                    Langkah 1: Kunci Saldo Otomatis
-                  </span>
-                  <p className="text-[11px] text-slate-600 dark:text-slate-400">
-                    Saldo awal shift aktif <strong>terkunci secara default</strong> dan ditarik langsung dari saldo sisa (OS)
-                    yang disahkan oleh foreman shift sebelumnya. Input manual dinonaktifkan untuk mencegah manipulasi angka.
-                  </p>
-                </div>
+              {/* 3 Jalur Penelusuran Akar Masalah */}
+              <div className="space-y-3">
+                <span className="font-bold text-slate-800 dark:text-white text-xs block">
+                  3 Jalur Investigasi Akar Masalah & Rekonsiliasi (Root Cause Traceback):
+                </span>
 
-                <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-2">
-                  <span className="text-xs font-bold text-slate-800 dark:text-white block">
-                    Langkah 2: Investigasi via Tanda Seru
-                  </span>
-                  <p className="text-[11px] text-slate-600 dark:text-slate-400">
-                    Bila personil shift saat ini menemukan selisih fisik, personil menekan <strong>ikon tanda seru abu-abu</strong>.
-                    Sistem langsung menampilkan laporan shift lalu: siapa foreman-nya, berapa intake-nya, dan berapa finish-nya.
-                  </p>
-                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-2">
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 inline-block">
+                      Jalur A: Koreksi Finished
+                    </span>
+                    <strong className="text-xs text-slate-800 dark:text-white block">
+                      Salah Catat Hasil Selesai Shift Lalu
+                    </strong>
+                    <p className="text-[11px] text-slate-600 dark:text-slate-400">
+                      Operator shift lalu mencatat selesai instrumen terlalu banyak atau ada running yang tertahan.
+                      <strong> Solusi:</strong> Sesuaikan angka Finished shift lalu, maka Saldo Sisa shift lalu otomatis naik/turun dan klop dengan fisik!
+                    </p>
+                  </div>
 
-                <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-2">
-                  <span className="text-xs font-bold text-slate-800 dark:text-white block">
-                    Langkah 3: Perekaman Jejak Audit
-                  </span>
-                  <p className="text-[11px] text-slate-600 dark:text-slate-400">
-                    Penggantian nilai saldo mewajibkan memasukkan <strong>Nama Personil Pengubah</strong> dan <strong>Alasan Investigasi</strong>.
-                    Perubahan tersebut diabadikan di Audit Log dan dapat ditelusuri kembali sewaktu-waktu oleh Manajemen Lab.
-                  </p>
+                  <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-2">
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 inline-block">
+                      Jalur B: Koreksi Intake Hulu
+                    </span>
+                    <strong className="text-xs text-slate-800 dark:text-white block">
+                      Salah Catat Kiriman Stasiun Hulu
+                    </strong>
+                    <p className="text-[11px] text-slate-600 dark:text-slate-400">
+                      Stasiun alur sebelumnya (misal Press untuk EDXRF) salah hitung saat kirim, atau ada sampel titipan tambahan.
+                      <strong> Solusi:</strong> Sesuaikan angka Intake shift lalu, sehingga neraca hulu-hilir tetap selaras.
+                    </p>
+                  </div>
+
+                  <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-2">
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 inline-block">
+                      Jalur C: Koreksi Fisik Langsung
+                    </span>
+                    <strong className="text-xs text-slate-800 dark:text-white block">
+                      Selisih Hitung Serah Terima / Cacat Fisik
+                    </strong>
+                    <p className="text-[11px] text-slate-600 dark:text-slate-400">
+                      Data transaksi intake & finish di log alat sudah benar, namun fisik di meja berbeda karena salah hitung fisik saat serah terima atau sampel pecah/rusak.
+                    </p>
+                  </div>
                 </div>
               </div>
 
-              {/* Box Rangkuman Kemungkinan Kesalahan */}
-              <div className="p-4 rounded-2xl bg-slate-100/80 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 space-y-2">
-                <span className="font-bold text-slate-800 dark:text-white text-xs block">
-                  Titik Rawan Kesalahan yang Ditelusuri (Root Cause Traceback):
+              {/* Diagram Rekonsiliasi Mundur */}
+              <div className="p-4 rounded-2xl bg-teal-50/70 dark:bg-teal-950/30 border border-teal-200 dark:border-teal-800/60 space-y-2">
+                <span className="font-bold text-teal-900 dark:text-teal-200 text-xs flex items-center gap-2">
+                  <RefreshCw className="w-4 h-4 text-teal-600" />
+                  Mekanisme Sinkronisasi Dua Arah (Backward & Forward Synchronization)
                 </span>
-                <ul className="list-disc list-inside space-y-1 text-[11px] text-slate-600 dark:text-slate-400">
-                  <li><strong>Kesalahan Penginputan Awal Hulu</strong>: Jumlah kantong serbuk yang diterima dari prep kering salah hitung saat serah terima.</li>
-                  <li><strong>Kesalahan Penginputan Selesai (Finish)</strong>: Foreman shift lalu menginput hasil scan alat tanpa mengurangi batch yang reject/rusak.</li>
-                  <li><strong>Sampel Tertinggal / Terselip</strong>: Sampel fisik tertinggal di nampan pengeringan atau di samping mesin tanpa tercatat.</li>
-                </ul>
+                <p className="text-[11px] text-teal-800/90 dark:text-teal-300/90 leading-relaxed">
+                  Ketika personil mengonfirmasi rekonsiliasi:
+                  <br />
+                  1. Record Laporan Shift Sebelumnya diperbarui secara permanen di database/storage.
+                  <br />
+                  2. Saldo Akhir shift kemarin dihitung ulang secara matematis sehingga statusnya <strong>SINKRON</strong>.
+                  <br />
+                  3. Saldo Awal shift aktif langsung mewarisi angka terkoreksi tanpa selisih angka siluman.
+                  <br />
+                  4. Jejak Audit merekam siapa personil yang mengubah, siapa foreman shift lalu yang bersangkutan, dan catatan investigasinya.
+                </p>
               </div>
             </div>
           )}
 
-          {/* TAB 3: REKAP AUDIT LOG */}
+          {/* TAB 3: REKAP AUDIT LOG LENGKAP */}
           {activeTab === 'logs' && (
             <div className="space-y-4">
               <div className="flex items-center justify-between gap-3">
@@ -352,51 +375,81 @@ export const TracebackSchemeModal: React.FC<TracebackSchemeModalProps> = ({
                   </p>
                 </div>
               ) : (
-                <div className="space-y-2.5">
-                  {filteredLogs.map(log => (
-                    <div 
-                      key={log.id}
-                      className="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-2"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <span className="px-2 py-0.5 rounded-lg bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300 font-bold text-[10px]">
-                            {log.stationName}
-                          </span>
-                          <span className="text-xs font-bold text-slate-800 dark:text-slate-100">
-                            {log.originalValue} spl ➔ <span className="text-amber-600 font-mono font-bold">{log.correctedValue} spl</span>
-                          </span>
-                        </div>
-                        <span className="text-[10px] text-slate-400 font-mono">
-                          {new Date(log.timestamp).toLocaleString('id-ID')}
-                        </span>
-                      </div>
+                <div className="space-y-3">
+                  {filteredLogs.map(log => {
+                    const detail = log.reconciliationDetail;
+                    const rootCauseLabel = 
+                      log.rootCauseType === 'FINISHED_MISMATCH' ? 'Koreksi Selesai (Finished)' :
+                      log.rootCauseType === 'RECEIVED_MISMATCH' ? 'Koreksi Masuk (Intake Hulu)' :
+                      'Koreksi Fisik Handover';
 
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] bg-slate-50 dark:bg-slate-800/40 p-2.5 rounded-xl">
-                        <div>
-                          <span className="text-slate-400 block text-[10px]">Personil Pengubah:</span>
-                          <strong className="text-slate-800 dark:text-slate-200">{log.modifiedBy}</strong>
-                          <span className="text-[10px] text-slate-500 block">
-                            Shift {log.shift} ({log.regu}) • {log.date}
+                    return (
+                      <div 
+                        key={log.id}
+                        className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-2.5"
+                      >
+                        <div className="flex items-center justify-between flex-wrap gap-2">
+                          <div className="flex items-center gap-2">
+                            <span className="px-2 py-0.5 rounded-lg bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300 font-bold text-[10px]">
+                              {log.stationName}
+                            </span>
+                            <span className="px-2 py-0.5 rounded-lg bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300 font-bold text-[10px]">
+                              {rootCauseLabel}
+                            </span>
+                            {log.isBackwardReconciled && (
+                              <span className="px-2 py-0.5 rounded-lg bg-teal-100 dark:bg-teal-900/40 text-teal-800 dark:text-teal-300 font-bold text-[10px] flex items-center gap-1">
+                                <Check className="w-3 h-3" />
+                                Rekonsiliasi Mundur Berhasil
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-[10px] text-slate-400 font-mono">
+                            {new Date(log.timestamp).toLocaleString('id-ID')}
                           </span>
                         </div>
-                        <div>
-                          <span className="text-slate-400 block text-[10px]">Foreman Shift Lalu Terkait:</span>
-                          <strong className="text-slate-800 dark:text-slate-200">
-                            {log.previousShiftInfo.foreman || 'Foreman Shift Lalu'}
-                          </strong>
-                          <span className="text-[10px] text-slate-500 block">
-                            Shift {log.previousShiftInfo.shift} ({log.previousShiftInfo.regu}) • {log.previousShiftInfo.date}
-                          </span>
-                        </div>
-                      </div>
 
-                      <div className="text-[11px] text-slate-600 dark:text-slate-400">
-                        <span className="text-slate-400 font-semibold">Alasan Koreksi: </span>
-                        <span>{log.reason}</span>
+                        {/* Nilai Perubahan */}
+                        <div className="flex items-center gap-3 text-xs bg-slate-50 dark:bg-slate-800/40 p-2.5 rounded-xl flex-wrap">
+                          <span className="text-slate-500 font-mono">
+                            Saldo Sistem Lama: <strong>{log.originalValue} spl</strong>
+                          </span>
+                          <span className="text-slate-400">➔</span>
+                          <span className="text-amber-600 dark:text-amber-400 font-mono font-bold">
+                            Terkoreksi: {log.correctedValue} spl
+                          </span>
+                          {detail?.variance !== undefined && detail.variance !== 0 && (
+                            <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 ml-auto">
+                              Selisih Fisik: {detail.variance > 0 ? `+${detail.variance} spl` : `${detail.variance} spl`}
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] bg-slate-50/50 dark:bg-slate-800/30 p-2.5 rounded-xl">
+                          <div>
+                            <span className="text-slate-400 block text-[10px]">Personil Pengubah:</span>
+                            <strong className="text-slate-800 dark:text-slate-200">{log.modifiedBy}</strong>
+                            <span className="text-[10px] text-slate-500 block">
+                              Shift {log.shift} ({log.regu}) • {log.date}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-slate-400 block text-[10px]">Foreman Shift Lalu Terkait:</span>
+                            <strong className="text-slate-800 dark:text-slate-200">
+                              {log.previousShiftInfo.foreman || 'Foreman Shift Lalu'}
+                            </strong>
+                            <span className="text-[10px] text-slate-500 block">
+                              Shift {log.previousShiftInfo.shift} ({log.previousShiftInfo.regu}) • {log.previousShiftInfo.date}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="text-[11px] text-slate-600 dark:text-slate-400">
+                          <span className="text-slate-400 font-semibold">Alasan & Catatan Investigasi: </span>
+                          <span>{log.reason}</span>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>

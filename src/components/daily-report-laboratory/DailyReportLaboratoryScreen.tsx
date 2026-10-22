@@ -33,7 +33,9 @@ import {
   getSampleGroup, 
   SampleGroupType,
   DirectSampleIntakeRecord,
-  BalanceOverrideAuditLog
+  BalanceOverrideAuditLog,
+  StationTracebackContext,
+  DiscrepancyRootCauseType
 } from '../daily-performance-v2/daily-performance-v2-types';
 import { BalanceOverrideModal } from './BalanceOverrideModal';
 import { TracebackSchemeModal } from './TracebackSchemeModal';
@@ -540,6 +542,101 @@ export const DailyReportLaboratoryScreen: React.FC<DailyReportLaboratoryScreenPr
     toast.info('Penerimaan sampel non-eksplorasi berhasil dihapus.');
   };
 
+  // Memoized Traceback Context for the opened station
+  const currentStationTracebackContext = useMemo((): StationTracebackContext => {
+    const prev = previousShiftRecord;
+    const key = overrideStationKey;
+
+    let upstream = 'Stasiun Hulu';
+    let initialBal = 0;
+    let received = 0;
+    let finished = 0;
+    let officialOs = overrideCurrentValue;
+    let toolBreakdown: Record<string, number> | undefined = undefined;
+
+    if (key === 'press') {
+      upstream = 'Preparasi Kering (Pulverizer Serbuk)';
+      initialBal = prev?.pressPowder?.os ?? 0;
+      received = prev?.pressPowder?.received?.shift ?? 0;
+      finished = prev?.pressPowder?.finish?.shift ?? 0;
+      officialOs = prev?.pressPowder?.bal ?? Math.max(0, initialBal + received - finished);
+    } else if (key === 'edxrf') {
+      upstream = 'Meja Press Pellet (Pelet Selesai Press)';
+      initialBal = prev?.edxrf?.os ?? 0;
+      received = prev?.edxrf?.received ?? (prev?.pressPowder?.finish?.shift ?? 0);
+      const epsTotal = (prev?.edxrf?.epsC || 0) + (prev?.edxrf?.epsD || 0) + (prev?.edxrf?.epsE || 0) + 
+                       (prev?.edxrf?.epsF || 0) + (prev?.edxrf?.epsG || 0) + (prev?.edxrf?.epsH || 0) + (prev?.edxrf?.s2Puma || 0);
+      finished = prev?.edxrf?.shift ?? epsTotal;
+      officialOs = prev?.edxrf?.bal ?? Math.max(0, initialBal + received - finished);
+      toolBreakdown = {
+        epsC: prev?.edxrf?.epsC ?? 0,
+        epsD: prev?.edxrf?.epsD ?? 0,
+        epsE: prev?.edxrf?.epsE ?? 0,
+        epsF: prev?.edxrf?.epsF ?? 0,
+        epsG: prev?.edxrf?.epsG ?? 0,
+        epsH: prev?.edxrf?.epsH ?? 0,
+        s2Puma: prev?.edxrf?.s2Puma ?? 0
+      };
+    } else if (key === 'fusion') {
+      upstream = 'Stasiun Weighing (Penimbangan Sampel)';
+      initialBal = prev?.fuseBead?.osExp ?? 0;
+      received = prev?.sampleReceived?.exp?.shift ?? 0;
+      finished = prev?.fuseBead?.finishShift ?? 0;
+      officialOs = prev?.fuseBead?.balExp ?? Math.max(0, initialBal + received - finished);
+    } else if (key === 'loi') {
+      upstream = 'Furnace Pembakaran LOI';
+      initialBal = prev?.loi?.os ?? 100;
+      received = 0;
+      const wFin = (prev?.loi?.w2 || 0) + (prev?.loi?.w4 || 0) + (prev?.loi?.w5 || 0);
+      finished = prev?.loi?.finLoiShift ?? wFin;
+      officialOs = prev?.loi?.bal ?? Math.max(0, initialBal - finished);
+      toolBreakdown = {
+        w2: prev?.loi?.w2 ?? 0,
+        w4: prev?.loi?.w4 ?? 0,
+        w5: prev?.loi?.w5 ?? 0
+      };
+    } else if (key === 'wdxrf') {
+      upstream = 'Meja Bead Fusion (Peleburan Borat)';
+      initialBal = prev?.wdxrf?.osExp ?? 0;
+      received = prev?.fuseBead?.finishShift ?? 0;
+      const zTotal = (prev?.wdxrf?.zetiumA?.total || 0) + (prev?.wdxrf?.zetiumB?.total || 0);
+      finished = zTotal;
+      officialOs = prev?.wdxrf?.bal ?? Math.max(0, received - finished);
+      toolBreakdown = {
+        zetiumA: prev?.wdxrf?.zetiumA?.total ?? 0,
+        zetiumB: prev?.wdxrf?.zetiumB?.total ?? 0
+      };
+    } else if (key === 'qc') {
+      upstream = 'Spektrometer WDXRF (Hasil Scan Zetium)';
+      initialBal = prev?.qc?.os ?? 0;
+      received = prev?.qc?.received ?? ((prev?.wdxrf?.zetiumA?.total || 0) + (prev?.wdxrf?.zetiumB?.total || 0));
+      finished = prev?.qc?.finishShift ?? 0;
+      officialOs = prev?.qc?.bal ?? Math.max(0, initialBal + received - finished);
+    } else if (key === 'report') {
+      upstream = 'QC Data Validasi (Hasil Lolos QC)';
+      initialBal = prev?.report?.osReport ?? 0;
+      received = prev?.report?.received ?? (prev?.qc?.finishShift ?? 0);
+      finished = prev?.report?.finishReportDay ?? 0;
+      officialOs = prev?.report?.bal ?? Math.max(0, initialBal + received - finished);
+    }
+
+    return {
+      stationKey: key,
+      stationName: overrideStationName,
+      upstreamStationName: upstream,
+      date: prev?.date || 'Shift Lalu',
+      shift: prev?.shiftType || 'NIGHT',
+      regu: prev?.regu || 'B',
+      foreman: `Foreman Shift ${prev?.regu || 'Lalu'}`,
+      initialBalance: initialBal,
+      receivedCount: received,
+      finishedCount: finished,
+      officialOs: officialOs,
+      toolBreakdown,
+      recordId: prev?.id
+    };
+  }, [previousShiftRecord, overrideStationKey, overrideStationName, overrideCurrentValue]);
+
   // Handler buka modal koreksi saldo awal (Traceback Investigation)
   const handleOpenOverride = (
     stationKey: 'press' | 'edxrf' | 'fusion' | 'loi' | 'wdxrf' | 'qc' | 'report',
@@ -568,6 +665,114 @@ export const DailyReportLaboratoryScreen: React.FC<DailyReportLaboratoryScreenPr
     }));
   };
 
+  // Handler terintegrasi: Koreksi Saldo Awal + Rekonsiliasi Mundur ke Shift Sebelumnya
+  const handleApplyReconciliation = (
+    newVal: number,
+    reconciliationData: {
+      log: BalanceOverrideAuditLog;
+      rootCause: DiscrepancyRootCauseType;
+      reconcilePreviousShift: boolean;
+      newPreviousFinished?: number;
+      newPreviousReceived?: number;
+      newPreviousOs: number;
+    }
+  ) => {
+    // 1. Terapkan nilai baru ke state saldo awal shift aktif
+    if (overrideSetter) {
+      overrideSetter(newVal);
+    }
+
+    // 2. Berikan penanda visual status rekonsiliasi pada stasiun
+    setOverriddenStations(prev => ({
+      ...prev,
+      [overrideStationKey]: {
+        value: newVal,
+        by: reconciliationData.log.modifiedBy,
+        time: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
+        rootCause: reconciliationData.rootCause,
+        isReconciled: reconciliationData.reconcilePreviousShift
+      }
+    }));
+
+    // 3. Rekonsiliasi Mundur ke data record laporan shift sebelumnya (jika opsi aktif)
+    if (reconciliationData.reconcilePreviousShift && previousShiftRecord) {
+      const targetId = previousShiftRecord.id;
+      const key = overrideStationKey;
+
+      const updatedAll = allRecords.map(rec => {
+        if (rec.id !== targetId) return rec;
+
+        const updated = { ...rec };
+        if (key === 'press') {
+          const prevFinish = reconciliationData.newPreviousFinished ?? updated.pressPowder?.finish?.shift ?? 0;
+          const prevRec = reconciliationData.newPreviousReceived ?? updated.pressPowder?.received?.shift ?? 0;
+          updated.pressPowder = {
+            ...updated.pressPowder,
+            received: { ...updated.pressPowder.received, shift: prevRec },
+            finish: { ...updated.pressPowder.finish, shift: prevFinish },
+            bal: reconciliationData.newPreviousOs
+          };
+        } else if (key === 'edxrf') {
+          const prevFinish = reconciliationData.newPreviousFinished ?? updated.edxrf?.shift ?? 0;
+          const prevRec = reconciliationData.newPreviousReceived ?? updated.edxrf?.received ?? 0;
+          updated.edxrf = {
+            ...updated.edxrf,
+            received: prevRec,
+            shift: prevFinish,
+            bal: reconciliationData.newPreviousOs
+          };
+        } else if (key === 'fusion') {
+          const prevFinish = reconciliationData.newPreviousFinished ?? updated.fuseBead?.finishShift ?? 0;
+          const prevRec = reconciliationData.newPreviousReceived ?? updated.sampleReceived?.exp?.shift ?? 0;
+          updated.sampleReceived = {
+            ...updated.sampleReceived,
+            exp: { ...updated.sampleReceived.exp, shift: prevRec }
+          };
+          updated.fuseBead = {
+            ...updated.fuseBead,
+            finishShift: prevFinish,
+            balExp: reconciliationData.newPreviousOs
+          };
+        } else if (key === 'loi') {
+          const prevFinish = reconciliationData.newPreviousFinished ?? updated.loi?.finLoiShift ?? 0;
+          updated.loi = {
+            ...updated.loi,
+            finLoiShift: prevFinish,
+            bal: reconciliationData.newPreviousOs
+          };
+        } else if (key === 'wdxrf') {
+          updated.wdxrf = {
+            ...updated.wdxrf,
+            bal: reconciliationData.newPreviousOs
+          };
+        } else if (key === 'qc') {
+          const prevFinish = reconciliationData.newPreviousFinished ?? updated.qc?.finishShift ?? 0;
+          const prevRec = reconciliationData.newPreviousReceived ?? updated.qc?.received ?? 0;
+          updated.qc = {
+            ...updated.qc,
+            received: prevRec,
+            finishShift: prevFinish,
+            bal: reconciliationData.newPreviousOs
+          };
+        } else if (key === 'report') {
+          const prevFinish = reconciliationData.newPreviousFinished ?? updated.report?.finishReportDay ?? 0;
+          const prevRec = reconciliationData.newPreviousReceived ?? updated.report?.received ?? 0;
+          updated.report = {
+            ...updated.report,
+            received: prevRec,
+            finishReportDay: prevFinish,
+            bal: reconciliationData.newPreviousOs
+          };
+        }
+        return updated;
+      });
+
+      setAllRecords(updatedAll);
+      saveStoredRecords(updatedAll);
+      window.dispatchEvent(new CustomEvent('preplab-records-updated'));
+    }
+  };
+
   // Reusable Component untuk Saldo Awal Terkunci + Ikon Tanda Seru Abu-abu
   const renderLockedBalanceField = (
     label: string,
@@ -576,17 +781,24 @@ export const DailyReportLaboratoryScreen: React.FC<DailyReportLaboratoryScreenPr
     stationName: string,
     setter: (val: number) => void
   ) => {
-    const isOverridden = Boolean(overriddenStations[stationKey]);
+    const overrideInfo = overriddenStations[stationKey];
+    const isOverridden = Boolean(overrideInfo);
     return (
       <div className="space-y-1">
         <div className="flex items-center justify-between">
           <label className="text-[10px] text-slate-500 font-medium">{label}</label>
           <span className={`text-[9px] px-1.5 py-0.2 rounded font-bold ${
             isOverridden 
-              ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300' 
+              ? overrideInfo?.isReconciled
+                ? 'bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-300'
+                : 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300' 
               : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'
           }`}>
-            {isOverridden ? 'Terkoreksi' : 'Auto Shift Lalu'}
+            {isOverridden 
+              ? overrideInfo?.isReconciled 
+                ? 'Direkonsiliasi (Sinkron)' 
+                : 'Terkoreksi Fisik' 
+              : 'Auto Shift Lalu'}
           </span>
         </div>
         <div className="relative flex items-center">
@@ -594,14 +806,20 @@ export const DailyReportLaboratoryScreen: React.FC<DailyReportLaboratoryScreenPr
             type="number"
             readOnly
             value={value}
-            className="w-full px-3 py-1.5 pr-8 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 font-mono text-center font-bold text-slate-700 dark:text-slate-200 cursor-not-allowed select-none text-xs"
-            title="Saldo awal otomatis ditarik dari hasil shift sebelumnya. Klik tanda seru di samping kanan untuk koreksi investigasi."
+            className={`w-full px-3 py-1.5 pr-8 rounded-xl border font-mono text-center font-bold cursor-not-allowed select-none text-xs ${
+              isOverridden
+                ? overrideInfo?.isReconciled
+                  ? 'bg-teal-50/70 dark:bg-teal-950/30 border-teal-300 dark:border-teal-700 text-teal-900 dark:text-teal-200'
+                  : 'bg-amber-50/70 dark:bg-amber-950/30 border-amber-300 dark:border-amber-700 text-amber-900 dark:text-amber-200'
+                : 'bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200'
+            }`}
+            title="Saldo awal otomatis ditarik dari hasil shift sebelumnya. Klik tanda seru di samping kanan untuk investigasi & rekonsiliasi akar masalah."
           />
           <button
             type="button"
             onClick={() => handleOpenOverride(stationKey, stationName, value, setter)}
             className="absolute right-1.5 p-1 rounded-lg text-slate-400 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40 transition-all cursor-pointer"
-            title="Klik untuk membuka dialog koreksi & audit perbaikan saldo awal"
+            title="Klik untuk membuka dialog investigasi & rekonsiliasi saldo awal (Traceback System)"
           >
             <AlertCircle className="w-4 h-4" />
           </button>
@@ -2166,22 +2384,24 @@ export const DailyReportLaboratoryScreen: React.FC<DailyReportLaboratoryScreenPr
         </div>
       </footer>
 
-      {/* MODAL KOREKSI SALDO AWAL (TRACEBACK AUDIT OVERRIDE) */}
+      {/* MODAL KOREKSI SALDO AWAL (TRACEBACK AUDIT OVERRIDE & RECONCILIATION) */}
       <BalanceOverrideModal
         isOpen={overrideModalOpen}
         onClose={() => setOverrideModalOpen(false)}
         stationKey={overrideStationKey}
         stationName={overrideStationName}
         currentValue={overrideCurrentValue}
+        tracebackContext={currentStationTracebackContext}
         previousShiftInfo={{
-          date: previousShiftRecord?.date || 'Shift Lalu',
-          shift: previousShiftRecord?.shiftType || 'NIGHT',
-          regu: previousShiftRecord?.regu || 'Regu Lalu',
-          foreman: previousShiftRecord?.foreman || 'Foreman Shift Lalu',
-          originalBalance: overrideCurrentValue,
-          intake: 0,
-          finished: 0,
-          stationName: overrideStationName
+          date: currentStationTracebackContext.date,
+          shift: currentStationTracebackContext.shift,
+          regu: currentStationTracebackContext.regu,
+          foreman: currentStationTracebackContext.foreman,
+          originalBalance: currentStationTracebackContext.officialOs,
+          intake: currentStationTracebackContext.receivedCount,
+          finished: currentStationTracebackContext.finishedCount,
+          stationName: overrideStationName,
+          upstreamStation: currentStationTracebackContext.upstreamStationName
         }}
         currentDate={date}
         currentShift={shiftType}
@@ -2191,6 +2411,7 @@ export const DailyReportLaboratoryScreen: React.FC<DailyReportLaboratoryScreenPr
           name: String(e.nama || e.name || e.Nama || 'Operator')
         }))}
         onApplyOverride={handleApplyOverride}
+        onApplyReconciliation={handleApplyReconciliation}
       />
 
       {/* MODAL SKEMA TRACEBACK & AUDIT TRAIL LENGKAP */}

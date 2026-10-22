@@ -27,6 +27,7 @@ interface DailyPerformanceV2AbsenteeListProps {
   dayRecord?: DailyPerformanceRecord;
   nightRecord?: DailyPerformanceRecord;
   rosterList?: any[];
+  onCountsCalculated?: (counts: { cuti: number; izin: number; sakit: number; alfa: number; total: number }) => void;
 }
 
 // Helper parsing tanggal roster
@@ -120,7 +121,8 @@ export const DailyPerformanceV2AbsenteeList: React.FC<DailyPerformanceV2Absentee
   userPt = 'TBP',
   dayRecord,
   nightRecord,
-  rosterList: propRosterList
+  rosterList: propRosterList,
+  onCountsCalculated
 }) => {
   const [internalRoster, setInternalRoster] = useState<any[]>([]);
 
@@ -243,7 +245,21 @@ export const DailyPerformanceV2AbsenteeList: React.FC<DailyPerformanceV2Absentee
       const isNonShift = empShift.includes('NON') || jab.includes('superintendent') || jab.includes('supervisor') || jab.includes('officer') || jab.includes('chemist');
 
       // Tentukan apakah personil termasuk kategori kendala tidak hadir
-      const isCuti = upper.startsWith('C') || upper === 'CT' || upper === 'CR' || upper === 'CE' || upper === 'CI' || upper === 'CS' || upper.includes('CUTI');
+      const isCuti = (
+        ['TRV', 'TV', 'TT', 'XP', 'CT', 'CR', 'CE', 'CI', 'CS', 'C'].includes(upper) ||
+        upper.startsWith('C') ||
+        upper.startsWith('CT') ||
+        upper.startsWith('CE') ||
+        upper.startsWith('CI') ||
+        upper.startsWith('CS') ||
+        upper.startsWith('CR') ||
+        upper.startsWith('TRV') ||
+        upper.startsWith('TT') ||
+        upper.startsWith('TV') ||
+        upper.startsWith('XP') ||
+        upper.includes('CUTI') ||
+        upper === 'TRAVEL'
+      );
       const isSakit = !isCuti && (['SL', 'SS', 'S1', 'S2', 'S'].includes(upper) || upper.startsWith('SAKIT'));
       const isIzin = !isCuti && !isSakit && (['I', 'IK', 'IA', 'DL', 'UL'].includes(upper) || upper.startsWith('IZIN') || upper === 'IJIN');
       const isAlfa = !isCuti && !isSakit && !isIzin && (upper === 'A' || upper === 'ALPA' || upper === 'ALPHA');
@@ -344,6 +360,19 @@ export const DailyPerformanceV2AbsenteeList: React.FC<DailyPerformanceV2Absentee
       totalCount: alfa.length + izin.length + sakit.length + cuti.length
     };
   }, [activeRoster, dateKeys, selectedDate, shiftType, dayRecord, nightRecord, userPt]);
+
+  // Laporkan hasil hitungan ke parent jika callback onCountsCalculated disediakan
+  useEffect(() => {
+    if (onCountsCalculated) {
+      onCountsCalculated({
+        cuti: cutiList.length,
+        izin: izinList.length,
+        sakit: sakitList.length,
+        alfa: alfaList.length,
+        total: totalCount
+      });
+    }
+  }, [cutiList.length, izinList.length, sakitList.length, alfaList.length, totalCount, onCountsCalculated]);
 
   // Kelompok kategori berurutan baku: 1. Alfa, 2. Izin, 3. Sakit, 4. Cuti
   const categories = useMemo(() => [
