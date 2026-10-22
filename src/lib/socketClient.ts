@@ -26,7 +26,7 @@ export function getGlobalSocket(): Socket {
       randomizationFactor: 0.5,
       timeout: 15000,
       transports: ['polling', 'websocket'],
-      autoConnect: hasAuthToken,
+      autoConnect: false, // Lazy Connect: Only connect when active real-time features (Chat/Lounge) are open
       auth: (cb) => {
         const token = typeof window !== 'undefined' 
           ? (localStorage.getItem('p2h_token') || localStorage.getItem('token') || '') 
@@ -116,22 +116,20 @@ export function registerPresence(user: {
 }) {
   if (!user || !user.nik) return;
   registeredUser = user;
-  const socket = getGlobalSocket();
-  const token = typeof window !== 'undefined'
-    ? (localStorage.getItem('p2h_token') || localStorage.getItem('token') || '')
-    : '';
-  (socket as any).auth = { token };
-  if (!socket.connected) {
-    socket.connect();
-  } else {
-    socket.emit('presence:join', user);
+  // Store user info without forcing persistent socket connection globally
+  if (globalSocket && globalSocket.connected) {
+    const token = typeof window !== 'undefined'
+      ? (localStorage.getItem('p2h_token') || localStorage.getItem('token') || '')
+      : '';
+    (globalSocket as any).auth = { token };
+    globalSocket.emit('presence:join', user);
   }
 }
 
 export function pingPresence() {
-  const socket = getGlobalSocket();
-  if (socket.connected) {
-    socket.emit('presence:ping');
+  // Only ping if socket is actively connected (e.g. user is in Chat or Lounge)
+  if (globalSocket && globalSocket.connected) {
+    globalSocket.emit('presence:ping');
   }
 }
 
@@ -146,36 +144,50 @@ export function unregisterPresence() {
 export function joinRoom(room: string, user?: any) {
   currentChatRoom = room;
   const socket = getGlobalSocket();
+  const token = typeof window !== 'undefined'
+    ? (localStorage.getItem('p2h_token') || localStorage.getItem('token') || '')
+    : '';
+  (socket as any).auth = { token };
+  if (!socket.connected) {
+    socket.connect();
+  }
   const payload = {
     room,
     ...(registeredUser || {}),
     ...(user || {})
   };
-  if (socket.connected) {
-    socket.emit('chat:join', payload);
-  }
+  socket.emit('chat:join', payload);
 }
 
 export function joinLounge(userPayload?: any) {
   currentChatRoom = 'lounge';
   const socket = getGlobalSocket();
+  const token = typeof window !== 'undefined'
+    ? (localStorage.getItem('p2h_token') || localStorage.getItem('token') || '')
+    : '';
+  (socket as any).auth = { token };
+  if (!socket.connected) {
+    socket.connect();
+  }
   const payload = {
     room: 'lounge',
     ...(registeredUser || {}),
     ...(userPayload || {})
   };
   activeLoungePayload = payload;
-  if (socket.connected) {
-    socket.emit('chat:join', payload);
-    socket.emit('lounge:join', payload);
-  }
+  socket.emit('chat:join', payload);
+  socket.emit('lounge:join', payload);
 }
 
 export function leaveRoom() {
   currentChatRoom = null;
   const socket = getGlobalSocket();
-  if (socket.connected) {
+  if (socket && socket.connected) {
     socket.emit('chat:leave');
+    // If user is not in lounge, disconnect socket to allow Cloud Run to scale to 0
+    if (!activeLoungePayload) {
+      socket.disconnect();
+    }
   }
 }
 
@@ -183,9 +195,11 @@ export function leaveLounge(userNik?: string) {
   activeLoungePayload = null;
   currentChatRoom = null;
   const socket = getGlobalSocket();
-  if (socket.connected) {
+  if (socket && socket.connected) {
     socket.emit('lounge:leave', { nik: userNik });
     socket.emit('chat:leave');
+    // Disconnect socket to stop persistent holding of Cloud Run container
+    socket.disconnect();
   }
 }
 

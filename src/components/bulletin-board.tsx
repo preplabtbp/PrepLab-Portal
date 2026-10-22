@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { translateDisplayText } from './notion/logbook-section-utils';
+import { translateDisplayText, isSameSection } from './notion/logbook-section-utils';
 import { TbpDashboard } from "./TbpDashboard";
 import { SectionHubDashboard, COVER_PRESETS } from "./SectionHubDashboard";
 import { NotionDatabaseTable, TableRowData, extractDriveId } from "./NotionDatabaseTable";
@@ -524,12 +524,20 @@ export function BulletinBoard({
     const mainSections = [
       "INFORMATION",
       "ADMINISTRASI",
+      "ADMINISTRATION",
       "LABORATORIUM",
+      "LABORATORY",
       "PREPARASI",
+      "PREPARATION",
       "QUALITY ASSURANCE",
+      "MANAJEMEN MUTU",
       "MAINTENANCE",
       "WAREHOUSE",
       "WAREHOUSE / INVENTORY CONTROL",
+      "INVENTORY",
+      "PROSEDUR",
+      "PROCEDURE",
+      "SOP",
       "GENERAL ISSUE",
       "GOLDEN RULES",
       "PROMOSI K3",
@@ -554,17 +562,21 @@ export function BulletinBoard({
     const titleUpper = (post.title || "").toUpperCase().trim();
     const sectionHubTitles = [
       "ADMINISTRASI",
+      "ADMINISTRATION",
       "LABORATORIUM",
+      "LABORATORY",
       "PREPARASI",
+      "PREPARATION",
       "QUALITY ASSURANCE",
+      "MANAJEMEN MUTU",
       "MAINTENANCE",
       "WAREHOUSE",
       "WAREHOUSE / INVENTORY CONTROL",
       "INVENTORY",
       "GENERAL ISSUE",
-      "MANAJEMEN MUTU",
       "INFORMATION",
       "PROSEDUR",
+      "PROCEDURE",
       "SOP",
     ];
     if (sectionHubTitles.some((t) => titleUpper === t || titleUpper.replace(/^[#\s\-*]+/, "") === t)) {
@@ -621,8 +633,8 @@ export function BulletinBoard({
         const normalizedSec = secName.trim();
         const existingHub = samePtPosts.find((p) => {
           if (!isSectionHubPost(p)) return false;
-          const pTitle = getPostTitle(p).toLowerCase().trim();
-          return pTitle === normalizedSec.toLowerCase();
+          const pTitle = getPostTitle(p).trim();
+          return isSameSection(pTitle, normalizedSec);
         });
         if (existingHub) return existingHub;
 
@@ -857,8 +869,10 @@ export function BulletinBoard({
           let target = posts.find((p) => String(p.id) === String(urlPostId));
           if (!target && String(urlPostId).startsWith('section-')) {
             const cleanSec = String(urlPostId).replace(/^section-/, '').replace(/-/g, ' ').trim();
-            const secUpper = cleanSec.toUpperCase();
-            target = {
+            target = posts.find((p) => isSameSection(p.title || '', cleanSec));
+            const secUpper = translateDisplayText(cleanSec).toUpperCase();
+            if (!target) {
+              target = {
               id: String(urlPostId),
               title: secUpper,
               department: 'Prep & Lab',
@@ -866,6 +880,7 @@ export function BulletinBoard({
               content: `# ${secUpper}\n\n$INFO$\n\n$RULES$`,
               pt: (selectedPtFilter !== 'ALL' ? selectedPtFilter : (pt || userUniverse || 'TBP'))
             };
+            }
           }
           if (target) {
             if (!canAccessAllSections && isLogbookPost(target)) {
@@ -940,13 +955,10 @@ export function BulletinBoard({
           }
         }
 
-        // If targetId is a section-* (e.g. section-laboratorium)
+        // If targetId is a section-* (e.g. section-laboratorium or section-laboratory)
         if (!target && String(targetId).startsWith('section-')) {
           const cleanSec = String(targetId).replace(/^section-/, '').replace(/-/g, ' ').trim();
-          target = posts.find((p) => {
-            const pTitle = (p.title || '').trim().toLowerCase();
-            return pTitle === cleanSec.toLowerCase() || (p.title || '').toLowerCase().replace(/[^a-z0-9]+/g, '-') === cleanSec.toLowerCase();
-          });
+          target = posts.find((p) => isSameSection(p.title || '', cleanSec));
           if (!target) {
             const secUpper = cleanSec.toUpperCase();
             target = {

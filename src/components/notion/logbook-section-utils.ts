@@ -33,6 +33,45 @@ export function translateDisplayText(text: string): string {
 /**
  * Visual display translator for table column headers from Indonesian to English
  */
+
+/**
+ * Resolves a canonical section identifier supporting bilingual equivalents:
+ * e.g. "Laboratorium", "Laboratory", "LABORATORY", "section-laboratorium" -> 'laboratory'
+ */
+export function getCanonicalSection(s: string): string {
+  if (!s) return '';
+  const clean = s.replace(/^[#\s\-*]+/, '').replace(/^section-/, '').replace(/-/g, ' ').trim().toLowerCase();
+  
+  // Distinguish sub-documents (Daily, Weekly, Logbook, SOP, etc.)
+  const subPrefix = ['daily', 'weekly', 'monthly', 'quarterly', 'yearly', 'biannual', 'logbook', 'routine', 'non-routine', 'sop', 'ik'].find(p => clean.includes(p));
+
+  let base = '';
+  if (clean.includes('lab') || clean.includes('aas') || clean.includes('xrf')) base = 'laboratory';
+  else if (clean.includes('prep') || clean.includes('crusher')) base = 'preparation';
+  else if (clean.includes('admin') || clean.includes('surat') || clean.includes('cuti')) base = 'administration';
+  else if (clean.includes('mutu') || clean.includes('iso') || clean.includes('qa') || clean.includes('quality')) base = 'quality_assurance';
+  else if (clean.includes('maint') || clean.includes('teknik') || clean.includes('mesin')) base = 'maintenance';
+  else if (clean.includes('ware') || clean.includes('gudang') || clean.includes('stok') || clean.includes('inven')) base = 'inventory';
+  else if (clean.includes('prosedur') || clean.includes('procedure')) base = 'procedure';
+  else if (clean.includes('general issue') || clean.includes('issue')) base = 'general_issue';
+  else base = clean.replace(/[^a-z0-9]/g, '');
+
+  return subPrefix ? base + ':' + subPrefix : base;
+}
+
+/**
+ * Checks if two section strings refer to the same section (supporting English/Indonesian aliases).
+ * e.g. "Laboratorium" and "Laboratory" -> true
+ *      "section-laboratorium" and "LABORATORY" -> true
+ */
+export function isSameSection(a: string, b: string): boolean {
+  if (!a || !b) return false;
+  const canA = getCanonicalSection(a);
+  const canB = getCanonicalSection(b);
+  if (canA && canB && canA === canB) return true;
+  return false;
+}
+
 export function getDisplayColumnHeader(colHeader: string): string {
   if (!colHeader) return '';
   const colLower = colHeader.toLowerCase().trim();
@@ -386,8 +425,8 @@ export function isUserAllowedToAccessSection(
   if (clean === 'prosedur' || clean === 'general issue' || clean === 'general' || clean === 'information') {
     return true;
   }
-  const allowed = getUserAllowedSections(userProfile).map(s => s.toLowerCase());
-  return allowed.some(s => s === clean || clean.includes(s) || s.includes(clean));
+  const allowed = getUserAllowedSections(userProfile);
+  return allowed.some(s => isSameSection(s, clean) || s.toLowerCase() === clean || clean.includes(s.toLowerCase()));
 }
 
 
