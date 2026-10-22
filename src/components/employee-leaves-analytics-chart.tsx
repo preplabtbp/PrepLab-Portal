@@ -27,11 +27,12 @@ import {
 } from 'lucide-react';
 import { toPng } from 'html-to-image';
 import { toast } from 'sonner';
-import { EmployeeLeaveItem } from './employee-leaves-screen';
+import { EmployeeLeaveItem, parseGolonganLevel } from './employee-leaves-screen';
 
 interface LeavesAnalyticsProps {
   leaves: EmployeeLeaveItem[];
   defaultSection?: string;
+  defaultCategory?: 'ALL' | 'STAFF' | 'CREW';
 }
 
 // Skema Warna Referensi Gambar (Teal Tosca, Gold Amber, Soft Blue, Coral)
@@ -97,7 +98,62 @@ function ManpowerFigure({ color = '#2298A7', height = 110, helmetColor = '#FFFFF
   );
 }
 
-export function EmployeeLeavesAnalyticsChart({ leaves, defaultSection = 'ALL' }: LeavesAnalyticsProps) {
+// Helper: Cek apakah personil adalah Crew (Golongan I)
+export function checkIsCrewGolI(emp: any): boolean {
+  if (!emp) return true;
+  const gol = String(emp.gol || emp.golongan || emp.jobGrade || '').trim().toUpperCase();
+  const jab = String(emp.jabatan || emp.position || emp.role || '').trim().toLowerCase();
+
+  // Jika eksplisit ada golongan I / 1 / S1
+  if (
+    gol === 'I' || gol === '1' || gol === 'I.1' || gol === '1.1' || 
+    gol === 'S1.1' || gol === 'S1.2' || gol.startsWith('1.') || gol.startsWith('I.')
+  ) {
+    return true;
+  }
+
+  // Jika eksplisit ada golongan II, III, IV, V atau 2, 3, 4, 5
+  if (
+    gol === 'II' || gol === 'III' || gol === 'IV' || gol === 'V' ||
+    gol === '2' || gol === '3' || gol === '4' || gol === '5' ||
+    gol.startsWith('2.') || gol.startsWith('3.') || gol.startsWith('4.') || gol.startsWith('5.') ||
+    gol.startsWith('II.') || gol.startsWith('III.') || gol.startsWith('IV.') || gol.startsWith('V.')
+  ) {
+    return false;
+  }
+
+  // Pengecekan jabatan Staff (Golongan II s/d V)
+  if (
+    jab.includes('foreman') || jab.includes('supervisor') || jab.includes('spv') ||
+    jab.includes('admin') || jab.includes('superintendent') || jab.includes('spt') ||
+    jab.includes('manager') || jab.includes('specialist') || jab.includes('lead hand') ||
+    jab.includes('group leader') || jab.includes('officer') || jab.includes('chemist') ||
+    jab.includes('analyst') || jab.includes('planner') || jab.includes('head')
+  ) {
+    return false;
+  }
+
+  // Pengecekan jabatan Crew (Golongan I)
+  if (
+    jab.includes('crew') || jab.includes('helper') || jab.includes('operator') ||
+    jab.includes('teknisi') || jab.includes('sampler') || jab.includes('preparator') ||
+    jab.includes('crusher') || jab.includes('driver') || jab.includes('analis')
+  ) {
+    return true;
+  }
+
+  return parseGolonganLevel(gol, jab) === 1;
+}
+
+export function checkIsStaffGolIIV(emp: any): boolean {
+  return !checkIsCrewGolI(emp);
+}
+
+export function EmployeeLeavesAnalyticsChart({ 
+  leaves, 
+  defaultSection = 'ALL',
+  defaultCategory = 'ALL' 
+}: LeavesAnalyticsProps) {
   const chartCardRef = useRef<HTMLDivElement>(null);
   const [isExporting, setIsExporting] = useState(false);
 
@@ -106,6 +162,9 @@ export function EmployeeLeavesAnalyticsChart({ leaves, defaultSection = 'ALL' }:
 
   // Filter Section
   const [selectedSection, setSelectedSection] = useState(defaultSection);
+
+  // Filter Kategori Karyawan: 'ALL' | 'STAFF' | 'CREW'
+  const [selectedCategory, setSelectedCategory] = useState<'ALL' | 'STAFF' | 'CREW'>(defaultCategory);
 
   // State untuk Mode Perminggu (Senin s/d Minggu)
   // Default ke Senin minggu ini atau tanggal izin terbaru
@@ -135,15 +194,28 @@ export function EmployeeLeavesAnalyticsChart({ leaves, defaultSection = 'ALL' }:
     return availableMonths[0] || new Date().toISOString().slice(0, 7);
   });
 
-  // Filter data sesuai Section
-  const filteredLeavesBySection = useMemo(() => {
-    if (selectedSection === 'ALL') return leaves;
-    const s = selectedSection.toLowerCase();
-    return leaves.filter(l => 
-      (l.section && l.section.toLowerCase().includes(s)) ||
-      (l.penempatan && l.penempatan.toLowerCase().includes(s))
-    );
-  }, [leaves, selectedSection]);
+  // Filter data sesuai Section & Kategori Karyawan (Staff Gol II-V vs Crew Gol I)
+  const filteredLeaves = useMemo(() => {
+    let list = leaves;
+
+    // 1. Filter Section jika bukan 'ALL'
+    if (selectedSection !== 'ALL') {
+      const s = selectedSection.toLowerCase();
+      list = list.filter(l => 
+        (l.section && l.section.toLowerCase().includes(s)) ||
+        (l.penempatan && l.penempatan.toLowerCase().includes(s))
+      );
+    }
+
+    // 2. Filter Kategori Karyawan: Staff (Gol II-V) vs Crew (Gol I)
+    if (selectedCategory === 'STAFF') {
+      list = list.filter(l => checkIsStaffGolIIV(l));
+    } else if (selectedCategory === 'CREW') {
+      list = list.filter(l => checkIsCrewGolI(l));
+    }
+
+    return list;
+  }, [leaves, selectedSection, selectedCategory]);
 
   // ==========================================
   // KALKULASI DATA PERMINGGU (SENIN S/D MINGGU)
@@ -173,7 +245,7 @@ export function EmployeeLeavesAnalyticsChart({ leaves, defaultSection = 'ALL' }:
   const dailyWeekData = useMemo(() => {
     return weekDays.map(({ dayName, dateStr, dayNumber, monthShort }) => {
       // Cari izin yang aktif pada tanggal dateStr
-      const activeLeaves = filteredLeavesBySection.filter(l => {
+      const activeLeaves = filteredLeaves.filter(l => {
         const start = l.awalAbsensi;
         const end = l.akhirAbsensi || l.awalAbsensi;
         return dateStr >= start && dateStr <= end;
@@ -199,7 +271,9 @@ export function EmployeeLeavesAnalyticsChart({ leaves, defaultSection = 'ALL' }:
           izinLain++;
         }
 
-        persons.push(`${l.name} (${l.shift || 'NS'} - ${l.alasanAbsensi})`);
+        const isStaff = checkIsStaffGolIIV(l);
+        const roleLabel = isStaff ? 'Staff' : 'Crew';
+        persons.push(`${l.name} (${roleLabel} • ${l.shift || 'NS'} - ${l.alasanAbsensi})`);
       });
 
       return {
@@ -216,14 +290,14 @@ export function EmployeeLeavesAnalyticsChart({ leaves, defaultSection = 'ALL' }:
         persons
       };
     });
-  }, [weekDays, filteredLeavesBySection]);
+  }, [weekDays, filteredLeaves]);
 
   // Total dan breakdown untuk minggu terpilih
   const weekSummary = useMemo(() => {
     const mondayStr = formatDateISO(currentMonday);
     const sundayStr = formatDateISO(weekSunday);
 
-    const weekLeaves = filteredLeavesBySection.filter(l => {
+    const weekLeaves = filteredLeaves.filter(l => {
       const start = l.awalAbsensi;
       const end = l.akhirAbsensi || l.awalAbsensi;
       return !(end < mondayStr || start > sundayStr);
@@ -238,8 +312,7 @@ export function EmployeeLeavesAnalyticsChart({ leaves, defaultSection = 'ALL' }:
     let nonStaffTotal = 0;
 
     weekLeaves.forEach(l => {
-      const sh = (l.shift || '').toLowerCase();
-      const isStaff = sh.includes('non') || (l.jabatan || '').toLowerCase().includes('admin') || (l.jabatan || '').toLowerCase().includes('foreman') || (l.jabatan || '').toLowerCase().includes('spv');
+      const isStaff = checkIsStaffGolIIV(l);
       const isSakit = (l.alasanAbsensi || '').toLowerCase().includes('sakit') || (l.alasanAbsensi || '').toLowerCase().includes('demam');
 
       if (isStaff) {
@@ -297,13 +370,13 @@ export function EmployeeLeavesAnalyticsChart({ leaves, defaultSection = 'ALL' }:
         ]
       }
     };
-  }, [filteredLeavesBySection, currentMonday, weekSunday]);
+  }, [filteredLeaves, currentMonday, weekSunday]);
 
   // ==========================================
   // KALKULASI DATA PERBULAN
   // ==========================================
   const monthSummary = useMemo(() => {
-    const monthLeaves = filteredLeavesBySection.filter(l => 
+    const monthLeaves = filteredLeaves.filter(l => 
       l.awalAbsensi && l.awalAbsensi.startsWith(selectedMonthStr)
     );
 
@@ -434,103 +507,173 @@ export function EmployeeLeavesAnalyticsChart({ leaves, defaultSection = 'ALL' }:
       {/* ==================================================== */}
       {/* KONTROL & TOOLBAR DIAGRAM EKSEKUTIF                  */}
       {/* ==================================================== */}
-      <div className="bg-white dark:bg-slate-900 rounded-3xl p-4 sm:p-5 shadow-sm border border-slate-200 dark:border-slate-800 flex flex-col md:flex-row items-center justify-between gap-4">
+      <div className="bg-white dark:bg-slate-900 rounded-3xl p-4 sm:p-5 shadow-sm border border-slate-200 dark:border-slate-800 space-y-4">
         
-        {/* Toggle Mode: Perminggu vs Perbulan */}
-        <div className="flex items-center gap-1.5 p-1 bg-slate-100 dark:bg-slate-800 rounded-2xl w-full sm:w-auto">
-          <button
-            type="button"
-            onClick={() => setViewMode('week')}
-            className={`flex-1 sm:flex-none px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
-              viewMode === 'week'
-                ? 'bg-[#2298A7] text-white shadow-xs'
-                : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
-            }`}
-          >
-            <Calendar className="w-4 h-4" />
-            <span>Perminggu (Senin - Minggu)</span>
-          </button>
+        {/* ROW 1: Toggle Mode & Filter Kategori Staff (Gol II-V) vs Crew (Gol I) & Export */}
+        <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
+          
+          {/* Toggle Mode: Perminggu vs Perbulan */}
+          <div className="flex items-center gap-1.5 p-1 bg-slate-100 dark:bg-slate-800 rounded-2xl w-full sm:w-auto">
+            <button
+              type="button"
+              onClick={() => setViewMode('week')}
+              className={`flex-1 sm:flex-none px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                viewMode === 'week'
+                  ? 'bg-[#2298A7] text-white shadow-xs'
+                  : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
+              }`}
+            >
+              <Calendar className="w-4 h-4" />
+              <span>Perminggu (Senin - Minggu)</span>
+            </button>
 
-          <button
-            type="button"
-            onClick={() => setViewMode('month')}
-            className={`flex-1 sm:flex-none px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
-              viewMode === 'month'
-                ? 'bg-[#2298A7] text-white shadow-xs'
-                : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
-            }`}
-          >
-            <Clock className="w-4 h-4" />
-            <span>Perbulan (Bulanan)</span>
-          </button>
-        </div>
+            <button
+              type="button"
+              onClick={() => setViewMode('month')}
+              className={`flex-1 sm:flex-none px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                viewMode === 'month'
+                  ? 'bg-[#2298A7] text-white shadow-xs'
+                  : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
+              }`}
+            >
+              <Clock className="w-4 h-4" />
+              <span>Perbulan (Bulanan)</span>
+            </button>
+          </div>
 
-        {/* Periode Navigator */}
-        <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end flex-wrap">
-          {viewMode === 'week' ? (
-            <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800/80 p-1 rounded-2xl border border-slate-200 dark:border-slate-700">
-              <button
-                type="button"
-                onClick={handlePrevWeek}
-                className="p-1.5 rounded-xl hover:bg-white dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition-colors"
-                title="Minggu Sebelumnya"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-
-              <div className="px-2.5 py-1 text-xs font-bold text-[#2298A7] dark:text-teal-400 font-mono flex items-center gap-1.5">
-                <span>{headerPeriodText}</span>
-              </div>
-
-              <button
-                type="button"
-                onClick={handleNextWeek}
-                className="p-1.5 rounded-xl hover:bg-white dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition-colors"
-                title="Minggu Selanjutnya"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
-
-              <button
-                type="button"
-                onClick={handleThisWeek}
-                className="text-[10px] font-bold px-2 py-1 rounded-lg bg-teal-500/10 text-[#2298A7] hover:bg-teal-500/20 transition-colors ml-1"
-              >
-                Hari Ini
-              </button>
-            </div>
-          ) : (
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-slate-500">Pilih Bulan:</span>
-              <select
-                value={selectedMonthStr}
-                onChange={(e) => setSelectedMonthStr(e.target.value)}
-                className="px-3 py-1.5 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-bold text-[#2298A7] focus:outline-none"
-              >
-                {availableMonths.map(mStr => {
-                  const [y, m] = mStr.split('-');
-                  const idx = parseInt(m, 10) - 1;
-                  return (
-                    <option key={mStr} value={mStr}>
-                      {MONTH_NAMES[idx]} {y}
-                    </option>
-                  );
-                })}
-              </select>
-            </div>
-          )}
+          {/* FILTER STAFF (GOL II-V) vs CREW (GOL I) */}
+          <div className="flex items-center gap-1 p-1 bg-slate-100 dark:bg-slate-800 rounded-2xl overflow-x-auto">
+            <span className="text-[11px] font-bold text-slate-400 px-2 hidden sm:inline uppercase tracking-wider">
+              Kategori:
+            </span>
+            <button
+              type="button"
+              onClick={() => setSelectedCategory('ALL')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+                selectedCategory === 'ALL'
+                  ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-xs border border-slate-200/60 dark:border-slate-600'
+                  : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+              }`}
+            >
+              Semua (Staff & Crew)
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedCategory('STAFF')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+                selectedCategory === 'STAFF'
+                  ? 'bg-[#2298A7] text-white shadow-xs'
+                  : 'text-slate-600 dark:text-slate-300 hover:text-[#2298A7]'
+              }`}
+              title="Filter khusus personil Staff (Golongan II sampai V)"
+            >
+              <ShieldCheck className="w-3.5 h-3.5" />
+              <span>Staff (Gol II-V)</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedCategory('CREW')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+                selectedCategory === 'CREW'
+                  ? 'bg-[#F5A623] text-white shadow-xs'
+                  : 'text-slate-600 dark:text-slate-300 hover:text-[#F5A623]'
+              }`}
+              title="Filter khusus personil Crew (Golongan I)"
+            >
+              <Users className="w-3.5 h-3.5" />
+              <span>Crew (Gol I)</span>
+            </button>
+          </div>
 
           {/* Export PNG Button */}
           <button
             type="button"
             onClick={handleExportPng}
             disabled={isExporting}
-            className="px-3.5 py-2 rounded-xl bg-[#F5A623] hover:bg-[#E89D1B] text-white text-xs font-bold shadow-xs transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+            className="px-3.5 py-2 rounded-xl bg-[#F5A623] hover:bg-[#E89D1B] text-white text-xs font-bold shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 shrink-0"
             title="Download slide diagram persis tampilan referensi"
           >
             <Download className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">{isExporting ? 'Mengekspor...' : 'Unduh Diagram HD'}</span>
+            <span>{isExporting ? 'Mengekspor...' : 'Unduh Diagram HD'}</span>
           </button>
+        </div>
+
+        {/* ROW 2: Periode Navigator & Filter Section */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+          
+          {/* Filter Section Dropdown */}
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold text-slate-500 dark:text-slate-400">Section:</span>
+            <select
+              value={selectedSection}
+              onChange={e => setSelectedSection(e.target.value)}
+              className="px-3 py-1.5 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-bold text-[#2298A7] focus:outline-none cursor-pointer"
+            >
+              <option value="ALL">Semua Section</option>
+              <option value="Preparation">Preparation</option>
+              <option value="Laboratory">Laboratory</option>
+              <option value="Administration">Administration</option>
+              <option value="Maintenance">Maintenance</option>
+              <option value="Inventory Control">Inventory Control</option>
+              <option value="Quality Assurance">Quality Assurance</option>
+            </select>
+          </div>
+
+          {/* Periode Navigator (Minggu / Bulan) */}
+          <div className="flex items-center gap-2 justify-between sm:justify-end flex-wrap">
+            {viewMode === 'week' ? (
+              <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800/80 p-1 rounded-2xl border border-slate-200 dark:border-slate-700">
+                <button
+                  type="button"
+                  onClick={handlePrevWeek}
+                  className="p-1.5 rounded-xl hover:bg-white dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition-colors"
+                  title="Minggu Sebelumnya"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+
+                <div className="px-2.5 py-1 text-xs font-bold text-[#2298A7] dark:text-teal-400 font-mono flex items-center gap-1.5">
+                  <span>{headerPeriodText}</span>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleNextWeek}
+                  className="p-1.5 rounded-xl hover:bg-white dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition-colors"
+                  title="Minggu Selanjutnya"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleThisWeek}
+                  className="text-[10px] font-bold px-2 py-1 rounded-lg bg-teal-500/10 text-[#2298A7] hover:bg-teal-500/20 transition-colors ml-1"
+                >
+                  Hari Ini
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-slate-500">Pilih Bulan:</span>
+                <select
+                  value={selectedMonthStr}
+                  onChange={(e) => setSelectedMonthStr(e.target.value)}
+                  className="px-3 py-1.5 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-bold text-[#2298A7] focus:outline-none cursor-pointer"
+                >
+                  {availableMonths.map(mStr => {
+                    const [y, m] = mStr.split('-');
+                    const idx = parseInt(m, 10) - 1;
+                    return (
+                      <option key={mStr} value={mStr}>
+                        {MONTH_NAMES[idx]} {y}
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -559,9 +702,20 @@ export function EmployeeLeavesAnalyticsChart({ leaves, defaultSection = 'ALL' }:
               <h2 className="text-2xl sm:text-4xl font-normal text-slate-800 tracking-tight font-display">
                 {selectedSection === 'ALL' ? 'Laboratory Administration' : selectedSection}
               </h2>
-              <p className="text-sm sm:text-base text-slate-600 font-medium mt-0.5">
-                Manpower Attendance {viewMode === 'week' ? '(Weekly: Senin - Minggu)' : '(Monthly Analytics)'}
-              </p>
+              <div className="flex items-center justify-center gap-2 mt-0.5 flex-wrap">
+                <p className="text-sm sm:text-base text-slate-600 font-medium">
+                  Manpower Attendance {viewMode === 'week' ? '(Weekly: Senin - Minggu)' : '(Monthly Analytics)'}
+                </p>
+                <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold ${
+                  selectedCategory === 'STAFF'
+                    ? 'bg-[#2298A7]/15 text-[#187884] border border-[#2298A7]/30'
+                    : selectedCategory === 'CREW'
+                    ? 'bg-[#F5A623]/15 text-[#D48810] border border-[#F5A623]/30'
+                    : 'bg-slate-100 text-slate-700 border border-slate-200'
+                }`}>
+                  {selectedCategory === 'STAFF' ? 'Staff (Gol II-V)' : selectedCategory === 'CREW' ? 'Crew (Gol I)' : 'Semua (Staff & Crew)'}
+                </span>
+              </div>
             </div>
 
             {/* Bulan / Periode di Kanan Atas (Warna Teal) */}
@@ -581,7 +735,14 @@ export function EmployeeLeavesAnalyticsChart({ leaves, defaultSection = 'ALL' }:
           <div className="hidden md:block absolute top-0 bottom-0 left-1/2 w-0 border-r border-dashed border-[#2298A7]/70 -translate-x-1/2 z-10" />
 
           {/* SISI KIRI: ATTENDANCE STAFF */}
-          <div className="p-4 sm:p-6 flex flex-col items-center justify-between border-b md:border-b-0 border-dashed border-[#2298A7]/70">
+          <div className={`p-4 sm:p-6 flex flex-col items-center justify-between border-b md:border-b-0 border-dashed border-[#2298A7]/70 transition-all ${
+            selectedCategory === 'CREW' ? 'opacity-35 grayscale-[30%]' : ''
+          }`}>
+            <div className="w-full text-center mb-2">
+              <span className="inline-block px-3 py-0.5 rounded-full text-[11px] font-black uppercase tracking-wider bg-[#2298A7]/15 text-[#187884] border border-[#2298A7]/30">
+                Staff (Golongan II - V)
+              </span>
+            </div>
             <div className="w-full flex items-center justify-center gap-2 sm:gap-6">
               {/* Figure Manpower Kartun (Teal & Gold) */}
               <div className="flex items-end gap-1.5 shrink-0">
@@ -644,8 +805,15 @@ export function EmployeeLeavesAnalyticsChart({ leaves, defaultSection = 'ALL' }:
             </div>
           </div>
 
-          {/* SISI KANAN: ATTENDANCE NON-STAFF */}
-          <div className="p-4 sm:p-6 flex flex-col items-center justify-between">
+          {/* SISI KANAN: ATTENDANCE NON-STAFF (CREW) */}
+          <div className={`p-4 sm:p-6 flex flex-col items-center justify-between transition-all ${
+            selectedCategory === 'STAFF' ? 'opacity-35 grayscale-[30%]' : ''
+          }`}>
+            <div className="w-full text-center mb-2">
+              <span className="inline-block px-3 py-0.5 rounded-full text-[11px] font-black uppercase tracking-wider bg-[#F5A623]/15 text-[#D48810] border border-[#F5A623]/30">
+                Crew (Golongan I)
+              </span>
+            </div>
             <div className="w-full flex items-center justify-center gap-2 sm:gap-6">
               {/* Pie Chart Non-Staff */}
               <div className="w-48 h-48 sm:w-52 sm:h-52 relative flex items-center justify-center">
@@ -719,8 +887,8 @@ export function EmployeeLeavesAnalyticsChart({ leaves, defaultSection = 'ALL' }:
               <span className="w-2.5 h-2.5 rounded-full bg-[#2298A7]" />
               <span>
                 {viewMode === 'week' 
-                  ? 'Distribusi Harian Manpower Izin (Senin s/d Minggu)' 
-                  : `Tren Izin Mingguan Bulan ${headerPeriodText}`}
+                  ? `Distribusi Harian Manpower Izin ${selectedCategory === 'STAFF' ? 'Staff (Gol II-V)' : selectedCategory === 'CREW' ? 'Crew (Gol I)' : 'Semua'} (Senin s/d Minggu)` 
+                  : `Tren Izin Mingguan ${selectedCategory === 'STAFF' ? 'Staff (Gol II-V)' : selectedCategory === 'CREW' ? 'Crew (Gol I)' : ''} Bulan ${headerPeriodText}`}
               </span>
             </h4>
             <div className="flex items-center gap-3 text-[10px] font-bold">
@@ -788,10 +956,13 @@ export function EmployeeLeavesAnalyticsChart({ leaves, defaultSection = 'ALL' }:
         <div className="p-4 sm:p-6 pt-2 grid grid-cols-1 md:grid-cols-2 gap-4">
           
           {/* BOX KIRI: ATTENDANCE STAFF */}
-          <div className="flex items-start justify-between p-3.5 rounded-2xl bg-slate-50/70 border border-slate-200">
+          <div className={`flex items-start justify-between p-3.5 rounded-2xl bg-slate-50/70 border border-slate-200 transition-all ${
+            selectedCategory === 'CREW' ? 'opacity-35' : ''
+          }`}>
             <div className="space-y-1 text-xs text-slate-700">
-              <h4 className="font-black text-sm text-slate-900 underline decoration-[#2298A7] decoration-2">
-                Attendance Staff
+              <h4 className="font-black text-sm text-slate-900 underline decoration-[#2298A7] decoration-2 flex items-center gap-1.5">
+                <span>Attendance Staff</span>
+                <span className="text-[10px] no-underline font-bold text-[#187884] bg-[#2298A7]/15 px-1.5 py-0.2 rounded">Gol II - V</span>
               </h4>
               <div className="pt-1 space-y-0.5 text-[11px] font-mono">
                 <p>Sakit ({viewMode === 'week' ? `${weekSummary.staff.sakitPct}%` : `${monthSummary.sakitPct}%`}) : {viewMode === 'week' ? `${weekSummary.staff.sakit} Org` : '-'}</p>
@@ -806,11 +977,14 @@ export function EmployeeLeavesAnalyticsChart({ leaves, defaultSection = 'ALL' }:
             </div>
           </div>
 
-          {/* BOX KANAN: ATTENDANCE NON-STAFF */}
-          <div className="flex items-start justify-between p-3.5 rounded-2xl bg-slate-50/70 border border-slate-200">
+          {/* BOX KANAN: ATTENDANCE NON-STAFF / CREW */}
+          <div className={`flex items-start justify-between p-3.5 rounded-2xl bg-slate-50/70 border border-slate-200 transition-all ${
+            selectedCategory === 'STAFF' ? 'opacity-35' : ''
+          }`}>
             <div className="space-y-1 text-xs text-slate-700">
-              <h4 className="font-black text-sm text-slate-900 underline decoration-[#F5A623] decoration-2">
-                Attendance Non-Staff
+              <h4 className="font-black text-sm text-slate-900 underline decoration-[#F5A623] decoration-2 flex items-center gap-1.5">
+                <span>Attendance Crew</span>
+                <span className="text-[10px] no-underline font-bold text-[#D48810] bg-[#F5A623]/15 px-1.5 py-0.2 rounded">Gol I</span>
               </h4>
               <div className="pt-1 space-y-0.5 text-[11px] font-mono">
                 <p>Sakit ({viewMode === 'week' ? `${weekSummary.nonStaff.sakitPct}%` : '0.23%'}) : {viewMode === 'week' ? `${weekSummary.nonStaff.sakit} Org` : '-'}</p>
