@@ -43,7 +43,7 @@ export const DailyPerformanceScreen: React.FC<DailyPerformanceScreenProps> = ({
   const [selectedDate, setSelectedDate] = useState<string>(() => {
     // Find latest record with non-zero received
     const activeRecs = INITIAL_DAILY_PERFORMANCE_RECORDS.filter(r => r.sampleReceived.gc.shift > 0);
-    return activeRecs[activeRecs.length - 1]?.date || '19/10/2026';
+    return activeRecs[activeRecs.length - 1]?.date || '22/10/2026';
   });
 
   // Calculate high-level KPIs across all records

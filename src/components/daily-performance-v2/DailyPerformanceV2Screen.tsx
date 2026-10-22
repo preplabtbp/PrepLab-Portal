@@ -48,7 +48,7 @@ export const DailyPerformanceV2Screen: React.FC<DailyPerformanceV2ScreenProps> =
   // Default date: latest date with active samples
   const [selectedDate, setSelectedDate] = useState<string>(() => {
     const activeRecs = INITIAL_DAILY_PERFORMANCE_RECORDS.filter(r => r.sampleReceived.gc.shift > 0);
-    return activeRecs[activeRecs.length - 1]?.date || '19/10/2026';
+    return activeRecs[activeRecs.length - 1]?.date || '22/10/2026';
   });
 
   // Distinct dates list for the date selector

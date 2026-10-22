@@ -1279,7 +1279,7 @@ export function TbpDashboard({
         <div className="absolute bottom-4 left-6 md:left-12 flex items-center gap-2">
           <div className="px-3 py-1 rounded-full bg-black/60 backdrop-blur-md border border-white/20 text-white text-xs font-semibold flex items-center gap-2 shadow-lg">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-            <span>Site Kawasi • Pulau Obi</span>
+            <span>{activeUniverse === 'GTS' ? 'Site Fluk • Pulau Obi' : 'Site Kawasi • Pulau Obi'}</span>
           </div>
           <div className="hidden sm:flex px-3 py-1 rounded-full bg-black/60 backdrop-blur-md border border-white/20 text-white/80 text-xs font-mono">
             Prep & Analytical Lab Portal
@@ -1291,7 +1291,7 @@ export function TbpDashboard({
           <button
             onClick={() => setPreviewImage({ 
               url: mediaSettings.banner || DEFAULT_MEDIA.banner, 
-              title: 'Header Banner Utama • Prep & Analytical Lab Portal (Site Kawasi • Pulau Obi)' 
+              title: `Header Banner Utama • Prep & Analytical Lab Portal (${activeUniverse === 'GTS' ? 'Site Fluk • Pulau Obi' : 'Site Kawasi • Pulau Obi'})` 
             })}
             className="px-3.5 py-1.5 rounded-xl bg-black/70 hover:bg-black/90 backdrop-blur-md text-white text-xs font-semibold border border-white/30 shadow-lg flex items-center gap-1.5 transition-all hover:scale-105 active:scale-95 cursor-pointer"
           >
@@ -1322,14 +1322,16 @@ export function TbpDashboard({
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-2xl md:text-3xl font-display font-extrabold tracking-tight" style={{ color: 'var(--text-main, #ffffff)' }}>
-                  PT. TBP & GPS
+                  {activeUniverse === 'GTS' ? 'PT. Gane Tambang Sentosa' : 'PT. TBP & GPS'}
                 </h1>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-bold border bg-teal-500/10 text-teal-500 border-teal-500/30">
                   VERIFIED SITE
                 </span>
               </div>
               <p className="text-xs tracking-wide" style={{ color: 'var(--text-muted, #94a3b8)' }}>
-                Preparation & Analytical Laboratory Information Center • Harita Nickel
+                {activeUniverse === 'GTS'
+                  ? 'Preparation & Analytical Laboratory Information Center • Site Fluk, Pulau Obi'
+                  : 'Preparation & Analytical Laboratory Information Center • Harita Nickel'}
               </p>
             </div>
           </div>
@@ -1344,7 +1346,7 @@ export function TbpDashboard({
               }}
             >
               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
-              <span>281 Dokumen Tersedia</span>
+              <span>{posts.length > 0 ? `${posts.length} Dokumen Tersedia` : (activeUniverse === 'GTS' ? '161 Dokumen Tersedia' : '281 Dokumen Tersedia')}</span>
             </div>
             <div className="flex items-center gap-2">
               <button
