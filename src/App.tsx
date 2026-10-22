@@ -321,21 +321,18 @@ export default function App() {
     let raw: string | null = null;
     if (inspectorNik) {
       const savedAvatar = localStorage.getItem(`p2h_inspector_avatar_${inspectorNik}`);
-      if (savedAvatar) {
-        // Jangan gunakan foto drive dari excel master sebagai foto profil akun
-        if (savedAvatar.includes('drive.google.com') || savedAvatar.includes('lh3.googleusercontent.com') || savedAvatar.includes('/api/employees/photo/')) {
-          localStorage.removeItem(`p2h_inspector_avatar_${inspectorNik}`);
-        } else {
-          raw = savedAvatar;
-        }
+      if (savedAvatar && savedAvatar.trim()) {
+        raw = savedAvatar;
       }
     }
     if (!raw && userProfile?.avatar) {
-      if (!userProfile.avatar.includes('drive.google.com') && !userProfile.avatar.includes('lh3.googleusercontent.com') && !userProfile.avatar.includes('/api/employees/photo/')) {
-        raw = userProfile.avatar;
-      }
+      raw = userProfile.avatar;
     }
-    return raw ? formatAvatarUrl(raw) : null;
+    // Fallback to employee database official photo
+    if (!raw && userProfile?.photo) {
+      raw = userProfile.photo;
+    }
+    return raw ? formatAvatarUrl(raw, 400) : null;
   }, [inspectorNik, userProfile, syncTick]);
 
   // Real-time Global Portal Presence Registration
@@ -754,21 +751,8 @@ export default function App() {
           localStorage.setItem('p2h_inspector_profile', JSON.stringify(data.employee));
           if (data.employee.avatar) {
             localStorage.setItem(`p2h_inspector_avatar_${inspectorNik}`, data.employee.avatar);
-          } else {
-            // Lindungi foto sebelumnya: jangan pernah hapus cache avatar lokal jika backend belum memiliki foto!
-            // Justru sinkronkan kembali cache lokal ke backend agar foto tersimpan permanen
-            const localCached = localStorage.getItem(`p2h_inspector_avatar_${inspectorNik}`);
-            if (localCached && localCached.trim()) {
-              if (localCached.includes('drive.google.com') || localCached.includes('lh3.googleusercontent.com') || localCached.includes('/api/employees/photo/')) {
-                localStorage.removeItem(`p2h_inspector_avatar_${inspectorNik}`);
-              } else {
-                fetch('/api/employees/avatar', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ nik: inspectorNik, avatar: localCached.trim() })
-                }).catch(() => {});
-              }
-            }
+          } else if (data.employee.photo) {
+            localStorage.setItem(`p2h_inspector_avatar_${inspectorNik}`, data.employee.photo);
           }
           window.dispatchEvent(new Event('profile_updated'));
         }
