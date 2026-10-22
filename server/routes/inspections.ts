@@ -2718,6 +2718,7 @@ router.get("/api/inspection-schedule", async (req, res) => {
 
       const rosterToday = await getRosterToday(queryNik, queryName);
 
+      const isPublished = Boolean(portal ? true : (allSchedules && allSchedules.length > 0));
       return res.json({
         found: !!matched,
         schedule: matched || null,
@@ -2725,16 +2726,19 @@ router.get("/api/inspection-schedule", async (req, res) => {
         sheet: targetSheet,
         source: portal ? 'portal' : 'sheet',
         week: targetWeekTag,
-        totalScheduled: allSchedules.length
+        totalScheduled: allSchedules.length,
+        isPublished: isPublished && allSchedules.length > 0
       });
     }
 
+    const isPublished = Boolean(portal ? true : (allSchedules && allSchedules.length > 0));
     res.json({
       success: true,
       sheet: targetSheet,
       source: portal ? 'portal' : 'sheet',
       week: targetWeekTag,
       total: allSchedules.length,
+      isPublished: isPublished && allSchedules.length > 0,
       data: allSchedules,
       agendaShifts: portal ? portal.agendaShifts : (agendaShiftsBySheet.get(targetSheet.toLowerCase()) || [])
     });

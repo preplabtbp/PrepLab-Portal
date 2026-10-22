@@ -32,7 +32,9 @@ import {
 } from 'lucide-react';
 import { toPng } from 'html-to-image';
 import { toast } from 'sonner';
+import { useQuery } from '@tanstack/react-query';
 import { TardinessRecord, formatTardinessDateIndo } from './employee-tardiness-screen';
+import { parseGolonganLevel, checkIsGolonganI } from './RosterLeaveScheduleSheet';
 
 interface Props {
   records: TardinessRecord[];
@@ -104,8 +106,37 @@ export function EmployeeTardinessDiagram({
   // Filters inside diagram
   const [selectedSection, setSelectedSection] = useState(defaultSection);
   const [selectedShift, setSelectedShift] = useState('ALL');
+  const [selectedGolongan, setSelectedGolongan] = useState<'ALL' | 'STAFF' | 'CREW'>('ALL');
   const [searchTable, setSearchTable] = useState('');
   const [filterTableStatus, setFilterTableStatus] = useState<'ALL' | 'Masuk' | 'Pulang' | 'Warning'>('ALL');
+
+  // Master employees data for Golongan detection
+  const { data: employees = [] } = useQuery({
+    queryKey: ['employees-master-lite'],
+    queryFn: async (): Promise<any[]> => {
+      const r = await fetch('/api/employees');
+      const j = await r.json();
+      return Array.isArray(j) ? j : [];
+    },
+    staleTime: 10 * 60 * 1000,
+  });
+
+  const empByNik = useMemo(() => new Map(employees.map((e: any) => [String(e.nik || '').trim().toUpperCase(), e])), [employees]);
+  const empByName = useMemo(() => new Map(employees.map((e: any) => [String(e.nama || '').trim().toLowerCase(), e])), [employees]);
+
+  const isStaff = (r: TardinessRecord): boolean => {
+    const emp = (r.nik ? empByNik.get(r.nik.trim().toUpperCase()) : null) || empByName.get(r.name.trim().toLowerCase());
+    if (emp) {
+      if (checkIsGolonganI(emp)) return false;
+      const lvl = parseGolonganLevel(emp.gol || emp.golongan || emp.jobGrade, emp.jabatan || r.jabatan);
+      return lvl >= 2;
+    }
+    if (checkIsGolonganI({ jabatan: r.jabatan })) return false;
+    const lvl = parseGolonganLevel(null, r.jabatan);
+    return lvl >= 2;
+  };
+
+  const isCrew = (r: TardinessRecord): boolean => !isStaff(r);
 
   // Week Mode State (Monday - Sunday)
   const [currentMonday, setCurrentMonday] = useState<Date>(() => {
@@ -151,7 +182,7 @@ export function EmployeeTardinessDiagram({
     return availableYears[0] || String(new Date().getFullYear());
   });
 
-  // Filter records by Section & Shift
+  // Filter records by Section, Shift & Golongan (Staff / Crew)
   const baseFiltered = useMemo(() => {
     let result = records;
     if (selectedSection !== 'ALL') {
@@ -160,8 +191,13 @@ export function EmployeeTardinessDiagram({
     if (selectedShift !== 'ALL') {
       result = result.filter(r => (r.shift || '').toLowerCase().includes(selectedShift.toLowerCase()));
     }
+    if (selectedGolongan === 'STAFF') {
+      result = result.filter(r => isStaff(r));
+    } else if (selectedGolongan === 'CREW') {
+      result = result.filter(r => isCrew(r));
+    }
     return result;
-  }, [records, selectedSection, selectedShift]);
+  }, [records, selectedSection, selectedShift, selectedGolongan, empByNik, empByName]);
 
   // Pre-calculate monthly tardiness count for warning check (Key: `${name.toLowerCase()}__${month}`)
   const monthlyTardinessCountMap = useMemo(() => {
@@ -541,13 +577,37 @@ export function EmployeeTardinessDiagram({
           <select
             value={selectedSection}
             onChange={e => setSelectedSection(e.target.value)}
-            className="text-xs font-semibold px-2.5 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 focus:outline-none"
+            className="text-xs font-semibold px-2.5 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 focus:outline-none cursor-pointer"
           >
             <option value="ALL">Semua Section</option>
             <option value="Preparation">Preparation</option>
             <option value="Laboratory">Laboratory</option>
             <option value="Maintenance">Maintenance</option>
             <option value="Administration">Administration</option>
+          </select>
+
+          {/* Shift Filter */}
+          <select
+            value={selectedShift}
+            onChange={e => setSelectedShift(e.target.value)}
+            className="text-xs font-semibold px-2.5 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 focus:outline-none cursor-pointer"
+          >
+            <option value="ALL">Semua Shift</option>
+            <option value="Shift A">Shift A</option>
+            <option value="Shift B">Shift B</option>
+            <option value="Nonshift">Nonshift</option>
+          </select>
+
+          {/* Golongan Filter: Staff (Gol II-V) vs Crew (Gol I) */}
+          <select
+            value={selectedGolongan}
+            onChange={e => setSelectedGolongan(e.target.value as any)}
+            className="text-xs font-semibold px-2.5 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 focus:outline-none cursor-pointer font-bold"
+            title="Filter Golongan: Staff (Gol II-V) / Crew (Gol I)"
+          >
+            <option value="ALL">Semua Golongan</option>
+            <option value="STAFF">Staff (Gol II-V)</option>
+            <option value="CREW">Crew (Gol I)</option>
           </select>
 
           {/* Export PNG */}
@@ -583,6 +643,18 @@ export function EmployeeTardinessDiagram({
                  viewMode === 'month' ? `Periode Bulan ${MONTH_NAMES[parseInt(selectedMonthStr.split('-')[1], 10) - 1]} ${selectedMonthStr.split('-')[0]}` :
                  viewMode === 'year' ? `Periode Tahun ${selectedYearStr}` : 'Seluruh Database'}
               </span>
+              {selectedGolongan !== 'ALL' && (
+                <>
+                  <span className="text-xs text-slate-400">·</span>
+                  <span className={`text-[11px] font-bold px-2 py-0.5 rounded-md ${
+                    selectedGolongan === 'STAFF'
+                      ? 'text-indigo-700 bg-indigo-50 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800'
+                      : 'text-amber-700 bg-amber-50 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-200 dark:border-amber-800'
+                  }`}>
+                    {selectedGolongan === 'STAFF' ? 'Staff (Gol II-V)' : 'Crew (Gol I)'}
+                  </span>
+                </>
+              )}
             </div>
             <h2 className="text-lg sm:text-xl font-black text-slate-900 dark:text-white mt-1">
               Diagram Analitik Keterlambatan &amp; Pulang Cepat
@@ -871,8 +943,17 @@ export function EmployeeTardinessDiagram({
                         </td>
 
                         <td className="py-2 px-4">
-                          <div className="font-bold text-slate-900 dark:text-white">
-                            {r.name}
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-bold text-slate-900 dark:text-white">
+                              {r.name}
+                            </span>
+                            <span className={`text-[9.5px] font-bold px-1.5 py-0.2 rounded ${
+                              isStaff(r)
+                                ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200/80 dark:border-indigo-800'
+                                : 'bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-200/80 dark:border-amber-800'
+                            }`}>
+                              {isStaff(r) ? 'Staff (Gol II-V)' : 'Crew (Gol I)'}
+                            </span>
                           </div>
                           {r.jabatan && (
                             <div className="text-[10px] text-slate-500 dark:text-slate-400">
