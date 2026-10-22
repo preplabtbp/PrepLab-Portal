@@ -79,8 +79,12 @@ interface HubItem {
 function loadOrderedHubItems(section: string, type: 'info' | 'rules', defaultItems: HubItem[]): HubItem[] {
   try {
     const cleanSec = (section || 'general').toLowerCase().replace(/[^a-z0-9]+/g, '_');
+    const translatedCleanSec = (translateDisplayText(section) || 'general').toLowerCase().replace(/[^a-z0-9]+/g, '_');
     const key = `preplab_hub_custom_items_${cleanSec}_${type}`;
-    const raw = localStorage.getItem(key);
+    let raw = localStorage.getItem(key);
+    if (!raw && translatedCleanSec !== cleanSec) {
+      raw = localStorage.getItem(`preplab_hub_custom_items_${translatedCleanSec}_${type}`);
+    }
     if (raw) {
       const parsed: HubItem[] = JSON.parse(raw);
       if (Array.isArray(parsed) && parsed.length > 0) {
@@ -176,10 +180,14 @@ export function SectionHubDashboard({
   // State for Double-Click Inline Editing of Section Title & Font Color
   const getInitialTitleColor = (): string => {
     const cleanSec = (post?.title || 'general').toLowerCase().replace(/[^a-z0-9]+/g, '_');
+    const translatedCleanSec = (translateDisplayText(post?.title || '') || 'general').toLowerCase().replace(/[^a-z0-9]+/g, '_');
     const tagColor = (post?.tags || []).find((t: string) => t.startsWith('titleColor:'))?.replace('titleColor:', '');
     if (tagColor) return tagColor;
     try {
-      const cached = localStorage.getItem(`preplab_hub_title_color_${cleanSec}`);
+      let cached = localStorage.getItem(`preplab_hub_title_color_${cleanSec}`);
+      if (!cached && translatedCleanSec !== cleanSec) {
+        cached = localStorage.getItem(`preplab_hub_title_color_${translatedCleanSec}`);
+      }
       if (cached) return cached;
     } catch {}
     return '#0f172a';
@@ -229,7 +237,11 @@ export function SectionHubDashboard({
     }
 
     try {
+      const translatedCleanSec = (translateDisplayText(trimmed) || 'general').toLowerCase().replace(/[^a-z0-9]+/g, '_');
       localStorage.setItem(`preplab_hub_title_color_${cleanSec}`, editingTitleColor);
+      if (translatedCleanSec !== cleanSec) {
+        localStorage.setItem(`preplab_hub_title_color_${translatedCleanSec}`, editingTitleColor);
+      }
     } catch {}
 
     if (!post?.id) {

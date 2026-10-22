@@ -133,10 +133,47 @@ export function NotificationBell({ userNik, userName, onOpenP5mModal }: Notifica
     }
   };
 
+  // Smart Visibility-Aware HTTP Polling:
+  // - Polls every 45s when tab is active
+  // - Pauses completely when tab is hidden/minimized to allow Cloud Run to scale to 0
+  // - Fetches immediately upon returning to the tab
   useEffect(() => {
     fetchNotifications();
-    const interval = setInterval(fetchNotifications, 30000);
-    return () => clearInterval(interval);
+
+    let intervalId: any = null;
+
+    const startPolling = () => {
+      if (intervalId) clearInterval(intervalId);
+      intervalId = setInterval(fetchNotifications, 45000);
+    };
+
+    const stopPolling = () => {
+      if (intervalId) clearInterval(intervalId);
+      intervalId = null;
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        stopPolling();
+      } else {
+        fetchNotifications();
+        startPolling();
+      }
+    };
+
+    const handleFocus = () => {
+      fetchNotifications();
+    };
+
+    startPolling();
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      stopPolling();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocus);
+    };
   }, [userNik]);
 
   // Real-time Socket.IO listener for instant notification delivery

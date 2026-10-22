@@ -180,7 +180,7 @@ export default function ChatScreen({
     }
   }, [activeRoom]);
 
-  // Join room and load history when activeRoom changes
+  // Join room and load history when activeRoom changes, leave room and disconnect when unmounting
   useEffect(() => {
     fetchHistory(true);
     joinRoom(activeRoom, {
@@ -189,6 +189,9 @@ export default function ChatScreen({
       department: userProfile?.section || 'General',
       avatar: userProfile?.avatar || undefined
     });
+    return () => {
+      leaveRoom();
+    };
   }, [activeRoom, inspectorNik, inspectorName, userProfile, fetchHistory]);
 
   // Real-time Socket.IO listeners on singleton socket (resilient to reconnects)

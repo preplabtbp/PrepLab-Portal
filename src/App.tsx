@@ -354,12 +354,7 @@ export default function App() {
 
     registerPresence(user);
 
-    const pingInterval = setInterval(() => {
-      pingPresence();
-    }, 25000);
-
     return () => {
-      clearInterval(pingInterval);
       unregisterPresence();
     };
   }, [inspectorNik, inspectorName, userProfile, headerAvatar]);
