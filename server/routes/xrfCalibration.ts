@@ -1244,6 +1244,40 @@ export function invalidateXrfChartCache() {
   qcChartCache = null;
 }
 
+function normalizeXrfAnalyzedAt(rawAnalyzed?: string | null, batchDate?: string | null): string {
+  const clean = (rawAnalyzed || '').trim();
+  const dateStr = (batchDate || '').trim();
+  if (!clean) return dateStr || '';
+
+  // 1. Purely time "HH:mm" or "HH:mm:ss"
+  if (/^\d{1,2}:\d{2}(:\d{2})?$/.test(clean)) {
+    const timePad = clean.slice(0, 5).padStart(5, '0');
+    return dateStr ? `${dateStr} ${timePad}` : timePad;
+  }
+
+  // 2. "DD/MM/YY HH:mm" or "DD/MM/YYYY HH:mm" or "DD-MM-YYYY HH:mm"
+  const m = clean.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})(\s+(\d{1,2}:\d{2}(:\d{2})?))?$/);
+  if (m) {
+    let day = parseInt(m[1], 10);
+    let month = parseInt(m[2], 10);
+    let year = parseInt(m[3], 10);
+    if (year < 100) year = 2000 + year;
+    const timePart = m[5] ? m[5].slice(0, 5).padStart(5, '0') : '00:00';
+    return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')} ${timePart}`;
+  }
+
+  // 3. Already ISO "YYYY-MM-DD HH:mm"
+  if (/^\d{4}-\d{2}-\d{2}/.test(clean)) {
+    const parts = clean.split(/\s+/);
+    if (parts.length >= 2) {
+      return `${parts[0]} ${parts[1].slice(0, 5).padStart(5, '0')}`;
+    }
+    return parts[0];
+  }
+
+  return dateStr ? `${dateStr} ${clean}` : clean;
+}
+
 // 8. GET QC Control Chart Data (Gambar 6 & 4)
 // High-performance with in-memory cache and precomputed all-elements data
 xrfRouter.get("/qc-chart-data", async (req, res) => {
@@ -1454,21 +1488,35 @@ xrfRouter.get("/qc-chart-data", async (req, res) => {
             || groupedData.get(`${spaceStd}::${inst}`)
             || [];
 
-          const pointsForGrid = matchingRows.map((d, idx) => {
+          // Deduplikasi pintar: hindari double titik jika ada data impor ganda pada tanggal & nilai yang sama
+          const deduplicatedRows: typeof matchingRows = [];
+          const seenKeys = new Set<string>();
+
+          for (const d of matchingRows) {
             const val = getter(d);
-            const rawAnalyzed = (d.analyzedAt || '').trim();
-            let combinedAnalyzed = rawAnalyzed;
-            if (!rawAnalyzed) {
-              combinedAnalyzed = d.verificationDate || '';
-            } else if (/^\d{1,2}:\d{2}(:\d{2})?$/.test(rawAnalyzed) && d.verificationDate) {
-              combinedAnalyzed = `${d.verificationDate} ${rawAnalyzed}`.trim();
+            const valFixed = val !== null && val !== undefined ? Number(val).toFixed(4) : '0';
+            const normAnalyzed = normalizeXrfAnalyzedAt(d.analyzedAt, d.verificationDate);
+            const sampleClean = (d.sampleLabel || '').trim().toLowerCase();
+            
+            // Unique key per sample run
+            const dedupKey = `${normAnalyzed}::${sampleClean}::${valFixed}`;
+            if (seenKeys.has(dedupKey)) {
+              continue; // Abaikan duplicate data identik
             }
+            seenKeys.add(dedupKey);
+            deduplicatedRows.push(d);
+          }
+
+          const pointsForGrid = deduplicatedRows.map((d, idx) => {
+            const val = getter(d);
+            const normAnalyzed = normalizeXrfAnalyzedAt(d.analyzedAt, d.verificationDate);
+            const dateOnly = normAnalyzed.split(/\s+/)[0] || d.verificationDate;
             return {
               index: idx + 1,
               id: d.id,
-              date: d.verificationDate,
+              date: dateOnly,
               week: d.weekNo,
-              analyzedAt: combinedAnalyzed,
+              analyzedAt: normAnalyzed,
               value: val !== null && val !== undefined ? Number(val) : 0,
               status: d.itemStatus,
             };
@@ -2045,12 +2093,7 @@ xrfRouter.post("/bulk-import-paste", async (req, res) => {
           standardCode: it.standardCode,
           sampleLabel: it.sampleLabel || it.displayName || it.standardCode,
           sequenceNo: Number(it.sequenceNo) || (itemIdx + 1),
-          analyzedAt: (() => {
-            const raw = (it.analyzedAt || '').trim();
-            if (!raw) return `${vDate} ${vTime}`.trim();
-            if (/^\d{1,2}:\d{2}(:\d{2})?$/.test(raw)) return `${vDate} ${raw}`.trim();
-            return raw;
-          })(),
+          analyzedAt: normalizeXrfAnalyzedAt(it.analyzedAt, vDate),
           ni: Number(it.ni) || 0,
           co: Number(it.co) || 0,
           fe: Number(it.fe) || 0,
