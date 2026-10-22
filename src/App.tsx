@@ -489,11 +489,20 @@ export default function App() {
 
   const handleSwitchUniverse = (targetUniv: 'TBP' | 'GTS') => {
     if (!isDeveloper) return;
+    if (targetUniv === effectiveUniverse) return;
     setActiveUniverse(targetUniv);
     localStorage.setItem('portal_active_universe', targetUniv);
     localStorage.setItem('bulletin_active_universe', targetUniv);
     window.dispatchEvent(new CustomEvent('portal-universe-changed', { detail: { universe: targetUniv } }));
-    toast.success(`Beralih ke Universe ${targetUniv === 'GTS' ? 'PT. Gane Tambang Sentosa (GTS)' : 'PT. Trimegah Bangun Persada (TBP / GPS)'}`);
+    toast.loading(`Beralih ke Universe ${targetUniv === 'GTS' ? 'PT. Gane Tambang Sentosa (GTS)' : 'PT. Trimegah Bangun Persada (TBP / GPS)'}...`, { id: 'universe-switch' });
+    setTimeout(() => {
+      const currentPath = window.location.pathname;
+      if (currentPath.startsWith('/bulletin')) {
+        window.location.href = `/bulletin/${targetUniv}`;
+      } else {
+        window.location.reload();
+      }
+    }, 300);
   };
 
   const isAdminOrDeveloper = React.useMemo(() => {
