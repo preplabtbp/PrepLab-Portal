@@ -1332,9 +1332,9 @@ export function TbpDashboard({
                 <h1 className="text-2xl md:text-3xl font-display font-extrabold tracking-tight" style={{ color: 'var(--text-main, #ffffff)' }}>
                   {companyTitle}
                 </h1>
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold border bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/30 shadow-2xs">
-                  <VerifiedBadge size="xs" />
-                  VERIFIED SITE
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10.5px] font-extrabold border bg-sky-500/15 text-sky-700 dark:text-sky-300 border-sky-500/40 shadow-xs select-none">
+                  <span>VERIFIED SITE</span>
+                  <VerifiedBadge size={18} title="Verified Site Resmi PrepLab" />
                 </span>
               </div>
               <p className="text-xs tracking-wide" style={{ color: 'var(--text-muted, #94a3b8)' }}>

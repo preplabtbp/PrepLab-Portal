@@ -28,7 +28,7 @@ export const VerifiedBadge: React.FC<VerifiedBadgeProps> = ({
   };
 
   const resolvedSizeClass = typeof size === 'number' ? '' : (sizeMap[size] || sizeMap.sm);
-  const inlineStyle = typeof size === 'number' ? { width: size, height: size } : undefined;
+  const inlineStyle = typeof size === 'number' ? { width: size, height: size, minWidth: size, minHeight: size } : undefined;
 
   return (
     <span
