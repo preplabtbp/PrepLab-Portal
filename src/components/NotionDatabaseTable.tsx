@@ -67,7 +67,8 @@ import {
   ClipboardCheck,
 Link2,
   PlaneTakeoff,
-  Coffee
+  Coffee,
+  Clock
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Button } from './ui';
@@ -8920,6 +8921,15 @@ export function NotionDatabaseTable({
                                           window.location.href = `/safety-rekap?returnTo=${returnUrl}`;
                                           return;
                                         }
+                                        if (
+                                          (tLower.includes('keterlambatan') || tLower.includes('pulang cepat') || tLower.includes('tardiness')) &&
+                                          !tLower.includes('kta')
+                                        ) {
+                                          e.stopPropagation();
+                                          const returnUrl = encodeURIComponent(window.location.pathname + window.location.search);
+                                          window.location.href = `/keterlambatan?returnTo=${returnUrl}`;
+                                          return;
+                                        }
                                         if (!isEditingThis && onToggleExpand) {
                                           onToggleExpand(e);
                                         }
@@ -9132,7 +9142,12 @@ export function NotionDatabaseTable({
                                                 (taskText.includes('keterlambatan') && taskText.includes('kta')) ||
                                                 taskText.includes('rekap kta')
                                               );
-                                              const hasModuleShortcut = isLeaveShortcut || isOffShortcut || isPermissionShortcut || isTrainingShortcut || isInspectionScheduleShortcut || isSafetyRekapShortcut;
+                                              const isTardinessShortcut = (
+                                                taskText.includes('keterlambatan') ||
+                                                taskText.includes('pulang cepat') ||
+                                                taskText.includes('tardiness')
+                                              );
+                                              const hasModuleShortcut = isLeaveShortcut || isOffShortcut || isPermissionShortcut || isTrainingShortcut || isInspectionScheduleShortcut || isSafetyRekapShortcut || isTardinessShortcut;
 
                                               return (
                                                 <>
@@ -9235,6 +9250,23 @@ export function NotionDatabaseTable({
                                                       >
                                                         <ClipboardList className="w-2.5 h-2.5 text-amber-600 dark:text-amber-400" />
                                                         <span>Buka Rekap KTA/TTA</span>
+                                                      </button>
+                                                    )}
+
+                                                    {/* Quick Open Rekapan Keterlambatan & Pulang Cepat button */}
+                                                    {isTardinessShortcut && (
+                                                      <button
+                                                        type="button"
+                                                        onClick={(e) => {
+                                                          e.stopPropagation();
+                                                          const returnUrl = encodeURIComponent(window.location.pathname + window.location.search);
+                                                          window.location.href = `/keterlambatan?returnTo=${returnUrl}`;
+                                                        }}
+                                                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9.5px] font-bold bg-rose-500/15 hover:bg-rose-500/25 text-rose-700 dark:text-rose-300 border border-rose-500/30 transition-all cursor-pointer shadow-2xs shrink-0"
+                                                        title="Klik untuk membuka Modul Rekapan Keterlambatan & Pulang Cepat"
+                                                      >
+                                                        <Clock className="w-2.5 h-2.5 text-rose-600 dark:text-rose-400" />
+                                                        <span>Buka Rekap Keterlambatan</span>
                                                       </button>
                                                     )}
 
@@ -12267,6 +12299,42 @@ export function NotionDatabaseTable({
                           className="px-3.5 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs flex items-center gap-1.5 shrink-0 shadow-sm cursor-pointer"
                         >
                           <span>Buka Rekap KTA/TTA</span>
+                          <ChevronRight className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Integrated Rekapan Keterlambatan & Pulang Cepat Banner */}
+                    {selectedRow && (() => {
+                      const t = String(baseTopicTitle || '').toLowerCase();
+                      return (
+                        (t.includes('keterlambatan') || t.includes('pulang cepat') || t.includes('tardiness')) &&
+                        !t.includes('kta')
+                      );
+                    })() && (
+                      <div className="p-3.5 rounded-xl border border-rose-500/30 bg-rose-500/10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs mb-3">
+                        <div className="flex items-center gap-2.5">
+                          <div className="p-2 rounded-lg bg-rose-600 text-white shrink-0">
+                            <Clock className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <div className="text-xs font-bold text-rose-900 dark:text-rose-200">
+                              Modul Terhubung: Rekapan Keterlambatan &amp; Pulang Cepat
+                            </div>
+                            <div className="text-[11px] text-rose-700 dark:text-rose-300">
+                              Akses langsung rekapitulasi data keterlambatan finger masuk dan kepulangan cepat karyawan Preparation &amp; Laboratory.
+                            </div>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const returnUrl = encodeURIComponent(window.location.pathname + window.location.search);
+                            window.location.href = `/keterlambatan?returnTo=${returnUrl}`;
+                          }}
+                          className="px-3.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs flex items-center gap-1.5 shrink-0 shadow-sm cursor-pointer"
+                        >
+                          <span>Buka Rekap Keterlambatan</span>
                           <ChevronRight className="w-3.5 h-3.5" />
                         </button>
                       </div>

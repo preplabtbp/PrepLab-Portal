@@ -13,6 +13,7 @@ import { mealCounts, bungkusCount, MEAL_SLOT_BY_GROUP, type MealSlot } from '../
 import { MealBungkusStats } from './meal-bungkus-stats';
 import { MealBungkusRecipientsTable } from './meal-bungkus-recipients';
 import { EmployeeProfileExcelImportModal } from './EmployeeProfileExcelImportModal';
+import { parseGolonganLevel, checkIsGolonganI } from './RosterLeaveScheduleSheet';
 
 // ===== Orderan Makanan harian =====
 // Kolom mengikuti sheet order makan: Pagi/Sahur, Siang, Sore (Kantin & Lapangan), Takjil & Malam (Lapangan),
@@ -262,13 +263,6 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
   // Kebijakan: Jika cuti masih berjalan, tidak perlu diberikan Wajib Lapor (tetap kosong/null)
   const rows = useMemo(() => {
     return rawRows.map(r => {
-      const isCuti = String(r.status || '').toUpperCase() === 'CUTI' || String(r.shiftKerja || '').toUpperCase() === 'CUTI';
-      if (isCuti) {
-        return {
-          ...r,
-          keteranganLapor: null,
-        };
-      }
       if (isRowBelumLapor(r)) {
         return {
           ...r,
@@ -286,6 +280,13 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
           batchPagi: null,
           batchSore: null,
           catatan: null,
+        };
+      }
+      const isCuti = String(r.status || '').toUpperCase() === 'CUTI' || String(r.shiftKerja || '').toUpperCase() === 'CUTI';
+      if (isCuti) {
+        return {
+          ...r,
+          keteranganLapor: null,
         };
       }
       return r;
@@ -599,6 +600,47 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
     const fixed = ['No', 'NIK', 'Nama', 'Shift', 'Jenis Meal', 'Status'];
     const header1 = [...fixed, 'Kantin', '', '', 'Bungkusan', ...bungkusCols.slice(1).map(() => '')];
     const header2 = [...fixed.map(() => ''), 'Pagi', 'Siang', 'Sore', ...bungkusCols.map(c => c.label)];
+    const empByNik = new Map(employees.map((e: any) => [String(e.nik || '').trim().toUpperCase(), e]));
+    const empByName = new Map(employees.map((e: any) => [String(e.nama || '').trim().toLowerCase(), e]));
+
+    const isGolongan1To2 = (emp?: any, r?: MealOrder): boolean => {
+      const target = emp || r;
+      if (!target) return false;
+      if (checkIsGolonganI(target)) return true;
+      const rawGol = target.gol || target.golongan || target.jobGrade;
+      const rawJab = target.jabatan || target.position || target.role;
+      const level = parseGolonganLevel(rawGol, rawJab);
+      return level === 1 || level === 2;
+    };
+
+    const isGolongan2To5 = (emp?: any, r?: MealOrder): boolean => {
+      const target = emp || r;
+      if (!target) return false;
+      if (checkIsGolonganI(target)) return false;
+      const level = parseGolonganLevel(target.gol || target.golongan || target.jobGrade, target.jabatan || target.position);
+      return level >= 2 && level <= 5;
+    };
+
+    const isCRMess = (r: MealOrder, emp?: any): boolean => {
+      const sm = String(r.statusMess || emp?.statusMess || emp?.status_mess || '').trim().toUpperCase();
+      return sm === 'CR' || sm === 'MESS' || sm.includes('CR');
+    };
+
+    const isNRMess = (r: MealOrder, emp?: any): boolean => {
+      const sm = String(r.statusMess || emp?.statusMess || emp?.status_mess || '').trim().toUpperCase();
+      return sm === 'NR' || /^nr\b/i.test(sm) || sm.includes('NR');
+    };
+
+    const isResidenceNirwana = (r: MealOrder, emp?: any): boolean => {
+      const res = String(r.tempatTinggal || emp?.residence || emp?.tempatTinggal || emp?.tempat_tinggal || '').trim().toLowerCase();
+      return res.includes('nirwana');
+    };
+
+    const isResidenceKawasi = (r: MealOrder, emp?: any): boolean => {
+      const res = String(r.tempatTinggal || emp?.residence || emp?.tempatTinggal || emp?.tempat_tinggal || '').trim().toLowerCase();
+      return res.includes('kawasi');
+    };
+
     const body = list.map((r, i) => {
       // Status CS (Cuti Site) dianggap tetap On Duty di site, tidak ditaruh CS lagi di kolom Status
       const sk = String(r.statusKerja || '').trim();
@@ -636,17 +678,34 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
         }
       }
 
+      const isOff = statusExport === 'Off' ||
+                    /^off\b/i.test(sk) ||
+                    /^off\b/i.test(st) ||
+                    /^off\b/i.test(sh) ||
+                    /^off\b/i.test(cat);
+
+      const emp = empByNik.get(String(r.nik || '').trim().toUpperCase()) ||
+                  empByName.get(String(r.nama || '').trim().toLowerCase());
+      const isGol2To5 = isGolongan2To5(emp, r);
+      const isGol1To2 = isGolongan1To2(emp, r);
+      const isMessCR = isCRMess(r, emp);
+      const isMessNR = isNRMess(r, emp);
+      const isNirwanaOrKawasi = isResidenceNirwana(r, emp) || isResidenceKawasi(r, emp);
+
+      // Karyawan Gol II-V Mess CR saat Off tetap mendapatkan jatah makan di Kantin (Pagi, Siang, Sore)
+      const isOffWithMeal = isOff && isGol2To5 && isMessCR;
+
       // PERMINTAAN USER: ketika di orderan makanan ada Izin/Sakit maka Orderan makanan TETAP KOSONG pada Excel
-      const isAbsentWithoutMeal = isIzinOrSakit || statusExport === 'Cuti' || statusExport === 'Off';
+      const isAbsentWithoutMeal = isIzinOrSakit || statusExport === 'Cuti' || (isOff && !isOffWithMeal);
 
       const kantin = isAbsentWithoutMeal
         ? kantinSlots.map(() => '')
         : kantinSlots.map(s => {
             const count = mealCounts(r, s).makanKantin;
-            return count > 0 ? count : '';
+            return count > 0 ? count : (isOffWithMeal ? 1 : '');
           });
 
-      const bungkus = isAbsentWithoutMeal
+      const bungkus = isAbsentWithoutMeal || isOffWithMeal
         ? bungkusCols.map(() => '')
         : bungkusCols.map(c => {
             const count = bungkusOf(r, c.slot);
@@ -655,7 +714,20 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
 
       const hasKantin = kantin.some(v => typeof v === 'number' && v > 0);
       const hasBungkus = bungkus.some(v => typeof v === 'number' && v > 0);
-      const jenisMeal = isAbsentWithoutMeal ? '-' : (hasKantin || !hasBungkus ? 'Kantin' : 'Bungkusan');
+      const isCuti = statusExport === 'Cuti';
+
+      let jenisMeal = '-';
+      if (isCuti) {
+        jenisMeal = 'Bungkusan';
+      } else if (isOff && isGol1To2 && isMessNR && isNirwanaOrKawasi) {
+        jenisMeal = 'Bungkusan';
+      } else if (isOff && isGol2To5 && isMessCR) {
+        jenisMeal = 'Kantin';
+      } else if (isAbsentWithoutMeal) {
+        jenisMeal = '-';
+      } else {
+        jenisMeal = hasKantin || !hasBungkus ? 'Kantin' : 'Bungkusan';
+      }
 
       return [
         // Shift hanya Siang / Malam / Longshift: Nonshift, Cuti, Cuti Site, dll. → Siang

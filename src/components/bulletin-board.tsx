@@ -194,11 +194,11 @@ export function BulletinBoard({
     } catch {}
   }, [selectedPost]);
 
-  // Instantly load cached posts from localStorage to eliminate delay when entering section pages
+  // Instantly load cached posts from localStorage/sessionStorage to eliminate delay when entering section pages
   const [posts, setPosts] = useState<any[]>(() => {
     try {
       const cacheKey = `preplab_cached_bulletin_posts_${userPt || 'TBP'}`;
-      const cached = localStorage.getItem(cacheKey) || localStorage.getItem('preplab_cached_bulletin_posts_TBP');
+      const cached = localStorage.getItem(cacheKey) || localStorage.getItem('preplab_cached_bulletin_posts_TBP') || sessionStorage.getItem('preplab_cached_bulletin_posts');
       if (cached) {
         const parsed = JSON.parse(cached);
         if (Array.isArray(parsed) && parsed.length > 0) return parsed;
@@ -441,6 +441,7 @@ export function BulletinBoard({
             // Remove duplicate key to save localStorage quota
             localStorage.removeItem('preplab_cached_bulletin_posts');
             localStorage.setItem(`preplab_cached_bulletin_posts_${targetPt}`, JSON.stringify(allPosts));
+            sessionStorage.setItem("preplab_cached_bulletin_posts", JSON.stringify(allPosts));
           } catch (storageErr) {
             console.warn('[Bulletin] localStorage quota exceeded for posts cache, gracefully skipping');
             try {
@@ -726,6 +727,19 @@ export function BulletinBoard({
 
     setSelectedPost(freshPost);
     setIsEditing(false);
+
+    // If freshPost has numeric ID but content is missing or placeholder, fetch full content in background
+    if (freshPost?.id && typeof freshPost.id === 'number' && (!freshPost.content || freshPost.content.length < 50)) {
+      fetch(`/api/bulletin/${freshPost.id}`)
+        .then(res => res.json())
+        .then(json => {
+          if (json.status === 'success' && json.data?.content) {
+            setSelectedPost(json.data);
+            setPosts(prev => prev.map(p => p.id === json.data.id ? json.data : p));
+          }
+        })
+        .catch(() => {});
+    }
 
     try {
       if (freshPost?.id) {

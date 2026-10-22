@@ -1188,8 +1188,11 @@ export async function syncMealOrdersFromRoster(date: string, updatedBy = 'system
     const isTodayWorkOrOff = isWorkOrOffRosterStatus(rosterEmp.status);
 
     let effectiveKL: string | null | undefined = undefined;
-    if (isTodayCuti) {
-      // Kebijakan: Jika cuti masih berjalan tidak perlu diberikan Wajib Lapor
+    if (current && current.keteranganLapor && /belum\s*lapor|wajib\s*lapor/i.test(String(current.keteranganLapor))) {
+      // Admin secara eksplisit menandai Wajib Lapor / Belum Lapor pada orderan
+      effectiveKL = 'Wajib Lapor';
+    } else if (isTodayCuti) {
+      // Default: Jika cuti masih berjalan dan tidak ada tanda Wajib Lapor manual, biarkan null
       effectiveKL = null;
     } else if (current && current.keteranganLapor !== undefined) {
       effectiveKL = current.keteranganLapor;
@@ -1436,7 +1439,14 @@ export async function syncSingleEmployeeMealOrder(nik: string, dateStr: string, 
     }
 
     const isTodayCutiSingle = isCutiRosterStatus(rosterStatus) || String(rosterStatus || '').trim().toUpperCase() === 'CUTI';
-    const effectiveKLSingle = isTodayCutiSingle ? null : (current ? current.keteranganLapor : undefined);
+    let effectiveKLSingle: string | null | undefined = undefined;
+    if (current && current.keteranganLapor && /belum\s*lapor|wajib\s*lapor/i.test(String(current.keteranganLapor))) {
+      effectiveKLSingle = 'Wajib Lapor';
+    } else if (isTodayCutiSingle) {
+      effectiveKLSingle = null;
+    } else if (current) {
+      effectiveKLSingle = current.keteranganLapor;
+    }
 
     const computed = computeMealOrderByRoster(
       { ...emp, name: master?.nama || emp.name, statusMess: lockedStatusMess, shift: lockedShift, section: lockedSection, tempatTinggal: lockedTt, alamatDomisili: null, keteranganLapor: effectiveKLSingle },
@@ -1762,13 +1772,11 @@ mealOrdersRouter.get("/api/meal-orders", async (req, res) => {
           rows = await getMealOrderRowsWithLatestProfiles(date);
         } else {
           rows = dbRows.map(r => {
-            const isTodayCuti = isCutiRosterStatus(r.status) || isCutiRosterStatus(r.shiftKerja) || String(r.status || '').trim().toUpperCase() === 'CUTI' || String(r.shiftKerja || '').trim().toUpperCase() === 'CUTI';
-            const effectiveKL = isTodayCuti ? null : r.keteranganLapor;
-            const isLapor = effectiveKL && /belum\s*lapor|wajib\s*lapor/i.test(String(effectiveKL));
+            const isLapor = r.keteranganLapor && /belum\s*lapor|wajib\s*lapor/i.test(String(r.keteranganLapor));
             if (isLapor) {
               return {
                 ...r,
-                keteranganLapor: effectiveKL && /wajib/i.test(effectiveKL) ? 'Wajib Lapor' : effectiveKL,
+                keteranganLapor: 'Wajib Lapor',
                 pagiKantin: null,
                 pagiLapangan: null,
                 sahurKantin: null,
@@ -1784,6 +1792,7 @@ mealOrdersRouter.get("/api/meal-orders", async (req, res) => {
                 catatan: null,
               };
             }
+            const isTodayCuti = isCutiRosterStatus(r.status) || isCutiRosterStatus(r.shiftKerja) || String(r.status || '').trim().toUpperCase() === 'CUTI' || String(r.shiftKerja || '').trim().toUpperCase() === 'CUTI';
             if (isTodayCuti && r.keteranganLapor) {
               return { ...r, keteranganLapor: null };
             }

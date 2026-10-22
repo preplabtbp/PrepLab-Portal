@@ -835,7 +835,7 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
     return rawUrl;
   };
 
-  const getPdfDownloadUrl = (rawUrl: string) => {
+  const getPdfDownloadUrl = (rawUrl: string, title?: string) => {
     if (!rawUrl) return '';
     if (typeof rawUrl === 'string' && rawUrl.trim().startsWith('{')) {
       try {
@@ -845,9 +845,72 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
     }
     const driveId = extractDriveId(rawUrl);
     if (driveId) {
-      return `/api/drive/download/${driveId}`;
+      const safeTitle = (title || 'Laporan_Inspeksi').replace(/[^a-zA-Z0-9_\-\.]+/g, '_');
+      const filename = safeTitle.endsWith('.pdf') ? safeTitle : `${safeTitle}.pdf`;
+      return `/api/drive/download/${driveId}?filename=${encodeURIComponent(filename)}`;
     }
     return rawUrl;
+  };
+
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
+
+  const handleDownloadPdf = async (url: string, rawTitle?: string) => {
+    if (!url || url === '#' || url === '-') {
+      toast.error('Tautan PDF belum tersedia.');
+      return;
+    }
+    const driveId = extractDriveId(url);
+    const safeTitle = (rawTitle || 'Laporan_Inspeksi')
+      .replace(/[^a-zA-Z0-9_\-]+/g, '_')
+      .replace(/^_+|_+$/g, '');
+    const filename = safeTitle.toLowerCase().endsWith('.pdf') ? safeTitle : `${safeTitle}.pdf`;
+
+    setDownloadingPdf(true);
+    const toastId = toast.loading('Mengunduh berkas PDF...');
+    try {
+      const token = localStorage.getItem('token') || localStorage.getItem('auth_token') || sessionStorage.getItem('token');
+      const headers: Record<string, string> = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const res = await fetch(url, { headers });
+      if (!res.ok) {
+        if (driveId) {
+          window.open(`https://drive.google.com/uc?export=download&id=${driveId}`, '_blank');
+          toast.success('Membuka unduhan Google Drive...', { id: toastId });
+          return;
+        }
+        throw new Error(`Gagal mengunduh (Status ${res.status})`);
+      }
+
+      const blob = await res.blob();
+      // If server returned JSON error (e.g. 401 or html)
+      if (blob.type.includes('json') || (blob.type.includes('text') && blob.size < 1000)) {
+        if (driveId) {
+          window.open(`https://drive.google.com/uc?export=download&id=${driveId}`, '_blank');
+          toast.success('Membuka unduhan Google Drive...', { id: toastId });
+          return;
+        }
+      }
+
+      const blobUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => window.URL.revokeObjectURL(blobUrl), 1000);
+      toast.success('PDF berhasil diunduh!', { id: toastId });
+    } catch (err: any) {
+      if (driveId) {
+        window.open(`https://drive.google.com/uc?export=download&id=${driveId}`, '_blank');
+        toast.success('Membuka unduhan Google Drive...', { id: toastId });
+      } else {
+        toast.error('Gagal mengunduh: ' + err.message, { id: toastId });
+      }
+    } finally {
+      setDownloadingPdf(false);
+    }
   };
 
   const compressImage = (file: File): Promise<string> => {
@@ -1869,16 +1932,14 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
 
                                   {msg.pdfUrl && msg.pdfUrl !== '#' && (
                                     <>
-                                      <a
-                                        href={getPdfDownloadUrl(msg.pdfUrl)}
-                                        target="_blank"
-                                        rel="noreferrer"
-                                        download
+                                      <button
+                                        type="button"
+                                        onClick={() => handleDownloadPdf(getPdfDownloadUrl(msg.pdfUrl, msg.pdfTitle || msg.formTitle || 'Laporan_Inspeksi'), msg.pdfTitle || msg.formTitle || 'Laporan_Inspeksi')}
                                         className="p-1 px-2 rounded-lg bg-[var(--input-bg)] text-emerald-600 dark:text-emerald-400 border border-[var(--border-main)] text-[10px] font-bold flex items-center justify-center gap-1 hover:bg-[var(--bg-main)] transition-colors cursor-pointer"
                                         title="Unduh / Download Berkas PDF"
                                       >
                                         <Download className="w-3 h-3" />
-                                      </a>
+                                      </button>
                                       <a
                                         href={getPdfEmbedUrl(msg.pdfUrl)}
                                         target="_blank"
@@ -2997,7 +3058,7 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
           ? pdfModal.urlGps
           : pdfModal.url;
 
-        const downloadUrl = getPdfDownloadUrl(activePdfUrl);
+        const downloadUrl = getPdfDownloadUrl(activePdfUrl, pdfModal.title);
         const embedUrl = getPdfEmbedUrl(activePdfUrl);
         const hasBoth = Boolean(pdfModal.urlTbp && pdfModal.urlGps && pdfModal.urlTbp !== pdfModal.urlGps);
 
@@ -3061,17 +3122,16 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
 
                 <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
                   {/* DIRECT DOWNLOAD BUTTON */}
-                  <a
-                    href={downloadUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    download
-                    className="h-8 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white border border-emerald-500/30 text-[11px] font-bold flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
+                  <button
+                    type="button"
+                    onClick={() => handleDownloadPdf(downloadUrl, pdfModal.title)}
+                    disabled={downloadingPdf}
+                    className="h-8 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white border border-emerald-500/30 text-[11px] font-bold flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
                     title="Unduh / Download Berkas PDF ke Perangkat Anda"
                   >
-                    <Download className="w-3.5 h-3.5" />
-                    <span>Download PDF</span>
-                  </a>
+                    <Download className={`w-3.5 h-3.5 ${downloadingPdf ? 'animate-spin' : ''}`} />
+                    <span>{downloadingPdf ? 'Mengunduh...' : 'Download PDF'}</span>
+                  </button>
 
                   {/* BUKA TAB BARU */}
                   <a
@@ -3110,15 +3170,14 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
                     💡 Pratinjau PDF tidak muncul di ponsel?
                   </span>
                   <div className="flex items-center gap-2 shrink-0">
-                    <a
-                      href={downloadUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      download
-                      className="px-2.5 py-1 rounded-lg bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-300 border border-emerald-500/40 font-bold flex items-center gap-1 text-[11px] transition-colors"
+                    <button
+                      type="button"
+                      onClick={() => handleDownloadPdf(downloadUrl, pdfModal.title)}
+                      disabled={downloadingPdf}
+                      className="px-2.5 py-1 rounded-lg bg-emerald-600/30 hover:bg-emerald-600/50 disabled:opacity-50 text-emerald-300 border border-emerald-500/40 font-bold flex items-center gap-1 text-[11px] transition-colors cursor-pointer"
                     >
-                      <Download className="w-3 h-3" /> Unduh PDF
-                    </a>
+                      <Download className={`w-3 h-3 ${downloadingPdf ? 'animate-spin' : ''}`} /> {downloadingPdf ? 'Mengunduh...' : 'Unduh PDF'}
+                    </button>
                   </div>
                 </div>
               </div>

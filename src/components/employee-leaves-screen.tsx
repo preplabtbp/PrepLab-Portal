@@ -2336,16 +2336,13 @@ export function EmployeeLeavesScreen({
                         {rowNumber}
                       </td>
 
-                      {/* Karyawan (Name & NIK) */}
+                      {/* Karyawan (Name & Jabatan) */}
                       <td className="py-3 px-3.5">
                         <div className="font-bold text-slate-900 dark:text-white leading-tight">
                           {item.name}
                         </div>
                         <div className="flex items-center gap-1.5 mt-0.5">
-                          <span className="text-[10px] text-slate-500 font-mono bg-slate-100 dark:bg-slate-800 px-1 rounded">
-                            {item.nik}
-                          </span>
-                          <span className="text-[10px] text-slate-400 truncate max-w-[140px]">
+                          <span className="text-[10px] text-slate-400 truncate max-w-[180px]">
                             {item.jabatan}
                           </span>
                         </div>
