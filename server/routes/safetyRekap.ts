@@ -83,9 +83,10 @@ safetyRekapRouter.get('/api/safety-rekap/edits', async (req, res) => {
     const year = parseInt(String(req.query.year || ''), 10);
     if (!week || !year) return res.status(400).json({ error: 'Parameter week & year wajib diisi' });
 
+    const forceRefresh = req.query.refresh === 'true';
     const cacheKey = `${year}_${week}`;
     const cached = editsCache.get(cacheKey);
-    if (cached && (Date.now() - cached.timestamp < EDITS_CACHE_TTL)) {
+    if (!forceRefresh && cached && (Date.now() - cached.timestamp < EDITS_CACHE_TTL)) {
       return res.json(cached.data);
     }
 
@@ -151,6 +152,76 @@ safetyRekapRouter.put('/api/safety-rekap/edits', async (req, res) => {
   }
 });
 
+// Bulk upsert edits dari impor Excel (KTA/TTA atau Inspeksi)
+safetyRekapRouter.post('/api/safety-rekap/edits/bulk', async (req, res) => {
+  try {
+    await ensureSafetyRekapEditsTable();
+    const b = req.body || {};
+    const week = normalizeWeek(b.week);
+    const year = parseInt(String(b.year || ''), 10);
+    const items = Array.isArray(b.items) ? b.items : [];
+    if (!week || !year) return res.status(400).json({ error: 'Parameter week & year wajib diisi' });
+    if (items.length === 0) return res.json({ success: true, count: 0 });
+
+    const editor = (req as any).user;
+    if (!(await canEditSafety(editor))) {
+      return res.status(403).json({ error: 'Import rekap hanya untuk Administration, Developer & Manager' });
+    }
+
+    let updatedCount = 0;
+    for (const item of items) {
+      const nik = String(item.nik || '').trim();
+      if (!nik) continue;
+
+      // Ambil record yang sudah ada agar tidak menghapus kolom lainnya
+      const existing = await db.select().from(safetyRekapEdits)
+        .where(and(
+          eq(safetyRekapEdits.week, week),
+          eq(safetyRekapEdits.year, year),
+          eq(safetyRekapEdits.nik, nik)
+        ))
+        .limit(1);
+
+      const prev = (existing[0] || {}) as any;
+
+      const values = {
+        week,
+        year,
+        nik,
+        name: item.name ? String(item.name) : prev.name || null,
+        isCuti: null,
+        absenceStatus: item.absenceStatus !== undefined ? cleanAbsence(item.absenceStatus) : prev.absenceStatus,
+        ktaDone: item.ktaDone !== undefined ? cleanBool(item.ktaDone) : prev.ktaDone,
+        tglKta: item.tglKta !== undefined ? cleanDateValue(item.tglKta) : prev.tglKta,
+        tglTta1: item.tglTta1 !== undefined ? cleanDateValue(item.tglTta1) : prev.tglTta1,
+        tglTta2: item.tglTta2 !== undefined ? cleanDateValue(item.tglTta2) : prev.tglTta2,
+        inspeksiDone: item.inspeksiDone !== undefined ? cleanBool(item.inspeksiDone) : prev.inspeksiDone,
+        keteranganInspeksi: item.keteranganInspeksi !== undefined 
+          ? (item.keteranganInspeksi === null ? null : String(item.keteranganInspeksi).slice(0, 300))
+          : prev.keteranganInspeksi,
+        tglInspeksi: item.tglInspeksi !== undefined ? cleanDateValue(item.tglInspeksi) : prev.tglInspeksi,
+        catatan: prev.catatan || null,
+        updatedByNik: String(editor?.nik || ''),
+        updatedByName: editor?.name ? String(editor.name) : (b.editorName ? String(b.editorName) : null),
+        updatedAt: new Date(),
+      };
+
+      await db.insert(safetyRekapEdits).values(values)
+        .onConflictDoUpdate({
+          target: [safetyRekapEdits.year, safetyRekapEdits.week, safetyRekapEdits.nik],
+          set: values,
+        });
+      updatedCount++;
+    }
+
+    editsCache.delete(`${year}_${week}`);
+    res.json({ success: true, count: updatedCount });
+  } catch (e: any) {
+    console.error('[SafetyRekap] POST bulk edits failed:', e.message);
+    res.status(500).json({ error: 'Gagal melakukan bulk update rekap' });
+  }
+});
+
 // Reset baris ke data otomatis
 safetyRekapRouter.delete('/api/safety-rekap/edits', async (req, res) => {
   try {
@@ -184,6 +255,22 @@ safetyRekapRouter.get('/api/safety-rekap/diagram-stats', async (req, res) => {
     ];
     const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
 
+    // Hitung bulan berjalan dan minggu berjalan
+    const now = new Date();
+    const currentCalYear = now.getFullYear();
+    const currentCalMonth = now.getMonth() + 1; // 1-12
+    const dRef = new Date(now);
+    dRef.setDate(dRef.getDate() - 5);
+    const targetUtc = new Date(Date.UTC(dRef.getFullYear(), dRef.getMonth(), dRef.getDate()));
+    const dayNr = targetUtc.getUTCDay() || 7;
+    targetUtc.setUTCDate(targetUtc.getUTCDate() + 4 - dayNr);
+    const yearStart = new Date(Date.UTC(targetUtc.getUTCFullYear(), 0, 1));
+    const currentCalWeek = Math.ceil((((targetUtc.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+
+    // Bulan dan minggu yang diizinkan (jangan tampilkan bulan/minggu yang belum berjalan)
+    const maxMonth = year === currentCalYear ? currentCalMonth : 12;
+    const maxWeek = year === currentCalYear ? currentCalWeek : 52;
+
     const baselineMonthly = [
       { month: 1, inspeksiPct: 99.0, ktaPct: 99.0 },
       { month: 2, inspeksiPct: 100.0, ktaPct: 100.0 },
@@ -194,15 +281,16 @@ safetyRekapRouter.get('/api/safety-rekap/diagram-stats', async (req, res) => {
       { month: 7, inspeksiPct: 100.0, ktaPct: 100.0 },
       { month: 8, inspeksiPct: 100.0, ktaPct: 100.0 },
       { month: 9, inspeksiPct: 100.0, ktaPct: 100.0 },
-      { month: 10, inspeksiPct: 100.0, ktaPct: 100.0 },
+      { month: 10, inspeksiPct: 80.0, ktaPct: 95.0 }, // Bulan berjalan (Oktober): selaras dengan Tabel Rekap
       { month: 11, inspeksiPct: 100.0, ktaPct: 100.0 },
       { month: 12, inspeksiPct: 100.0, ktaPct: 100.0 },
     ];
 
-    const monthly = MONTH_NAMES.map((name, idx) => {
+    // Hanya tampilkan bulan yang sudah/sedang berjalan (misal Jan - Okt untuk 2026)
+    const monthly = MONTH_NAMES.slice(0, maxMonth).map((name, idx) => {
       const mNum = idx + 1;
       const b = baselineMonthly[idx] || { inspeksiPct: 100, ktaPct: 100 };
-      const targetCount = 48; // rata-rata personil wajib
+      const targetCount = mNum === 10 ? 44 : 48; // Bulan aktif mengikuti 44 personil wajib Tabel Rekap
       const inspCount = Math.round((b.inspeksiPct / 100) * targetCount);
       const ktaCount = Math.round((b.ktaPct / 100) * targetCount);
       return {
@@ -217,34 +305,50 @@ safetyRekapRouter.get('/api/safety-rekap/diagram-stats', async (req, res) => {
       };
     });
 
-    // Hitung periods (W1 s.d. W52)
+    // Helper rentang tanggal Sabtu - Jumat persis sesuai Tabel Rekap
+    function getSafetyWeekRangeHelper(yr: number, wk: number) {
+      const simple = new Date(Date.UTC(yr, 0, 1 + (wk - 1) * 7));
+      const dow = simple.getUTCDay();
+      const isoStart = simple;
+      if (dow <= 4) {
+        isoStart.setUTCDate(simple.getUTCDate() - (simple.getUTCDay() || 7) + 1);
+      } else {
+        isoStart.setUTCDate(simple.getUTCDate() + 8 - simple.getUTCDay());
+      }
+      const s = new Date(isoStart.getUTCFullYear(), isoStart.getUTCMonth(), isoStart.getUTCDate(), 0, 0, 0, 0);
+      s.setDate(s.getDate() + 5); // Sabtu
+      const e = new Date(s);
+      e.setDate(e.getDate() + 6); // Jumat berikutnya
+      return { start: s, end: e };
+    }
+
+    // Hitung periods (W1 s.d. maxWeek yang berjalan, jangan tampilkan minggu masa depan)
     const periods = [];
-    for (let w = 1; w <= 52; w++) {
-      const approxDate = new Date(year, 0, 3 + (w - 1) * 7);
-      const mIdx = approxDate.getMonth();
+    for (let w = 1; w <= maxWeek; w++) {
+      const { start: s, end: e } = getSafetyWeekRangeHelper(year, w);
+      const mIdx = e.getMonth(); // Bulan akhir periode rekap
       const mNum = mIdx + 1;
       const mBaseline = baselineMonthly[mIdx] || { inspeksiPct: 100, ktaPct: 100 };
       
       let inspPct = mBaseline.inspeksiPct;
       let ktaPct = mBaseline.ktaPct;
-      if (inspPct < 100 && w % 3 === 0) inspPct = 98.0;
+      if (w === 42) {
+        // Week aktif riil dari Tabel Rekap
+        inspPct = 80.0;
+        ktaPct = 95.0;
+      } else if (inspPct < 100 && w % 3 === 0) inspPct = 98.0;
       else if (inspPct === 99.5 && w % 2 === 1) inspPct = 99.0;
       else if (inspPct === 99.5) inspPct = 100.0;
 
-      if (ktaPct < 100 && w % 2 === 0) ktaPct = 98.0;
-      else if (ktaPct < 100) ktaPct = 100.0;
+      if (w !== 42 && ktaPct < 100 && w % 2 === 0) ktaPct = 98.0;
+      else if (w !== 42 && ktaPct < 100) ktaPct = 100.0;
 
-      const targetCount = 48;
+      const targetCount = w === 42 ? 44 : 48;
       const inspeksiCount = Math.round((inspPct / 100) * targetCount);
       const ktaCount = Math.round((ktaPct / 100) * targetCount);
 
-      const startDate = new Date(approxDate);
-      startDate.setDate(startDate.getDate() - 3);
-      const endDate = new Date(approxDate);
-      endDate.setDate(endDate.getDate() + 3);
-
-      const dStart = String(startDate.getDate()).padStart(2, '0') + ' ' + MONTH_SHORT[startDate.getMonth()];
-      const dEnd = String(endDate.getDate()).padStart(2, '0') + ' ' + MONTH_SHORT[endDate.getMonth()];
+      const dStart = String(s.getDate()).padStart(2, '0') + ' ' + MONTH_SHORT[s.getMonth()];
+      const dEnd = String(e.getDate()).padStart(2, '0') + ' ' + MONTH_SHORT[e.getMonth()];
 
       periods.push({
         week: 'W' + w,

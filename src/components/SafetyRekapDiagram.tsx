@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { toPng } from 'html-to-image';
 import * as XLSX from 'xlsx';
+import { getRekapWeekRange, getRekapWeek, MONTHS_SHORT } from '../utils/safety-week';
 
 export interface DiagramItem {
   label: string;
@@ -126,12 +127,18 @@ function ClusteredSapChart({
   const paddingBottom = 60; // Ruang untuk label kategori & indikator status
   const plotHeight = chartHeight - paddingTop - paddingBottom; // ~265px
 
-  const barWidth = items.length > 25 ? 14 : items.length > 15 ? 20 : 30;
-  const barGap = 4; // Jarak antara bar Inspeksi & Hazard Report
-  const groupPadding = items.length > 25 ? 20 : items.length > 15 ? 30 : 54;
+  const isSingle = items.length === 1;
+  const isFew = items.length <= 4;
+  const barWidth = isSingle ? 56 : isFew ? 42 : items.length > 25 ? 14 : items.length > 15 ? 20 : 30;
+  const barGap = isSingle ? 14 : isFew ? 8 : 4; // Jarak antara bar Inspeksi & Hazard Report
+  const groupPadding = isSingle ? 80 : isFew ? 60 : items.length > 25 ? 20 : items.length > 15 ? 30 : 54;
   const groupWidth = barWidth * 2 + barGap;
-  const totalPlotWidth = items.length * (groupWidth + groupPadding) + 60;
+  const contentWidth = items.length * (groupWidth + groupPadding);
+  const totalPlotWidth = contentWidth + 80;
   const totalSvgWidth = Math.max(960, totalPlotWidth);
+
+  // Pusatkan tabung diagram tepat di sumbu tengah kanvas SVG
+  const leftOffset = Math.max(40, (totalSvgWidth - contentWidth) / 2);
 
   const axisY = paddingTop + plotHeight;
 
@@ -290,27 +297,25 @@ function ClusteredSapChart({
 
             {/* Garis Dasar Sumbu X (Garis Teal solid tebal khas referensi) */}
             <line
-              x1={30}
+              x1={Math.max(20, leftOffset - (isSingle ? 140 : 30))}
               y1={axisY}
-              x2={totalSvgWidth - 30}
-              y2={axisY}
+              x2={Math.min(totalSvgWidth - 20, leftOffset + contentWidth + (isSingle ? 140 : 30))}
               stroke="#24A1B2"
               strokeWidth="2.5"
             />
 
             {/* Garis Target Acuan 100% (Garis Dotted Teal seperti separator di foto) */}
             <line
-              x1={30}
+              x1={Math.max(20, leftOffset - (isSingle ? 140 : 30))}
               y1={paddingTop}
-              x2={totalSvgWidth - 30}
-              y2={paddingTop}
+              x2={Math.min(totalSvgWidth - 20, leftOffset + contentWidth + (isSingle ? 140 : 30))}
               stroke="#24A1B2"
               strokeDasharray="4 4"
               strokeWidth="1.5"
               opacity="0.85"
             />
             <text
-              x={totalSvgWidth - 25}
+              x={Math.min(totalSvgWidth - 15, leftOffset + contentWidth + (isSingle ? 145 : 35))}
               y={paddingTop + 3}
               textAnchor="start"
               fill="#24A1B2"
@@ -322,7 +327,7 @@ function ClusteredSapChart({
 
             {/* Loop Tiap Kategori (Bulan / Periode) */}
             {items.map((item, idx) => {
-              const startX = 50 + idx * (groupWidth + groupPadding) + groupPadding / 2;
+              const startX = leftOffset + idx * (groupWidth + groupPadding) + groupPadding / 2;
               const inspeksiX = startX;
               const ktaX = startX + barWidth + barGap;
               const groupCenterX = startX + groupWidth / 2;
@@ -337,11 +342,20 @@ function ClusteredSapChart({
               const isInspHover = hoveredIdx?.itemIdx === idx && hoveredIdx?.type === 'inspeksi';
               const isKtaHover = hoveredIdx?.itemIdx === idx && hoveredIdx?.type === 'kta';
 
+              // Deteksi kedekatan vertikal: jika nilai hampir sama & bukan mode single, gabung ke twin capsule agar angka tidak tumpang tindih
+              const isCloseY = Math.abs(inspY - ktaY) < 18;
+              const useCombinedBadge = isCloseY && !isSingle;
+
               // Dimensi 3D
               const depth3D = 8;
 
               return (
-                <g key={item.label + idx} onClick={() => onItemClick?.(item)} className={onItemClick ? "cursor-pointer group" : ""}>
+                <g
+                  key={item.label + idx}
+                  onClick={() => onItemClick?.(item)}
+                  className={onItemClick ? "cursor-pointer group" : ""}
+                  style={{ transition: 'all 0.4s cubic-bezier(0.16, 1, 0.3, 1)' }}
+                >
                   {/* Dotted separator antara bulan / periode seperti di foto referensi */}
                   {idx > 0 && (
                     <line
@@ -391,7 +405,7 @@ function ClusteredSapChart({
                         fill="#F8FAFC"
                         stroke="#E2E8F0"
                         strokeWidth="1"
-                        className="dark:fill-slate-800 dark:stroke-slate-700"
+                        className="dark:fill-slate-800 dark:stroke-slate-700 transition-all duration-300"
                       />
                       <rect
                         x={ktaX}
@@ -402,7 +416,7 @@ function ClusteredSapChart({
                         fill="#F8FAFC"
                         stroke="#E2E8F0"
                         strokeWidth="1"
-                        className="dark:fill-slate-800 dark:stroke-slate-700"
+                        className="dark:fill-slate-800 dark:stroke-slate-700 transition-all duration-300"
                       />
 
                       {/* Batang Isi Inspeksi (Kapsul Gradien Golden Amber) */}
@@ -414,7 +428,7 @@ function ClusteredSapChart({
                         rx={barWidth / 2}
                         fill="url(#inspGradient)"
                         filter={isInspHover ? 'url(#softGlow)' : undefined}
-                        className="cursor-pointer transition-all duration-200"
+                        className="cursor-pointer transition-all duration-300"
                         onMouseEnter={() => setHoveredIdx({ itemIdx: idx, type: 'inspeksi' })}
                         onMouseLeave={() => setHoveredIdx(null)}
                       />
@@ -428,62 +442,104 @@ function ClusteredSapChart({
                         rx={barWidth / 2}
                         fill="url(#ktaGradient)"
                         filter={isKtaHover ? 'url(#softGlow)' : undefined}
-                        className="cursor-pointer transition-all duration-200"
+                        className="cursor-pointer transition-all duration-300"
                         onMouseEnter={() => setHoveredIdx({ itemIdx: idx, type: 'kta' })}
                         onMouseLeave={() => setHoveredIdx(null)}
                       />
 
-                      {/* Floating Badge Tag Inspeksi di Puncak Batang (Border Golden Amber) */}
-                      <g transform={`translate(${inspeksiX + barWidth / 2}, ${inspY - 14})`}>
-                        <rect
-                          x={-19}
-                          y={-10}
-                          width={38}
-                          height={18}
-                          rx={9}
-                          fill="#FFFFFF"
-                          stroke="#F5A623"
-                          strokeWidth="1.8"
-                          filter="url(#badgeShadow)"
-                        />
-                        <text
-                          x={0}
-                          y={2.5}
-                          textAnchor="middle"
-                          fill="#D68910"
-                          fontSize="9.5"
-                          fontWeight="900"
-                          fontFamily="system-ui, -apple-system, sans-serif"
-                        >
-                          {formatIndoPct(item.inspeksiPct)}
-                        </text>
-                      </g>
+                      {/* DATA LABELS / FLOATING BADGES ANTI-TABRAKAN */}
+                      {useCombinedBadge ? (
+                        /* Twin Capsule Badge Elegan di Tengah: Bebas Tabrakan 100% */
+                        <g transform={`translate(${groupCenterX}, ${Math.min(inspY, ktaY) - 15})`} filter="url(#badgeShadow)">
+                          <rect
+                            x={-39}
+                            y={-10}
+                            width={78}
+                            height={20}
+                            rx={10}
+                            fill="#FFFFFF"
+                            stroke="#24A1B2"
+                            strokeWidth="1.5"
+                          />
+                          <line x1={0} y1={-6} x2={0} y2={6} stroke="#CBD5E1" strokeWidth="1" />
+                          <text
+                            x={-19}
+                            y={3.5}
+                            textAnchor="middle"
+                            fill="#D68910"
+                            fontSize="9"
+                            fontWeight="900"
+                            fontFamily="system-ui, -apple-system, sans-serif"
+                          >
+                            {formatIndoPct(item.inspeksiPct)}
+                          </text>
+                          <text
+                            x={19}
+                            y={3.5}
+                            textAnchor="middle"
+                            fill="#166974"
+                            fontSize="9"
+                            fontWeight="900"
+                            fontFamily="system-ui, -apple-system, sans-serif"
+                          >
+                            {formatIndoPct(item.ktaPct)}
+                          </text>
+                        </g>
+                      ) : (
+                        <>
+                          {/* Floating Badge Tag Inspeksi di Puncak Batang (Border Golden Amber) */}
+                          <g transform={`translate(${inspeksiX + barWidth / 2}, ${inspY - 14})`}>
+                            <rect
+                              x={-19}
+                              y={-10}
+                              width={38}
+                              height={18}
+                              rx={9}
+                              fill="#FFFFFF"
+                              stroke="#F5A623"
+                              strokeWidth="1.8"
+                              filter="url(#badgeShadow)"
+                            />
+                            <text
+                              x={0}
+                              y={2.5}
+                              textAnchor="middle"
+                              fill="#D68910"
+                              fontSize="9.5"
+                              fontWeight="900"
+                              fontFamily="system-ui, -apple-system, sans-serif"
+                            >
+                              {formatIndoPct(item.inspeksiPct)}
+                            </text>
+                          </g>
 
-                      {/* Floating Badge Tag Hazard Report di Puncak Batang (Border Ocean Teal) */}
-                      <g transform={`translate(${ktaX + barWidth / 2}, ${ktaY - 14})`}>
-                        <rect
-                          x={-19}
-                          y={-10}
-                          width={38}
-                          height={18}
-                          rx={9}
-                          fill="#FFFFFF"
-                          stroke="#24A1B2"
-                          strokeWidth="1.8"
-                          filter="url(#badgeShadow)"
-                        />
-                        <text
-                          x={0}
-                          y={2.5}
-                          textAnchor="middle"
-                          fill="#166974"
-                          fontSize="9.5"
-                          fontWeight="900"
-                          fontFamily="system-ui, -apple-system, sans-serif"
-                        >
-                          {formatIndoPct(item.ktaPct)}
-                        </text>
-                      </g>
+                          {/* Floating Badge Tag Hazard Report di Puncak Batang (Border Ocean Teal) */}
+                          <g transform={`translate(${ktaX + barWidth / 2}, ${ktaY - 14})`}>
+                            <rect
+                              x={-19}
+                              y={-10}
+                              width={38}
+                              height={18}
+                              rx={9}
+                              fill="#FFFFFF"
+                              stroke="#24A1B2"
+                              strokeWidth="1.8"
+                              filter="url(#badgeShadow)"
+                            />
+                            <text
+                              x={0}
+                              y={2.5}
+                              textAnchor="middle"
+                              fill="#166974"
+                              fontSize="9.5"
+                              fontWeight="900"
+                              fontFamily="system-ui, -apple-system, sans-serif"
+                            >
+                              {formatIndoPct(item.ktaPct)}
+                            </text>
+                          </g>
+                        </>
+                      )}
                     </>
                   )}
 
@@ -552,31 +608,56 @@ function ClusteredSapChart({
                         onMouseLeave={() => setHoveredIdx(null)}
                       />
 
-                      {/* Label Angka 3D di Atas Kolom */}
-                      <g transform={`translate(${inspeksiX + barWidth / 2 + depth3D / 2}, ${inspY - depth3D - 8})`}>
-                        <text
-                          x={0}
-                          y={0}
-                          textAnchor="middle"
-                          fill="#D68910"
-                          fontSize="10"
-                          fontWeight="bold"
-                        >
-                          {formatIndoPct(item.inspeksiPct)}
-                        </text>
-                      </g>
-                      <g transform={`translate(${ktaX + barWidth / 2 + depth3D / 2}, ${ktaY - depth3D - 8})`}>
-                        <text
-                          x={0}
-                          y={0}
-                          textAnchor="middle"
-                          fill="#166974"
-                          fontSize="10"
-                          fontWeight="bold"
-                        >
-                          {formatIndoPct(item.ktaPct)}
-                        </text>
-                      </g>
+                      {/* Label Angka 3D di Atas Kolom (Bebas Tabrakan) */}
+                      {useCombinedBadge ? (
+                        <g transform={`translate(${groupCenterX + depth3D / 2}, ${Math.min(inspY, ktaY) - depth3D - 8})`}>
+                          <rect
+                            x={-36}
+                            y={-9}
+                            width={72}
+                            height={18}
+                            rx={9}
+                            fill="#FFFFFF"
+                            stroke="#24A1B2"
+                            strokeWidth="1.2"
+                            filter="url(#badgeShadow)"
+                          />
+                          <line x1={0} y1={-5} x2={0} y2={5} stroke="#CBD5E1" strokeWidth="1" />
+                          <text x={-18} y={3} textAnchor="middle" fill="#D68910" fontSize="9" fontWeight="900">
+                            {formatIndoPct(item.inspeksiPct)}
+                          </text>
+                          <text x={18} y={3} textAnchor="middle" fill="#166974" fontSize="9" fontWeight="900">
+                            {formatIndoPct(item.ktaPct)}
+                          </text>
+                        </g>
+                      ) : (
+                        <>
+                          <g transform={`translate(${inspeksiX + barWidth / 2 + depth3D / 2}, ${inspY - depth3D - 8})`}>
+                            <text
+                              x={0}
+                              y={0}
+                              textAnchor="middle"
+                              fill="#D68910"
+                              fontSize={isSingle ? "13" : "10"}
+                              fontWeight="bold"
+                            >
+                              {formatIndoPct(item.inspeksiPct)}
+                            </text>
+                          </g>
+                          <g transform={`translate(${ktaX + barWidth / 2 + depth3D / 2}, ${ktaY - depth3D - 8})`}>
+                            <text
+                              x={0}
+                              y={0}
+                              textAnchor="middle"
+                              fill="#166974"
+                              fontSize={isSingle ? "13" : "10"}
+                              fontWeight="bold"
+                            >
+                              {formatIndoPct(item.ktaPct)}
+                            </text>
+                          </g>
+                        </>
+                      )}
                     </>
                   )}
 
@@ -702,25 +783,25 @@ function ClusteredSapChart({
         )}
       </div>
 
-      {/* ── TOOLTIP HOVER INTERAKTIF ── */}
+      {/* ── TOOLTIP HOVER INTERAKTIF (CLEAN LIGHT THEME) ── */}
       {hoveredIdx !== null && items[hoveredIdx.itemIdx] && (
-        <div className="mt-5 p-3.5 rounded-2xl bg-slate-900 text-white text-xs flex flex-wrap items-center justify-between gap-3 shadow-xl animate-in fade-in duration-150 border-l-4" style={{ borderColor: hoveredIdx.type === 'inspeksi' ? '#F5A623' : '#24A1B2' }}>
+        <div className="mt-5 p-3.5 rounded-2xl bg-white border border-slate-200 text-slate-800 text-xs flex flex-wrap items-center justify-between gap-3 shadow-md animate-in fade-in duration-150 border-l-4" style={{ borderColor: hoveredIdx.type === 'inspeksi' ? '#F5A623' : '#24A1B2' }}>
           <div className="flex items-center gap-2.5">
             <span
               className="w-3.5 h-3.5 rounded-sm shrink-0"
               style={{ backgroundColor: hoveredIdx.type === 'inspeksi' ? '#F5A623' : '#24A1B2' }}
             />
-            <span className="font-bold">
+            <span className="font-bold text-slate-900">
               {items[hoveredIdx.itemIdx].label} · {hoveredIdx.type === 'inspeksi' ? 'Inspeksi Terencana' : 'Hazard Report (KTA/TTA)'}
             </span>
           </div>
-          <div className="flex items-center gap-4 text-slate-300">
+          <div className="flex items-center gap-4 text-slate-600">
             <span>
-              Pencapaian: <b className="text-white font-black text-sm">{formatIndoPct(hoveredIdx.type === 'inspeksi' ? items[hoveredIdx.itemIdx].inspeksiPct : items[hoveredIdx.itemIdx].ktaPct)}</b>
+              Pencapaian: <b className="text-slate-900 font-black text-sm">{formatIndoPct(hoveredIdx.type === 'inspeksi' ? items[hoveredIdx.itemIdx].inspeksiPct : items[hoveredIdx.itemIdx].ktaPct)}</b>
             </span>
             {items[hoveredIdx.itemIdx].targetCount && (
               <span>
-                Target Beban: <b className="text-white">{items[hoveredIdx.itemIdx].targetCount} Personil</b>
+                Target Beban: <b className="text-slate-900 font-bold">{items[hoveredIdx.itemIdx].targetCount} Personil</b>
               </span>
             )}
             <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider text-white" style={{ backgroundColor: hoveredIdx.type === 'inspeksi' ? '#D68910' : '#24A1B2' }}>
@@ -758,31 +839,46 @@ export function SafetyRekapDiagram({ year = 2026, activeWeek, activeWeekSummary 
     'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
   ], []);
 
+  const now = useMemo(() => new Date(), []);
+  const currentCalYear = now.getFullYear();
+  const currentCalMonth = now.getMonth() + 1; // 1-12
+  const currentCalWeekNum = useMemo(() => {
+    if (activeWeek) {
+      const parsed = parseInt(activeWeek.replace(/\D/g, ''), 10);
+      if (!isNaN(parsed)) return parsed;
+    }
+    return getRekapWeek(now).week;
+  }, [now, activeWeek]);
+
+  // Batas maksimal bulan dan minggu berjalan (jangan tampilkan bulan/minggu yang belum berjalan)
+  const maxAllowedMonth = selectedYear === currentCalYear ? currentCalMonth : 12;
+  const maxAllowedWeek = selectedYear === currentCalYear ? currentCalWeekNum : 52;
+
   // Poin 1: Sinkronisasi data persentase riil dari Tabel Rekap (activeWeekSummary)
   const activeStats = useMemo(() => {
     if (!activeWeekSummary || typeof activeWeekSummary.total !== 'number') return null;
     const total = activeWeekSummary.total;
-    const insp = activeWeekSummary.inspeksi ?? 0;
+    const insp = activeWeekSummary.insp ?? activeWeekSummary.inspeksi ?? 0;
     const kta = activeWeekSummary.kta ?? 0;
-    const inspPct = total > 0 ? Math.round((insp / total) * 1000) / 10 : 0;
-    const ktaPct = total > 0 ? Math.round((kta / total) * 1000) / 10 : 0;
+    const inspPct = typeof activeWeekSummary.inspPct === 'number'
+      ? activeWeekSummary.inspPct
+      : (total > 0 ? Math.round((insp / total) * 1000) / 10 : 0);
+    const ktaPct = typeof activeWeekSummary.ktaPct === 'number'
+      ? activeWeekSummary.ktaPct
+      : (total > 0 ? Math.round((kta / total) * 1000) / 10 : 0);
     return { total, insp, kta, inspPct, ktaPct };
   }, [activeWeekSummary]);
 
   // Bulan yang menaungi minggu aktif (misal W42 -> Oktober)
   const activeMonthNum = useMemo(() => {
-    if (!activeWeek) return null;
-    if (data?.periods) {
-      const p = data.periods.find(x => x.week === activeWeek);
-      if (p) return p.month;
-    }
+    if (!activeWeek) return currentCalMonth;
     const wNum = parseInt(activeWeek.replace(/\D/g, ''), 10);
     if (!isNaN(wNum)) {
-      const approx = new Date(selectedYear, 0, 3 + (wNum - 1) * 7);
-      return approx.getMonth() + 1;
+      const { end } = getRekapWeekRange(selectedYear, wNum);
+      return end.getMonth() + 1;
     }
-    return null;
-  }, [activeWeek, data?.periods, selectedYear]);
+    return currentCalMonth;
+  }, [activeWeek, selectedYear, currentCalMonth]);
 
   // Ambil data statistik dari backend
   const fetchDiagramData = useCallback(async (yr: number) => {
@@ -804,18 +900,18 @@ export function SafetyRekapDiagram({ year = 2026, activeWeek, activeWeekSummary 
         { month: 3, insp: 100, kta: 99 }, { month: 4, insp: 100, kta: 100 },
         { month: 5, insp: 99.5, kta: 99 }, { month: 6, insp: 100, kta: 100 },
         { month: 7, insp: 100, kta: 100 }, { month: 8, insp: 100, kta: 100 },
-        { month: 9, insp: 100, kta: 100 }, { month: 10, insp: 100, kta: 100 },
+        { month: 9, insp: 100, kta: 100 }, { month: 10, insp: 80, kta: 95 },
         { month: 11, insp: 100, kta: 100 }, { month: 12, insp: 100, kta: 100 }
       ];
-      const monthly = MONTH_NAMES.map((name, idx) => ({
+      const monthly = MONTH_NAMES.slice(0, maxAllowedMonth).map((name, idx) => ({
         label: name,
         month: idx + 1,
         monthName: name,
         shortName: MONTH_SHORT[idx],
-        targetCount: 48,
-        inspeksiCount: 48,
+        targetCount: idx + 1 === 10 ? 44 : 48,
+        inspeksiCount: idx + 1 === 10 ? 35 : 48,
         inspeksiPct: baseline[idx].insp,
-        ktaCount: 48,
+        ktaCount: idx + 1 === 10 ? 42 : 48,
         ktaPct: baseline[idx].kta
       }));
       setData({
@@ -839,68 +935,103 @@ export function SafetyRekapDiagram({ year = 2026, activeWeek, activeWeekSummary 
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [maxAllowedMonth]);
 
   useEffect(() => {
     fetchDiagramData(selectedYear);
   }, [selectedYear, fetchDiagramData]);
 
-  // Data Bulanan terformat
+  // Data Bulanan terformat (Mendukung filter per bulan & transisi centering)
   const monthlyItems = useMemo<DiagramItem[]>(() => {
     if (!data?.monthly) return [];
-    return data.monthly.map(m => ({
-      label: m.monthName,
-      inspeksiPct: m.inspeksiPct,
-      ktaPct: m.ktaPct,
-      targetCount: m.targetCount,
-      inspeksiCount: m.inspeksiCount,
-      ktaCount: m.ktaCount,
-    }));
-  }, [data?.monthly]);
-
-  // Opsi Dropdown Filter Per Week (W1 - W52)
-  const weekFilterOptions = useMemo(() => {
-    if (data?.periods && data.periods.length > 0) {
-      return data.periods.map(p => ({
-        value: p.week,
-        label: `Week ${p.weekNum} (${p.week}${p.dateRange ? ` • ${p.dateRange.replace(` ${selectedYear}`, '')}` : ''})${p.week === activeWeek ? ' [Aktif]' : ''}`
-      }));
+    // Batasi HANYA bulan yang sudah/sedang berjalan (jangan tampilkan bulan masa depan)
+    let list = data.monthly.filter(m => m.month <= maxAllowedMonth);
+    if (selectedMonthFilter !== 'ALL') {
+      list = list.filter(m => m.monthName.toLowerCase() === selectedMonthFilter.toLowerCase() || String(m.month) === selectedMonthFilter);
     }
+    return list.map(m => {
+      // Ambil angka riil dari Tabel Rekap untuk bulan berjalan (Oktober)
+      const isCurrentActiveMonth = (m.month === activeMonthNum || m.month === currentCalMonth) && Boolean(activeStats);
+      const targetCount = isCurrentActiveMonth && activeStats ? activeStats.total : m.targetCount;
+      const inspeksiCount = isCurrentActiveMonth && activeStats ? activeStats.insp : m.inspeksiCount;
+      const inspeksiPct = isCurrentActiveMonth && activeStats ? activeStats.inspPct : m.inspeksiPct;
+      const ktaCount = isCurrentActiveMonth && activeStats ? activeStats.kta : m.ktaCount;
+      const ktaPct = isCurrentActiveMonth && activeStats ? activeStats.ktaPct : m.ktaPct;
+
+      return {
+        label: m.monthName,
+        inspeksiPct,
+        ktaPct,
+        targetCount,
+        inspeksiCount,
+        ktaCount,
+      };
+    });
+  }, [data?.monthly, selectedMonthFilter, maxAllowedMonth, activeMonthNum, currentCalMonth, activeStats]);
+
+  // Opsi Dropdown Filter Per Week (W1 s.d. maxAllowedWeek) persis sesuai rentang Sabtu-Jumat Tabel Rekap
+  const weekFilterOptions = useMemo(() => {
     const opts = [];
-    for (let w = 1; w <= 52; w++) {
+    for (let w = 1; w <= maxAllowedWeek; w++) {
+      const { start: s, end: e } = getRekapWeekRange(selectedYear, w);
+      const dStart = `${s.getDate()} ${MONTHS_SHORT[s.getMonth()]}`;
+      const dEnd = `${e.getDate()} ${MONTHS_SHORT[e.getMonth()]}`;
+      const weekTag = `W${w}`;
       opts.push({
-        value: `W${w}`,
-        label: `Week ${w} (W${w})${`W${w}` === activeWeek ? ' [Aktif]' : ''}`
+        value: weekTag,
+        label: `Week ${w} (${weekTag} • ${dStart} - ${dEnd})${weekTag === activeWeek ? ' [Aktif]' : ''}`
       });
     }
     return opts;
-  }, [data?.periods, activeWeek, selectedYear]);
+  }, [maxAllowedWeek, selectedYear, activeWeek]);
 
-  // Data Mingguan terfilter Per Week
+  // Data Mingguan terfilter Per Week (Mengikuti tanggal presisi Sabtu - Jumat Tabel Rekap)
   const periodicItems = useMemo<DiagramItem[]>(() => {
-    if (!data?.periods) return [];
-    let list = data.periods;
-    if (selectedWeekFilter !== 'ALL') {
-      list = list.filter(p => p.week === selectedWeekFilter);
+    const rawList = data?.periods && data.periods.length > 0 ? data.periods : [];
+    const list: DiagramItem[] = [];
+
+    for (let w = 1; w <= maxAllowedWeek; w++) {
+      const { start: s, end: e } = getRekapWeekRange(selectedYear, w);
+      const dStart = `${s.getDate()} ${MONTHS_SHORT[s.getMonth()]}`;
+      const dEnd = `${e.getDate()} ${MONTHS_SHORT[e.getMonth()]}`;
+      const dateRange = `${dStart} - ${dEnd}`;
+      const weekTag = `W${w}`;
+
+      if (selectedWeekFilter !== 'ALL' && selectedWeekFilter !== weekTag) {
+        continue;
+      }
+
+      const pFromBackend = rawList.find(x => x.weekNum === w || x.week === weekTag);
+      const isCurrentActiveWeek = (weekTag === activeWeek || w === currentCalWeekNum) && Boolean(activeStats);
+
+      const targetCount = isCurrentActiveWeek && activeStats ? activeStats.total : (pFromBackend?.targetCount || 48);
+      const inspeksiCount = isCurrentActiveWeek && activeStats ? activeStats.insp : (pFromBackend?.inspeksiCount || 48);
+      const inspeksiPct = isCurrentActiveWeek && activeStats ? activeStats.inspPct : (pFromBackend?.inspeksiPct || 100);
+      const ktaCount = isCurrentActiveWeek && activeStats ? activeStats.kta : (pFromBackend?.ktaCount || 48);
+      const ktaPct = isCurrentActiveWeek && activeStats ? activeStats.ktaPct : (pFromBackend?.ktaPct || 100);
+
+      list.push({
+        label: weekTag,
+        subLabel: dateRange,
+        inspeksiPct,
+        ktaPct,
+        targetCount,
+        inspeksiCount,
+        ktaCount,
+      });
     }
 
-    return list.map(p => ({
-      label: p.week,
-      subLabel: selectedWeekFilter !== 'ALL' && p.dateRange
-        ? p.dateRange.replace(` ${selectedYear}`, '')
-        : p.monthName.slice(0, 3),
-      inspeksiPct: p.inspeksiPct,
-      ktaPct: p.ktaPct,
-      targetCount: p.targetCount,
-      inspeksiCount: p.inspeksiCount,
-      ktaCount: p.ktaCount,
-    }));
-  }, [data?.periods, selectedWeekFilter, selectedYear]);
+    return list;
+  }, [data?.periods, selectedWeekFilter, selectedYear, maxAllowedWeek, activeWeek, currentCalWeekNum, activeStats]);
 
-  // Data Tahunan terformat
+  // Data Tahunan terformat (Mendukung filter per tahun & transisi centering)
   const yearlyItems = useMemo<DiagramItem[]>(() => {
     if (!data?.yearly) return [];
-    return data.yearly.map(y => ({
+    let list = data.yearly;
+    if (selectedYearFilter !== 'ALL') {
+      list = list.filter(y => String(y.year) === selectedYearFilter);
+    }
+    return list.map(y => ({
       label: String(y.year),
       inspeksiPct: y.inspeksiPct,
       ktaPct: y.ktaPct,
@@ -908,7 +1039,7 @@ export function SafetyRekapDiagram({ year = 2026, activeWeek, activeWeekSummary 
       inspeksiCount: y.inspeksiCount,
       ktaCount: y.ktaCount,
     }));
-  }, [data?.yearly]);
+  }, [data?.yearly, selectedYearFilter]);
 
   // Fungsi Ekspor Gambar PNG High-Resolution
   const handleExportPng = async (targetRef: React.RefObject<HTMLDivElement | null>, fileName: string) => {
@@ -1031,7 +1162,7 @@ export function SafetyRekapDiagram({ year = 2026, activeWeek, activeWeekSummary 
             </span>
           </div>
           <p className="text-2xl sm:text-3xl font-black text-[var(--text-main)] mt-2">
-            {data?.summary.perfectMonthsCount ?? 8} / 12
+            {data?.summary.perfectMonthsCount ?? 8} / {maxAllowedMonth}
           </p>
           <p className="text-[11px] font-medium text-[var(--text-muted)] mt-1">Pencapaian Tanpa Cacat</p>
         </div>
@@ -1054,16 +1185,60 @@ export function SafetyRekapDiagram({ year = 2026, activeWeek, activeWeekSummary 
       {/* ── SECTION 1: DIAGRAM PER BULAN ── */}
       {(activeTab === 'monthly' || activeTab === 'all') && (
         <div className="space-y-4">
+          {/* Bar Filter Bulan */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-3xl bg-[var(--card-bg)] border border-[var(--border-main)] shadow-xs">
+            <div>
+              <h3 className="text-sm font-bold text-[var(--text-main)] flex items-center gap-2">
+                <Calendar className="w-4 h-4 text-[#F5A623]" />
+                Filter Bulan (Per Bulan)
+              </h3>
+              <p className="text-xs text-[var(--text-muted)]">Pilih bulan tertentu atau tampilkan semua bulan berjalan (Januari - {MONTH_NAMES[maxAllowedMonth - 1]})</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="relative min-w-[240px] sm:w-80">
+                <select
+                  value={selectedMonthFilter}
+                  onChange={e => setSelectedMonthFilter(e.target.value)}
+                  className="w-full h-10 pl-3.5 pr-10 rounded-2xl bg-[var(--input-bg)] border border-[var(--border-main)] text-xs font-bold text-[var(--text-main)] outline-none focus:ring-2 focus:ring-[#24A1B2]/30 cursor-pointer transition-all shadow-xs"
+                >
+                  <option value="ALL">Semua Bulan Berjalan (Januari - {MONTH_NAMES[maxAllowedMonth - 1]})</option>
+                  {MONTH_NAMES.slice(0, maxAllowedMonth).map((name, i) => (
+                    <option key={name} value={name}>
+                      Bulan {i + 1}: {name}
+                    </option>
+                  ))}
+                </select>
+                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3.5 text-[var(--text-muted)]">
+                  <ChevronRight className="w-4 h-4 rotate-90" />
+                </div>
+              </div>
+              {selectedMonthFilter !== 'ALL' && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedMonthFilter('ALL')}
+                  className="h-10 px-3.5 rounded-2xl bg-[#F5A623]/15 hover:bg-[#F5A623]/25 text-[#D68910] text-xs font-bold transition-all whitespace-nowrap cursor-pointer"
+                >
+                  Reset Bulan
+                </button>
+              )}
+            </div>
+          </div>
+
           <ClusteredSapChart
             chartRef={monthlyChartRef}
             year={selectedYear}
-            title={`Pencapaian Self Accountability Program (SAP) Dept. Preparation & Laboratory ${selectedYear}`}
-            subtitle="Rekapitulasi Kepatuhan Inspeksi Terencana & Hazard Report Berdasarkan 12 Bulan Kalender"
+            title={selectedMonthFilter === 'ALL'
+              ? `Pencapaian Self Accountability Program (SAP) Dept. Preparation & Laboratory ${selectedYear}`
+              : `Pencapaian SAP Bulan ${selectedMonthFilter} ${selectedYear}`}
+            subtitle={selectedMonthFilter === 'ALL'
+              ? "Rekapitulasi Kepatuhan Inspeksi Terencana & Hazard Report Berdasarkan 12 Bulan Kalender"
+              : `Fokus Kepatuhan Inspeksi Terencana & Hazard Report Bulan ${selectedMonthFilter}`}
             items={monthlyItems}
             exporting={exportingPng}
             styleMode={chartStyle}
             onStyleChange={setChartStyle}
-            onDownloadPng={() => handleExportPng(monthlyChartRef, `Diagram_SAP_Perbulan_${selectedYear}.png`)}
+            onItemClick={(item) => setSelectedMonthFilter(item.label)}
+            onDownloadPng={() => handleExportPng(monthlyChartRef, `Diagram_SAP_Perbulan_${selectedYear}_${selectedMonthFilter}.png`)}
           />
 
           {/* Tabel Detail Capaian Per Bulan */}
@@ -1091,9 +1266,21 @@ export function SafetyRekapDiagram({ year = 2026, activeWeek, activeWeekSummary 
                 </thead>
                 <tbody className="divide-y divide-[var(--border-main)] text-[var(--text-main)] font-medium">
                   {monthlyItems.map((m, idx) => (
-                    <tr key={m.label} className="hover:bg-[var(--input-bg)]/50 transition-colors">
+                    <tr
+                      key={m.label}
+                      onClick={() => setSelectedMonthFilter(m.label)}
+                      className={`hover:bg-[var(--input-bg)]/50 transition-colors cursor-pointer ${
+                        selectedMonthFilter === m.label ? 'bg-[#24A1B2]/10 font-bold' : ''
+                      }`}
+                      title={`Klik untuk fokus diagram bulan ${m.label}`}
+                    >
                       <td className="px-4 py-2.5 text-center text-[var(--text-muted)]">{idx + 1}</td>
-                      <td className="px-4 py-2.5 font-bold">{m.label}</td>
+                      <td className="px-4 py-2.5 font-bold flex items-center gap-1.5">
+                        <span>{m.label}</span>
+                        {selectedMonthFilter === m.label && (
+                          <span className="text-[10px] font-black px-1.5 py-0.2 rounded bg-[#24A1B2] text-white">Aktif</span>
+                        )}
+                      </td>
                       <td className="px-4 py-2.5 text-center font-mono">{m.targetCount || 48}</td>
                       <td className="px-4 py-2.5 text-center font-mono font-bold text-[#D68910]">{m.inspeksiCount || 48}</td>
                       <td className="px-4 py-2.5 text-center font-mono font-black">{formatIndoPct(m.inspeksiPct)}</td>
@@ -1126,7 +1313,7 @@ export function SafetyRekapDiagram({ year = 2026, activeWeek, activeWeekSummary 
                 <BarChart3 className="w-4 h-4 text-[#24A1B2]" />
                 Filter Minggu (Per Minggu)
               </h3>
-              <p className="text-xs text-[var(--text-muted)]">Pilih minggu tertentu atau tampilkan semua minggu (W1 - W52)</p>
+              <p className="text-xs text-[var(--text-muted)]">Pilih minggu tertentu atau tampilkan semua minggu berjalan (W1 - W{maxAllowedWeek})</p>
             </div>
             <div className="flex items-center gap-2">
               <div className="relative min-w-[240px] sm:w-80">
@@ -1135,7 +1322,7 @@ export function SafetyRekapDiagram({ year = 2026, activeWeek, activeWeekSummary 
                   onChange={e => setSelectedWeekFilter(e.target.value)}
                   className="w-full h-10 pl-3.5 pr-10 rounded-2xl bg-[var(--input-bg)] border border-[var(--border-main)] text-xs font-bold text-[var(--text-main)] outline-none focus:ring-2 focus:ring-[#24A1B2]/30 cursor-pointer transition-all shadow-xs"
                 >
-                  <option value="ALL">Semua Minggu (W1 - W52)</option>
+                  <option value="ALL">Semua Minggu Berjalan (W1 - W{maxAllowedWeek})</option>
                   {weekFilterOptions.map(opt => (
                     <option key={opt.value} value={opt.value}>
                       {opt.label}
@@ -1162,7 +1349,7 @@ export function SafetyRekapDiagram({ year = 2026, activeWeek, activeWeekSummary 
             chartRef={periodicChartRef}
             year={selectedYear}
             title={`Pencapaian SAP Per Minggu - Dept. Preparation & Laboratory ${selectedYear}`}
-            subtitle={`Tinjauan Kepatuhan Tiap Minggu (${selectedWeekFilter === 'ALL' ? 'Semua Minggu W1 - W52' : selectedWeekFilter})`}
+            subtitle={`Tinjauan Kepatuhan Tiap Minggu (${selectedWeekFilter === 'ALL' ? `Semua Minggu Berjalan W1 - W${maxAllowedWeek}` : selectedWeekFilter})`}
             items={periodicItems}
             exporting={exportingPng}
             styleMode={chartStyle}
@@ -1227,45 +1414,56 @@ export function SafetyRekapDiagram({ year = 2026, activeWeek, activeWeekSummary 
 
           {/* Kartu Ringkasan Kinerja Tahunan (Golden Amber & Teal) */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {yearlyItems.map(y => (
-              <div
-                key={y.label}
-                onClick={() => setSelectedYearFilter(y.label)}
-                className="p-5 rounded-3xl bg-[var(--card-bg)] border border-[var(--border-main)] shadow-sm space-y-3 cursor-pointer hover:border-[#24A1B2]/50 transition-all"
-                title={`Klik untuk fokus diagram tahun ${y.label}`}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold uppercase tracking-wider text-[var(--text-muted)]">Tahun Kinerja</span>
-                  <span className="px-3 py-1 rounded-full text-xs font-black bg-[#24A1B2]/15 text-[#24A1B2] dark:text-[#80DEEA]">
-                    {y.label}
-                  </span>
-                </div>
-                <div className="space-y-2.5">
-                  <div>
-                    <div className="flex justify-between text-xs font-bold mb-1">
-                      <span className="text-[#D68910]">Inspeksi Terencana</span>
-                      <span className="font-mono text-slate-800 dark:text-slate-200">{formatIndoPct(y.inspeksiPct)}</span>
+            {(data?.yearly || []).map(y => {
+              const isSelected = selectedYearFilter === String(y.year);
+              return (
+                <div
+                  key={y.year}
+                  onClick={() => setSelectedYearFilter(isSelected ? 'ALL' : String(y.year))}
+                  className={`p-5 rounded-3xl bg-[var(--card-bg)] border shadow-sm space-y-3 cursor-pointer transition-all ${
+                    isSelected
+                      ? 'border-[#24A1B2] ring-2 ring-[#24A1B2]/30 shadow-md'
+                      : 'border-[var(--border-main)] hover:border-[#24A1B2]/50'
+                  }`}
+                  title={`Klik untuk fokus diagram tahun ${y.year}`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold uppercase tracking-wider text-[var(--text-muted)]">Tahun Kinerja</span>
+                    <span className={`px-3 py-1 rounded-full text-xs font-black ${
+                      isSelected
+                        ? 'bg-[#24A1B2] text-white shadow-xs'
+                        : 'bg-[#24A1B2]/15 text-[#24A1B2] dark:text-[#80DEEA]'
+                    }`}>
+                      {y.year}
+                    </span>
+                  </div>
+                  <div className="space-y-2.5">
+                    <div>
+                      <div className="flex justify-between text-xs font-bold mb-1">
+                        <span className="text-[#D68910]">Inspeksi Terencana</span>
+                        <span className="font-mono text-slate-800 dark:text-slate-200">{formatIndoPct(y.inspeksiPct)}</span>
+                      </div>
+                      <div className="w-full h-2.5 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
+                        <div className="h-full bg-gradient-to-r from-[#FBBF24] to-[#D68910] rounded-full" style={{ width: `${Math.min(100, y.inspeksiPct)}%` }} />
+                      </div>
                     </div>
-                    <div className="w-full h-2.5 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
-                      <div className="h-full bg-gradient-to-r from-[#FBBF24] to-[#D68910] rounded-full" style={{ width: `${Math.min(100, y.inspeksiPct)}%` }} />
+                    <div>
+                      <div className="flex justify-between text-xs font-bold mb-1">
+                        <span className="text-[#24A1B2]">Hazard Report (KTA/TTA)</span>
+                        <span className="font-mono text-slate-800 dark:text-slate-200">{formatIndoPct(y.ktaPct)}</span>
+                      </div>
+                      <div className="w-full h-2.5 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
+                        <div className="h-full bg-gradient-to-r from-[#4DD0E1] to-[#166974] rounded-full" style={{ width: `${Math.min(100, y.ktaPct)}%` }} />
+                      </div>
                     </div>
                   </div>
-                  <div>
-                    <div className="flex justify-between text-xs font-bold mb-1">
-                      <span className="text-[#24A1B2]">Hazard Report (KTA/TTA)</span>
-                      <span className="font-mono text-slate-800 dark:text-slate-200">{formatIndoPct(y.ktaPct)}</span>
-                    </div>
-                    <div className="w-full h-2.5 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
-                      <div className="h-full bg-gradient-to-r from-[#4DD0E1] to-[#166974] rounded-full" style={{ width: `${Math.min(100, y.ktaPct)}%` }} />
-                    </div>
+                  <div className="pt-2 border-t border-[var(--border-main)] flex items-center justify-between text-xs text-[var(--text-muted)]">
+                    <span>Total Beban Wajib</span>
+                    <b className="text-[var(--text-main)] font-mono">{y.targetCount || 2496} Kegiatan</b>
                   </div>
                 </div>
-                <div className="pt-2 border-t border-[var(--border-main)] flex items-center justify-between text-xs text-[var(--text-muted)]">
-                  <span>Total Beban Wajib</span>
-                  <b className="text-[var(--text-main)] font-mono">{y.targetCount || 2496} Kegiatan</b>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}

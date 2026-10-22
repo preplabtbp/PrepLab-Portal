@@ -22,46 +22,12 @@ interface GroupReportProps {
   // 'feed' = modul SAP (laporan & feed), 'rekap' = detail rekap di menu Safety
   mode?: 'feed' | 'rekap';
   initialWeek?: string;
+  onWeekChange?: (week: string) => void;
 }
 
-function getCurrentISOWeekTag(d: Date = new Date()): string {
-  const date = new Date(d.getTime());
-  date.setHours(0, 0, 0, 0);
-  date.setDate(date.getDate() + 3 - (date.getDay() + 6) % 7);
-  const week1 = new Date(date.getFullYear(), 0, 4);
-  const weekNum = 1 + Math.round(((date.getTime() - week1.getTime()) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7);
-  return `W${weekNum}`;
-}
+import { getRekapWeek, getRekapWeekRange, buildSafetyWeekOptions, inPeriod, mergeRekapLists } from '../utils/safety-week';
+import { getISOWeek } from '../utils/iso-week';
 
-function generateWeekOptions(activeWeekTag: string, year: number = 2026) {
-  const activeNum = parseInt(activeWeekTag.replace(/\D/g, ''), 10) || 36;
-  const startNum = Math.max(1, activeNum - 3);
-  const endNum = Math.min(52, activeNum + 4);
-
-  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
-
-  const options: { value: string; label: string; isCurrent: boolean }[] = [];
-
-  for (let w = startNum; w <= endNum; w++) {
-    const simple = new Date(year, 0, 4);
-    const dayOfWeek = (simple.getDay() + 6) % 7;
-    const week1Monday = new Date(year, 0, 4 - dayOfWeek);
-    
-    const monday = new Date(week1Monday.getTime() + (w - 1) * 7 * 86400000);
-    const sunday = new Date(monday.getTime() + 6 * 86400000);
-
-    const startStr = `${monday.getDate().toString().padStart(2, '0')}-${sunday.getDate().toString().padStart(2, '0')} ${monthNames[sunday.getMonth()]}`;
-    const isCurrent = `W${w}` === activeWeekTag;
-    
-    options.push({
-      value: `W${w}`,
-      label: `Week ${w} (${startStr})${isCurrent ? ' [Aktif]' : ''}`,
-      isCurrent
-    });
-  }
-
-  return options;
-}
 
 export const formatKtaImageUrl = (url?: string | null): string => {
   if (!url || url === '-' || url === '#' || url === 'null') return '';
@@ -171,7 +137,7 @@ export function formatReportDateTime(timestamp?: string | number | Date | null):
   }
 }
 
-export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, inspectorSection, onClose, isFloating = false, isDeveloper = false, mode = 'rekap', initialWeek }: GroupReportProps) {
+export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, inspectorSection, onClose, isFloating = false, isDeveloper = false, mode = 'rekap', initialWeek, onWeekChange }: GroupReportProps) {
   // Main view: 'rekap' (detail status kepatuhan personil) atau 'feed' (linimasa & bukti laporan SAP)
   const [activeTab, setActiveTab] = useState<'rekap' | 'feed'>(mode || 'rekap');
 
@@ -192,8 +158,10 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showAttachModal, setShowAttachModal] = useState(false);
 
-  // Rekap Inspeksi State & Week Filter
-  const currentActiveWeek = useMemo(() => getCurrentISOWeekTag(new Date()), []);
+  // Rekap Inspeksi State & Week Filter - sinkronisasi mutlak dengan Periode Tabel Rekap Safety (Sabtu - Jumat)
+  const today = useMemo(() => new Date(), []);
+  const safetyWeekInfo = useMemo(() => getRekapWeek(today), [today]);
+  const currentActiveWeek = useMemo(() => `W${safetyWeekInfo.week}`, [safetyWeekInfo]);
   const [selectedWeek, setSelectedWeek] = useState<string>(initialWeek || currentActiveWeek);
 
   // Sync selectedWeek if initialWeek changes from parent
@@ -202,7 +170,7 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
       setSelectedWeek(initialWeek);
     }
   }, [initialWeek]);
-  const weekOptions = useMemo(() => generateWeekOptions(currentActiveWeek), [currentActiveWeek]);
+  const weekOptions = useMemo(() => buildSafetyWeekOptions(safetyWeekInfo.year, safetyWeekInfo.week), [safetyWeekInfo]);
   const [rekapSummary, setRekapSummary] = useState<{ total: number; sudah: number; belum: number; percentage: number; cutiCount?: number; selectedWeek?: string }>({ total: 0, sudah: 0, belum: 0, percentage: 0, cutiCount: 0 });
   const [rekapList, setRekapList] = useState<any[]>([]);
   const [cutiList, setCutiList] = useState<any[]>([]);
@@ -565,9 +533,7 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
     }
   };
 
-  useEffect(() => {
-    setSelectedWeek(currentActiveWeek);
-  }, [currentActiveWeek]);
+
 
   const loadedFeedWeek = useRef<string | null>(null);
   const loadedRekapWeek = useRef<string | null>(null);
@@ -620,13 +586,104 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
   const fetchRekapData = async (week: string = selectedWeek, refresh: boolean = true) => {
     try {
       setLoadingRekap(true);
-      const res = await fetch(`/api/rekap-inspeksi?week=${week}${refresh ? '&refresh=true' : ''}`);
-      if (res.ok) {
-        const data = await res.json();
-        setRekapSummary(data.summary || { total: 0, sudah: 0, belum: 0, percentage: 0, cutiCount: 0 });
-        setRekapList(data.rekapList || []);
-        setCutiList(data.cutiList || []);
-      }
+      const year = safetyWeekInfo.year;
+      const num = parseInt(week.replace(/\D/g, ''), 10) || safetyWeekInfo.week;
+      const period = getRekapWeekRange(year, num);
+      const isoWeeks = [`W${num}`, `W${getISOWeek(period.end)}`];
+      const suffix = refresh ? '&refresh=true' : '';
+
+      const [resA, resB] = await Promise.all([
+        fetch(`/api/rekap-inspeksi?week=${isoWeeks[0]}${suffix}`).then(r => r.ok ? r.json() : {}).catch(() => ({})),
+        isoWeeks[0] !== isoWeeks[1]
+          ? fetch(`/api/rekap-inspeksi?week=${isoWeeks[1]}${suffix}`).then(r => r.ok ? r.json() : {}).catch(() => ({}))
+          : Promise.resolve({})
+      ]) as [any, any];
+
+      const mergedList = mergeRekapLists([resA?.rekapList || [], resB?.rekapList || []]);
+      const cutiListRaw = resB?.cutiList || resA?.cutiList || [];
+
+      let sudahCount = 0;
+      let belumCount = 0;
+      let totalWajib = 0;
+
+      const processedList = mergedList.map(emp => {
+        if (emp.isCuti) return emp;
+        totalWajib++;
+
+        const cd = emp.checkDetails || {};
+        const isManual = emp.isManualOverride && emp.status === 'SUDAH';
+        
+        let validPdfDate: string | null = null;
+        let validSsDate: string | null = null;
+        let validCompletedAt: string | null = null;
+        let validPdfUrl = cd.pdfUrl || emp.pdfUrl;
+        let validSsUrl = cd.ssUrl || cd.ssProof || emp.ssUrl;
+        let validPdfTitle = cd.pdfTitle || emp.pdfTitle;
+
+        for (const src of (emp._sources || [emp])) {
+          const scd = src.checkDetails || {};
+          const cDate = inPeriod(src.completedAt, period) ? src.completedAt : null;
+          const sDate = inPeriod(scd.ssTimestamp, period) ? scd.ssTimestamp : null;
+          const pDate = inPeriod(scd.pdfTimestamp, period) ? scd.pdfTimestamp : null;
+
+          if (sDate) {
+            validSsDate = sDate;
+            validSsUrl = scd.ssUrl || scd.ssProof || src.ssUrl || validSsUrl;
+          }
+          if (pDate) {
+            validPdfDate = pDate;
+            validPdfUrl = scd.pdfUrl || src.pdfUrl || validPdfUrl;
+            validPdfTitle = scd.pdfTitle || src.pdfTitle || validPdfTitle;
+          }
+          if (cDate) {
+            validCompletedAt = cDate;
+          }
+        }
+
+        const effectiveCompleted = validCompletedAt || validSsDate || validPdfDate;
+        const hasValidScreenshot = Boolean((cd.ssDone || validSsUrl) && (isManual || validSsDate));
+        const hasValidPdf = Boolean(cd.pdfDone && (isManual || validPdfDate));
+        const isDoneInPeriod = isManual || (hasValidScreenshot && hasValidPdf);
+
+        if (isDoneInPeriod) {
+          sudahCount++;
+        } else {
+          belumCount++;
+        }
+
+        return {
+          ...emp,
+          status: isDoneInPeriod ? 'SUDAH' : 'BELUM',
+          completedAt: isDoneInPeriod ? effectiveCompleted : (validSsDate || validPdfDate || null),
+          pdfTitle: validPdfTitle,
+          pdfUrl: validPdfUrl,
+          ssUrl: validSsUrl,
+          checkDetails: {
+            ...cd,
+            pdfDone: isManual || Boolean(validPdfDate),
+            pdfTimestamp: validPdfDate,
+            pdfUrl: validPdfUrl,
+            pdfTitle: validPdfTitle,
+            ssDone: isManual || Boolean(validSsDate),
+            ssTimestamp: validSsDate,
+            ssUrl: validSsUrl,
+            summaryProgress: isDoneInPeriod ? '2/2' : (validSsDate || validPdfDate ? '1/2' : '0/2')
+          }
+        };
+      });
+
+      const percentage = totalWajib > 0 ? Math.round((sudahCount / totalWajib) * 100) : 0;
+
+      setRekapSummary({
+        total: totalWajib,
+        sudah: sudahCount,
+        belum: belumCount,
+        percentage,
+        cutiCount: cutiListRaw.length,
+        selectedWeek: week
+      });
+      setRekapList(processedList);
+      setCutiList(cutiListRaw);
     } catch (err) {
       console.error('Error fetching rekap data:', err);
     } finally {
@@ -637,13 +694,78 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
   const fetchRekapKtaData = async (week: string = selectedWeek) => {
     try {
       setLoadingRekapKta(true);
-      const res = await fetch(`/api/rekap-kta?week=${week}`);
-      if (res.ok) {
-        const data = await res.json();
-        setRekapKtaSummary(data.summary || { total: 0, sudah: 0, belum: 0, percentage: 0, cutiCount: 0 });
-        setRekapKtaList(data.rekapList || []);
-        setCutiKtaList(data.cutiList || []);
-      }
+      const year = safetyWeekInfo.year;
+      const num = parseInt(week.replace(/\D/g, ''), 10) || safetyWeekInfo.week;
+      const period = getRekapWeekRange(year, num);
+      const isoWeeks = [`W${num}`, `W${getISOWeek(period.end)}`];
+
+      const [resA, resB] = await Promise.all([
+        fetch(`/api/rekap-kta?week=${isoWeeks[0]}`).then(r => r.ok ? r.json() : {}).catch(() => ({})),
+        isoWeeks[0] !== isoWeeks[1] 
+          ? fetch(`/api/rekap-kta?week=${isoWeeks[1]}`).then(r => r.ok ? r.json() : {}).catch(() => ({}))
+          : Promise.resolve({})
+      ]) as [any, any];
+
+      const mergedList = mergeRekapLists([resA?.rekapList || [], resB?.rekapList || []]);
+      const cutiListRaw = resB?.cutiList || resA?.cutiList || [];
+
+      let sudahCount = 0;
+      let belumCount = 0;
+      let totalWajib = 0;
+
+      const processedList = mergedList.map(emp => {
+        if (emp.isCuti) return emp;
+        totalWajib++;
+
+        const obligation = emp.obligation || getKtaObligation(emp.nik, emp.jabatan, emp.section);
+        const isManual = emp.isManualOverride && emp.status === 'SUDAH';
+
+        const allReports: any[] = [];
+        for (const src of (emp._sources || [emp])) {
+          if (Array.isArray(src.reports)) allReports.push(...src.reports);
+        }
+
+        const validReports = allReports.filter(r => inPeriod(r.timestamp || r.date, period));
+
+        const ktaReports = validReports.filter(r => !String(r.reportType || '').toUpperCase().includes('TTA'));
+        const ttaReports = validReports.filter(r => String(r.reportType || '').toUpperCase().includes('TTA'));
+
+        let isDone = isManual;
+        if (!isDone) {
+          if (obligation.type === '1_KTA_OR_TTA') isDone = validReports.length >= 1;
+          else if (obligation.type === '1_KTA_AND_1_TTA') isDone = (ktaReports.length >= 1 && ttaReports.length >= 1) || validReports.length >= 2;
+          else if (obligation.type === '2_TTA') isDone = ttaReports.length >= 2;
+          else isDone = validReports.length >= 1;
+        }
+
+        if (isDone) sudahCount++;
+        else belumCount++;
+
+        return {
+          ...emp,
+          status: isDone ? 'SUDAH' : 'BELUM',
+          reports: validReports,
+          checkDetails: {
+            ...emp.checkDetails,
+            check1Done: isDone || ktaReports.length > 0 || ttaReports.length > 0,
+            check2Done: isDone || (obligation.type === '2_TTA' ? ttaReports.length >= 2 : validReports.length >= 2),
+            summaryProgress: isDone ? (obligation.type === '1_KTA_OR_TTA' ? '1/1' : '2/2') : (validReports.length > 0 ? '1/2' : '0/2')
+          }
+        };
+      });
+
+      const percentage = totalWajib > 0 ? Math.round((sudahCount / totalWajib) * 100) : 0;
+
+      setRekapKtaSummary({
+        total: totalWajib,
+        sudah: sudahCount,
+        belum: belumCount,
+        percentage,
+        cutiCount: cutiListRaw.length,
+        selectedWeek: week
+      });
+      setRekapKtaList(processedList);
+      setCutiKtaList(cutiListRaw);
     } catch (err) {
       console.error('Error fetching rekap KTA data:', err);
     } finally {
@@ -2033,7 +2155,11 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
 
               <select
                 value={selectedWeek}
-                onChange={(e) => setSelectedWeek(e.target.value)}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setSelectedWeek(val);
+                  if (onWeekChange) onWeekChange(val);
+                }}
                 className="bg-[var(--input-bg)] border border-[var(--border-main)] text-[var(--text-main)] text-xs font-bold font-mono px-3 py-1.5 rounded-xl shadow-xs focus:ring-2 focus:ring-[var(--primary)] outline-none cursor-pointer"
               >
                 {weekOptions.map(opt => (

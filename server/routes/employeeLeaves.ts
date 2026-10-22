@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "../../src/db/index.js";
-import { eq, desc, and, or, gte, lte, ilike, sql } from "drizzle-orm";
+import { eq, desc, and, or, gte, lte, ilike, sql, inArray } from "drizzle-orm";
 import { employeeLeaveRequests, employees } from "../../src/db/schema.js";
 import { drive } from "../../google-services.js";
 import * as XLSX from "xlsx";
@@ -51,6 +51,18 @@ export async function ensureEmployeeLeavesTable() {
       ADD COLUMN IF NOT EXISTS source TEXT DEFAULT 'web',
       ADD COLUMN IF NOT EXISTS sheet_row_id TEXT,
       ADD COLUMN IF NOT EXISTS kategori_izin TEXT;
+    `);
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS deleted_sheet_leaves (
+        id SERIAL PRIMARY KEY,
+        sheet_row_id TEXT NOT NULL UNIQUE,
+        deleted_at TIMESTAMP DEFAULT NOW()
+      );
+    `);
+    // Pembersihan otomatis: Hapus row kosong / sampah di database
+    await db.execute(sql`
+      DELETE FROM employee_leave_requests 
+      WHERE name IS NULL OR TRIM(name) = '' OR nik IS NULL OR TRIM(nik) = '';
     `);
     await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_leave_requests_nik ON employee_leave_requests(nik);`);
     await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_leave_requests_dates ON employee_leave_requests(awal_absensi, akhir_absensi);`);
@@ -257,7 +269,7 @@ export function resolveKategoriIzin(
         foundCode = st;
         break;
       }
-      if (st === 'IK') {
+      if (st === 'IK' && foundCode !== 'IK') {
         foundCode = st;
       }
       if (st === 'I' && !foundCode) {
@@ -343,7 +355,7 @@ function parseDurationDays(val: any): number {
 // Fetch dan parse Google Sheet Rekapan Izin Karyawan
 export async function fetchGoogleSheetLeaves(force = false): Promise<SheetLeaveItem[]> {
   const now = Date.now();
-  const CACHE_TTL = 30 * 1000; // 30 detik
+  const CACHE_TTL = 15 * 1000; // 15 detik untuk respon cepat saat Google Sheet diperbarui/dihapus
 
   if (!force && sheetCache.data.length > 0 && (now - sheetCache.lastFetchedAt < CACHE_TTL)) {
     return sheetCache.data;
@@ -370,6 +382,15 @@ export async function fetchGoogleSheetLeaves(force = false): Promise<SheetLeaveI
       return sheetCache.data;
     }
 
+    // Ambil daftar sheetRowId yang telah dihapus jika ada
+    const deletedSheetIds = new Set<string>();
+    try {
+      const delRes = await db.execute(sql`SELECT sheet_row_id FROM deleted_sheet_leaves`);
+      delRes.rows.forEach((r: any) => {
+        if (r.sheet_row_id) deletedSheetIds.add(String(r.sheet_row_id));
+      });
+    } catch {}
+
     // Header dinamis
     const headerRow: string[] = (rawRows[0] || []).map((h: any) => String(h || '').trim().toLowerCase());
     const findCol = (...keywords: string[]): number => {
@@ -394,6 +415,9 @@ export async function fetchGoogleSheetLeaves(force = false): Promise<SheetLeaveI
 
     // Iterasi baris data (mulai index 1)
     for (let i = 1; i < rawRows.length; i++) {
+      const rowId = `sheet-${i}`;
+      if (deletedSheetIds.has(rowId)) continue;
+
       const row = rawRows[i];
       if (!row || row.length === 0) continue;
 
@@ -613,17 +637,63 @@ employeeLeavesRouter.get("/api/employee-leaves", async (req, res) => {
       };
     });
 
-    // Pisahkan override sheet dari pure web records
+    // Pisahkan override sheet dari pure web records & bersihkan data yang telah dihapus dari Google Sheet
     const sheetOverrides = new Map<string, SheetLeaveItem>();
     const pureWebLeaves: SheetLeaveItem[] = [];
 
+    // Himpunan ID baris Google Sheet yang valid saat ini
+    const validSheetRowIds = new Set(sheetData.map(s => String(s.id)));
+    // Himpunan kunci data resmi dari Google Sheet saat ini: NIK + tanggal awal
+    const existingSheetKeySet = new Set(
+      sheetData.map(s => `${String(s.nik || '').trim().toUpperCase()}_${String(s.awalAbsensi || '').trim()}`)
+    );
+    const orphanedDbIds: number[] = [];
+
     formattedDbLeaves.forEach(d => {
+      // 1. Abaikan dan bersihkan record kosong / rusak
+      if (!d.name || !d.name.trim() || !d.nik || !d.nik.trim()) {
+        orphanedDbIds.push(Number(d.id));
+        return;
+      }
+
       if (d.sheetRowId) {
-        sheetOverrides.set(d.sheetRowId, d);
+        // Cek apakah data baris ini masih ada di Google Sheet
+        if (validSheetRowIds.has(d.sheetRowId)) {
+          sheetOverrides.set(d.sheetRowId, d);
+        } else {
+          // Baris ini telah DIHAPUS dari Google Sheet!
+          // Maka otomatis bersihkan override-nya dari DB agar tidak menjadi hantu
+          orphanedDbIds.push(Number(d.id));
+        }
       } else {
-        pureWebLeaves.push(d);
+        // Pure web record (source: 'web')
+        const leaveKey = `${String(d.nik || '').trim().toUpperCase()}_${String(d.awalAbsensi || '').trim()}`;
+        // Jika data ini SUDAH ADA di Google Sheet (seperti duplikasi Erwin Asnawi row 16 vs sheet-1237):
+        // Hapus duplikasi dari DB agar tampilan 100% konsisten dengan Google Sheet!
+        if (existingSheetKeySet.has(leaveKey)) {
+          orphanedDbIds.push(Number(d.id));
+        } else {
+          // Jika data web ini TIDAK ADA di Google Sheet:
+          // Google Sheet adalah master database rekapan. Jika record web ini berumur lebih dari 30 menit
+          // dan tidak ada di Google Sheet (misalnya telah dihapus dari Google Sheet oleh admin):
+          // Otomatis hilangkan / hapus dari DB!
+          const recordAgeMs = Date.now() - new Date(d.createdAt).getTime();
+          if (recordAgeMs > 30 * 60 * 1000) {
+            orphanedDbIds.push(Number(d.id));
+          } else {
+            pureWebLeaves.push(d);
+          }
+        }
       }
     });
+
+    // Jalankan auto-pruning data yang telah dihapus dari Google Sheet secara asynchronous
+    const idsToDelete = orphanedDbIds.filter(id => !isNaN(id) && id > 0);
+    if (idsToDelete.length > 0) {
+      db.delete(employeeLeaveRequests)
+        .where(inArray(employeeLeaveRequests.id, idsToDelete))
+        .catch(err => console.warn('[Employee Leaves] Auto-cleanup notice:', err.message));
+    }
 
     // Terapkan override dari DB ke data Google Sheet jika diedit oleh Administrasi
     const mergedSheetData: SheetLeaveItem[] = sheetData.map(s => {
@@ -1211,13 +1281,40 @@ employeeLeavesRouter.put("/api/employee-leaves/:id", async (req, res) => {
   }
 });
 
-// 6. DELETE /api/employee-leaves/:id - Hapus catatan izin
+// 6. DELETE /api/employee-leaves/:id - Hapus catatan izin (Support ID Google Sheet & DB)
 employeeLeavesRouter.delete("/api/employee-leaves/:id", async (req, res) => {
   try {
-    ensureEmployeeLeavesTable().catch(() => {});
-    const id = Number(req.params.id);
-    await db.delete(employeeLeaveRequests).where(eq(employeeLeaveRequests.id, id));
-    res.json({ status: "success", message: "Catatan perizinan berhasil dihapus." });
+    await ensureEmployeeLeavesTable();
+    const rawId = String(req.params.id);
+
+    if (rawId.startsWith('sheet-')) {
+      // 1. Simpan ke daftar deleted_sheet_leaves agar tidak muncul lagi
+      await db.execute(sql`
+        INSERT INTO deleted_sheet_leaves (sheet_row_id)
+        VALUES (${rawId})
+        ON CONFLICT (sheet_row_id) DO NOTHING;
+      `);
+
+      // 2. Hapus override jika ada
+      await db.delete(employeeLeaveRequests).where(eq(employeeLeaveRequests.sheetRowId, rawId));
+
+      // 3. Invalidate in-memory sheetCache seketika
+      sheetCache.data = sheetCache.data.filter(item => String(item.id) !== rawId);
+      sheetCache.totalRows = sheetCache.data.length;
+
+      return res.json({
+        status: "success",
+        message: "Catatan izin Google Sheet berhasil dihapus dan dihilangkan dari rekapan."
+      });
+    }
+
+    const numId = Number(rawId);
+    if (!isNaN(numId)) {
+      await db.delete(employeeLeaveRequests).where(eq(employeeLeaveRequests.id, numId));
+      return res.json({ status: "success", message: "Catatan perizinan berhasil dihapus." });
+    }
+
+    res.status(400).json({ status: "error", message: "ID catatan izin tidak valid" });
   } catch (error: any) {
     console.error("[Employee Leaves DELETE] Error:", error);
     res.status(500).json({ status: "error", message: error?.message || "Gagal menghapus catatan perizinan" });
