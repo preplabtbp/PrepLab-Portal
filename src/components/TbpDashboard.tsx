@@ -395,6 +395,13 @@ export function TbpDashboard({
 }: TbpDashboardProps) {
   const [time, setTime] = useState(new Date());
 
+  const isGts = activeUniverse === 'GTS';
+  const companyTitle = isGts ? 'PT. GTS' : (activeUniverse === 'ALL' ? 'PT. TBP, GPS & GTS' : 'PT. TBP & GPS');
+  const companySubtitle = isGts 
+    ? 'Preparation & Analytical Laboratory Information Center • PT. Gane Tambang Sentosa' 
+    : 'Preparation & Analytical Laboratory Information Center • Harita Nickel';
+  const siteLocation = isGts ? 'Site GTS • Halmahera Selatan' : 'Site Kawasi • Pulau Obi';
+
   // =========================================================================
   // MINI CALENDAR & MAJOR AGENDAS STATE & HELPERS
   // =========================================================================
@@ -1279,7 +1286,7 @@ export function TbpDashboard({
         <div className="absolute bottom-4 left-6 md:left-12 flex items-center gap-2">
           <div className="px-3 py-1 rounded-full bg-black/60 backdrop-blur-md border border-white/20 text-white text-xs font-semibold flex items-center gap-2 shadow-lg">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-            <span>Site Kawasi • Pulau Obi</span>
+            <span>{siteLocation}</span>
           </div>
           <div className="hidden sm:flex px-3 py-1 rounded-full bg-black/60 backdrop-blur-md border border-white/20 text-white/80 text-xs font-mono">
             Prep & Analytical Lab Portal
@@ -1291,7 +1298,7 @@ export function TbpDashboard({
           <button
             onClick={() => setPreviewImage({ 
               url: mediaSettings.banner || DEFAULT_MEDIA.banner, 
-              title: 'Header Banner Utama • Prep & Analytical Lab Portal (Site Kawasi • Pulau Obi)' 
+              title: `Header Banner Utama • Prep & Analytical Lab Portal (${siteLocation})` 
             })}
             className="px-3.5 py-1.5 rounded-xl bg-black/70 hover:bg-black/90 backdrop-blur-md text-white text-xs font-semibold border border-white/30 shadow-lg flex items-center gap-1.5 transition-all hover:scale-105 active:scale-95 cursor-pointer"
           >
@@ -1322,14 +1329,14 @@ export function TbpDashboard({
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-2xl md:text-3xl font-display font-extrabold tracking-tight" style={{ color: 'var(--text-main, #ffffff)' }}>
-                  PT. TBP & GPS
+                  {companyTitle}
                 </h1>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-bold border bg-teal-500/10 text-teal-500 border-teal-500/30">
                   VERIFIED SITE
                 </span>
               </div>
               <p className="text-xs tracking-wide" style={{ color: 'var(--text-muted, #94a3b8)' }}>
-                Preparation & Analytical Laboratory Information Center • Harita Nickel
+                {companySubtitle}
               </p>
             </div>
           </div>
@@ -1344,7 +1351,7 @@ export function TbpDashboard({
               }}
             >
               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
-              <span>281 Dokumen Tersedia</span>
+              <span>{posts?.length || 0} Dokumen Tersedia</span>
             </div>
             <div className="flex items-center gap-2">
               <button
