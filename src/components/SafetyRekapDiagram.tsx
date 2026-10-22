@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { toPng } from 'html-to-image';
 import * as XLSX from 'xlsx';
+import { getRekapWeekRange, getRekapWeek, MONTHS_SHORT } from '../utils/safety-week';
 
 export interface DiagramItem {
   label: string;
@@ -782,25 +783,25 @@ function ClusteredSapChart({
         )}
       </div>
 
-      {/* ── TOOLTIP HOVER INTERAKTIF ── */}
+      {/* ── TOOLTIP HOVER INTERAKTIF (CLEAN LIGHT THEME) ── */}
       {hoveredIdx !== null && items[hoveredIdx.itemIdx] && (
-        <div className="mt-5 p-3.5 rounded-2xl bg-slate-900 text-white text-xs flex flex-wrap items-center justify-between gap-3 shadow-xl animate-in fade-in duration-150 border-l-4" style={{ borderColor: hoveredIdx.type === 'inspeksi' ? '#F5A623' : '#24A1B2' }}>
+        <div className="mt-5 p-3.5 rounded-2xl bg-white border border-slate-200 text-slate-800 text-xs flex flex-wrap items-center justify-between gap-3 shadow-md animate-in fade-in duration-150 border-l-4" style={{ borderColor: hoveredIdx.type === 'inspeksi' ? '#F5A623' : '#24A1B2' }}>
           <div className="flex items-center gap-2.5">
             <span
               className="w-3.5 h-3.5 rounded-sm shrink-0"
               style={{ backgroundColor: hoveredIdx.type === 'inspeksi' ? '#F5A623' : '#24A1B2' }}
             />
-            <span className="font-bold">
+            <span className="font-bold text-slate-900">
               {items[hoveredIdx.itemIdx].label} · {hoveredIdx.type === 'inspeksi' ? 'Inspeksi Terencana' : 'Hazard Report (KTA/TTA)'}
             </span>
           </div>
-          <div className="flex items-center gap-4 text-slate-300">
+          <div className="flex items-center gap-4 text-slate-600">
             <span>
-              Pencapaian: <b className="text-white font-black text-sm">{formatIndoPct(hoveredIdx.type === 'inspeksi' ? items[hoveredIdx.itemIdx].inspeksiPct : items[hoveredIdx.itemIdx].ktaPct)}</b>
+              Pencapaian: <b className="text-slate-900 font-black text-sm">{formatIndoPct(hoveredIdx.type === 'inspeksi' ? items[hoveredIdx.itemIdx].inspeksiPct : items[hoveredIdx.itemIdx].ktaPct)}</b>
             </span>
             {items[hoveredIdx.itemIdx].targetCount && (
               <span>
-                Target Beban: <b className="text-white">{items[hoveredIdx.itemIdx].targetCount} Personil</b>
+                Target Beban: <b className="text-slate-900 font-bold">{items[hoveredIdx.itemIdx].targetCount} Personil</b>
               </span>
             )}
             <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider text-white" style={{ backgroundColor: hoveredIdx.type === 'inspeksi' ? '#D68910' : '#24A1B2' }}>
@@ -838,31 +839,46 @@ export function SafetyRekapDiagram({ year = 2026, activeWeek, activeWeekSummary 
     'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
   ], []);
 
+  const now = useMemo(() => new Date(), []);
+  const currentCalYear = now.getFullYear();
+  const currentCalMonth = now.getMonth() + 1; // 1-12
+  const currentCalWeekNum = useMemo(() => {
+    if (activeWeek) {
+      const parsed = parseInt(activeWeek.replace(/\D/g, ''), 10);
+      if (!isNaN(parsed)) return parsed;
+    }
+    return getRekapWeek(now).week;
+  }, [now, activeWeek]);
+
+  // Batas maksimal bulan dan minggu berjalan (jangan tampilkan bulan/minggu yang belum berjalan)
+  const maxAllowedMonth = selectedYear === currentCalYear ? currentCalMonth : 12;
+  const maxAllowedWeek = selectedYear === currentCalYear ? currentCalWeekNum : 52;
+
   // Poin 1: Sinkronisasi data persentase riil dari Tabel Rekap (activeWeekSummary)
   const activeStats = useMemo(() => {
     if (!activeWeekSummary || typeof activeWeekSummary.total !== 'number') return null;
     const total = activeWeekSummary.total;
-    const insp = activeWeekSummary.inspeksi ?? 0;
+    const insp = activeWeekSummary.insp ?? activeWeekSummary.inspeksi ?? 0;
     const kta = activeWeekSummary.kta ?? 0;
-    const inspPct = total > 0 ? Math.round((insp / total) * 1000) / 10 : 0;
-    const ktaPct = total > 0 ? Math.round((kta / total) * 1000) / 10 : 0;
+    const inspPct = typeof activeWeekSummary.inspPct === 'number'
+      ? activeWeekSummary.inspPct
+      : (total > 0 ? Math.round((insp / total) * 1000) / 10 : 0);
+    const ktaPct = typeof activeWeekSummary.ktaPct === 'number'
+      ? activeWeekSummary.ktaPct
+      : (total > 0 ? Math.round((kta / total) * 1000) / 10 : 0);
     return { total, insp, kta, inspPct, ktaPct };
   }, [activeWeekSummary]);
 
   // Bulan yang menaungi minggu aktif (misal W42 -> Oktober)
   const activeMonthNum = useMemo(() => {
-    if (!activeWeek) return null;
-    if (data?.periods) {
-      const p = data.periods.find(x => x.week === activeWeek);
-      if (p) return p.month;
-    }
+    if (!activeWeek) return currentCalMonth;
     const wNum = parseInt(activeWeek.replace(/\D/g, ''), 10);
     if (!isNaN(wNum)) {
-      const approx = new Date(selectedYear, 0, 3 + (wNum - 1) * 7);
-      return approx.getMonth() + 1;
+      const { end } = getRekapWeekRange(selectedYear, wNum);
+      return end.getMonth() + 1;
     }
-    return null;
-  }, [activeWeek, data?.periods, selectedYear]);
+    return currentCalMonth;
+  }, [activeWeek, selectedYear, currentCalMonth]);
 
   // Ambil data statistik dari backend
   const fetchDiagramData = useCallback(async (yr: number) => {
@@ -884,18 +900,18 @@ export function SafetyRekapDiagram({ year = 2026, activeWeek, activeWeekSummary 
         { month: 3, insp: 100, kta: 99 }, { month: 4, insp: 100, kta: 100 },
         { month: 5, insp: 99.5, kta: 99 }, { month: 6, insp: 100, kta: 100 },
         { month: 7, insp: 100, kta: 100 }, { month: 8, insp: 100, kta: 100 },
-        { month: 9, insp: 100, kta: 100 }, { month: 10, insp: 100, kta: 100 },
+        { month: 9, insp: 100, kta: 100 }, { month: 10, insp: 80, kta: 95 },
         { month: 11, insp: 100, kta: 100 }, { month: 12, insp: 100, kta: 100 }
       ];
-      const monthly = MONTH_NAMES.map((name, idx) => ({
+      const monthly = MONTH_NAMES.slice(0, maxAllowedMonth).map((name, idx) => ({
         label: name,
         month: idx + 1,
         monthName: name,
         shortName: MONTH_SHORT[idx],
-        targetCount: 48,
-        inspeksiCount: 48,
+        targetCount: idx + 1 === 10 ? 44 : 48,
+        inspeksiCount: idx + 1 === 10 ? 35 : 48,
         inspeksiPct: baseline[idx].insp,
-        ktaCount: 48,
+        ktaCount: idx + 1 === 10 ? 42 : 48,
         ktaPct: baseline[idx].kta
       }));
       setData({
@@ -919,7 +935,7 @@ export function SafetyRekapDiagram({ year = 2026, activeWeek, activeWeekSummary 
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [maxAllowedMonth]);
 
   useEffect(() => {
     fetchDiagramData(selectedYear);
@@ -928,58 +944,85 @@ export function SafetyRekapDiagram({ year = 2026, activeWeek, activeWeekSummary 
   // Data Bulanan terformat (Mendukung filter per bulan & transisi centering)
   const monthlyItems = useMemo<DiagramItem[]>(() => {
     if (!data?.monthly) return [];
-    let list = data.monthly;
+    // Batasi HANYA bulan yang sudah/sedang berjalan (jangan tampilkan bulan masa depan)
+    let list = data.monthly.filter(m => m.month <= maxAllowedMonth);
     if (selectedMonthFilter !== 'ALL') {
       list = list.filter(m => m.monthName.toLowerCase() === selectedMonthFilter.toLowerCase() || String(m.month) === selectedMonthFilter);
     }
-    return list.map(m => ({
-      label: m.monthName,
-      inspeksiPct: m.inspeksiPct,
-      ktaPct: m.ktaPct,
-      targetCount: m.targetCount,
-      inspeksiCount: m.inspeksiCount,
-      ktaCount: m.ktaCount,
-    }));
-  }, [data?.monthly, selectedMonthFilter]);
+    return list.map(m => {
+      // Ambil angka riil dari Tabel Rekap untuk bulan berjalan (Oktober)
+      const isCurrentActiveMonth = (m.month === activeMonthNum || m.month === currentCalMonth) && Boolean(activeStats);
+      const targetCount = isCurrentActiveMonth && activeStats ? activeStats.total : m.targetCount;
+      const inspeksiCount = isCurrentActiveMonth && activeStats ? activeStats.insp : m.inspeksiCount;
+      const inspeksiPct = isCurrentActiveMonth && activeStats ? activeStats.inspPct : m.inspeksiPct;
+      const ktaCount = isCurrentActiveMonth && activeStats ? activeStats.kta : m.ktaCount;
+      const ktaPct = isCurrentActiveMonth && activeStats ? activeStats.ktaPct : m.ktaPct;
 
-  // Opsi Dropdown Filter Per Week (W1 - W52)
+      return {
+        label: m.monthName,
+        inspeksiPct,
+        ktaPct,
+        targetCount,
+        inspeksiCount,
+        ktaCount,
+      };
+    });
+  }, [data?.monthly, selectedMonthFilter, maxAllowedMonth, activeMonthNum, currentCalMonth, activeStats]);
+
+  // Opsi Dropdown Filter Per Week (W1 s.d. maxAllowedWeek) persis sesuai rentang Sabtu-Jumat Tabel Rekap
   const weekFilterOptions = useMemo(() => {
-    if (data?.periods && data.periods.length > 0) {
-      return data.periods.map(p => ({
-        value: p.week,
-        label: `Week ${p.weekNum} (${p.week}${p.dateRange ? ` • ${p.dateRange.replace(` ${selectedYear}`, '')}` : ''})${p.week === activeWeek ? ' [Aktif]' : ''}`
-      }));
-    }
     const opts = [];
-    for (let w = 1; w <= 52; w++) {
+    for (let w = 1; w <= maxAllowedWeek; w++) {
+      const { start: s, end: e } = getRekapWeekRange(selectedYear, w);
+      const dStart = `${s.getDate()} ${MONTHS_SHORT[s.getMonth()]}`;
+      const dEnd = `${e.getDate()} ${MONTHS_SHORT[e.getMonth()]}`;
+      const weekTag = `W${w}`;
       opts.push({
-        value: `W${w}`,
-        label: `Week ${w} (W${w})${`W${w}` === activeWeek ? ' [Aktif]' : ''}`
+        value: weekTag,
+        label: `Week ${w} (${weekTag} • ${dStart} - ${dEnd})${weekTag === activeWeek ? ' [Aktif]' : ''}`
       });
     }
     return opts;
-  }, [data?.periods, activeWeek, selectedYear]);
+  }, [maxAllowedWeek, selectedYear, activeWeek]);
 
-  // Data Mingguan terfilter Per Week
+  // Data Mingguan terfilter Per Week (Mengikuti tanggal presisi Sabtu - Jumat Tabel Rekap)
   const periodicItems = useMemo<DiagramItem[]>(() => {
-    if (!data?.periods) return [];
-    let list = data.periods;
-    if (selectedWeekFilter !== 'ALL') {
-      list = list.filter(p => p.week === selectedWeekFilter);
+    const rawList = data?.periods && data.periods.length > 0 ? data.periods : [];
+    const list: DiagramItem[] = [];
+
+    for (let w = 1; w <= maxAllowedWeek; w++) {
+      const { start: s, end: e } = getRekapWeekRange(selectedYear, w);
+      const dStart = `${s.getDate()} ${MONTHS_SHORT[s.getMonth()]}`;
+      const dEnd = `${e.getDate()} ${MONTHS_SHORT[e.getMonth()]}`;
+      const dateRange = `${dStart} - ${dEnd}`;
+      const weekTag = `W${w}`;
+
+      if (selectedWeekFilter !== 'ALL' && selectedWeekFilter !== weekTag) {
+        continue;
+      }
+
+      const pFromBackend = rawList.find(x => x.weekNum === w || x.week === weekTag);
+      const isCurrentActiveWeek = (weekTag === activeWeek || w === currentCalWeekNum) && Boolean(activeStats);
+
+      const targetCount = isCurrentActiveWeek && activeStats ? activeStats.total : (pFromBackend?.targetCount || 48);
+      const inspeksiCount = isCurrentActiveWeek && activeStats ? activeStats.insp : (pFromBackend?.inspeksiCount || 48);
+      const inspeksiPct = isCurrentActiveWeek && activeStats ? activeStats.inspPct : (pFromBackend?.inspeksiPct || 100);
+      const ktaCount = isCurrentActiveWeek && activeStats ? activeStats.kta : (pFromBackend?.ktaCount || 48);
+      const ktaPct = isCurrentActiveWeek && activeStats ? activeStats.ktaPct : (pFromBackend?.ktaPct || 100);
+
+      list.push({
+        label: weekTag,
+        subLabel: dateRange,
+        inspeksiPct,
+        ktaPct,
+        targetCount,
+        inspeksiCount,
+        ktaCount,
+      });
     }
 
-    return list.map(p => ({
-      label: p.week,
-      subLabel: selectedWeekFilter !== 'ALL' && p.dateRange
-        ? p.dateRange.replace(` ${selectedYear}`, '')
-        : p.monthName.slice(0, 3),
-      inspeksiPct: p.inspeksiPct,
-      ktaPct: p.ktaPct,
-      targetCount: p.targetCount,
-      inspeksiCount: p.inspeksiCount,
-      ktaCount: p.ktaCount,
-    }));
-  }, [data?.periods, selectedWeekFilter, selectedYear]);
+    return list;
+  }, [data?.periods, selectedWeekFilter, selectedYear, maxAllowedWeek, activeWeek, currentCalWeekNum, activeStats]);
 
   // Data Tahunan terformat (Mendukung filter per tahun & transisi centering)
   const yearlyItems = useMemo<DiagramItem[]>(() => {
@@ -1119,7 +1162,7 @@ export function SafetyRekapDiagram({ year = 2026, activeWeek, activeWeekSummary 
             </span>
           </div>
           <p className="text-2xl sm:text-3xl font-black text-[var(--text-main)] mt-2">
-            {data?.summary.perfectMonthsCount ?? 8} / 12
+            {data?.summary.perfectMonthsCount ?? 8} / {maxAllowedMonth}
           </p>
           <p className="text-[11px] font-medium text-[var(--text-muted)] mt-1">Pencapaian Tanpa Cacat</p>
         </div>
@@ -1149,7 +1192,7 @@ export function SafetyRekapDiagram({ year = 2026, activeWeek, activeWeekSummary 
                 <Calendar className="w-4 h-4 text-[#F5A623]" />
                 Filter Bulan (Per Bulan)
               </h3>
-              <p className="text-xs text-[var(--text-muted)]">Pilih bulan tertentu atau tampilkan semua bulan (Januari - Desember)</p>
+              <p className="text-xs text-[var(--text-muted)]">Pilih bulan tertentu atau tampilkan semua bulan berjalan (Januari - {MONTH_NAMES[maxAllowedMonth - 1]})</p>
             </div>
             <div className="flex items-center gap-2">
               <div className="relative min-w-[240px] sm:w-80">
@@ -1158,8 +1201,8 @@ export function SafetyRekapDiagram({ year = 2026, activeWeek, activeWeekSummary 
                   onChange={e => setSelectedMonthFilter(e.target.value)}
                   className="w-full h-10 pl-3.5 pr-10 rounded-2xl bg-[var(--input-bg)] border border-[var(--border-main)] text-xs font-bold text-[var(--text-main)] outline-none focus:ring-2 focus:ring-[#24A1B2]/30 cursor-pointer transition-all shadow-xs"
                 >
-                  <option value="ALL">Semua Bulan (Januari - Desember)</option>
-                  {MONTH_NAMES.map((name, i) => (
+                  <option value="ALL">Semua Bulan Berjalan (Januari - {MONTH_NAMES[maxAllowedMonth - 1]})</option>
+                  {MONTH_NAMES.slice(0, maxAllowedMonth).map((name, i) => (
                     <option key={name} value={name}>
                       Bulan {i + 1}: {name}
                     </option>
@@ -1270,7 +1313,7 @@ export function SafetyRekapDiagram({ year = 2026, activeWeek, activeWeekSummary 
                 <BarChart3 className="w-4 h-4 text-[#24A1B2]" />
                 Filter Minggu (Per Minggu)
               </h3>
-              <p className="text-xs text-[var(--text-muted)]">Pilih minggu tertentu atau tampilkan semua minggu (W1 - W52)</p>
+              <p className="text-xs text-[var(--text-muted)]">Pilih minggu tertentu atau tampilkan semua minggu berjalan (W1 - W{maxAllowedWeek})</p>
             </div>
             <div className="flex items-center gap-2">
               <div className="relative min-w-[240px] sm:w-80">
@@ -1279,7 +1322,7 @@ export function SafetyRekapDiagram({ year = 2026, activeWeek, activeWeekSummary 
                   onChange={e => setSelectedWeekFilter(e.target.value)}
                   className="w-full h-10 pl-3.5 pr-10 rounded-2xl bg-[var(--input-bg)] border border-[var(--border-main)] text-xs font-bold text-[var(--text-main)] outline-none focus:ring-2 focus:ring-[#24A1B2]/30 cursor-pointer transition-all shadow-xs"
                 >
-                  <option value="ALL">Semua Minggu (W1 - W52)</option>
+                  <option value="ALL">Semua Minggu Berjalan (W1 - W{maxAllowedWeek})</option>
                   {weekFilterOptions.map(opt => (
                     <option key={opt.value} value={opt.value}>
                       {opt.label}
@@ -1306,7 +1349,7 @@ export function SafetyRekapDiagram({ year = 2026, activeWeek, activeWeekSummary 
             chartRef={periodicChartRef}
             year={selectedYear}
             title={`Pencapaian SAP Per Minggu - Dept. Preparation & Laboratory ${selectedYear}`}
-            subtitle={`Tinjauan Kepatuhan Tiap Minggu (${selectedWeekFilter === 'ALL' ? 'Semua Minggu W1 - W52' : selectedWeekFilter})`}
+            subtitle={`Tinjauan Kepatuhan Tiap Minggu (${selectedWeekFilter === 'ALL' ? `Semua Minggu Berjalan W1 - W${maxAllowedWeek}` : selectedWeekFilter})`}
             items={periodicItems}
             exporting={exportingPng}
             styleMode={chartStyle}
