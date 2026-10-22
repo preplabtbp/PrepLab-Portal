@@ -30,11 +30,15 @@ export interface DailySampleReceived {
 }
 
 export interface DailyPressPowder {
+  os?: number;
   received: { shift: number; day: number; wkly: number };
   finish: { shift: number; day: number; wkly: number };
+  bal?: number;
 }
 
 export interface DailyEDXRF {
+  os?: number;
+  received?: number;
   epsC: number;
   epsD: number;
   epsE: number;
@@ -45,6 +49,7 @@ export interface DailyEDXRF {
   shift: number;
   day: number;
   wkly: number;
+  bal?: number;
 }
 
 export interface DailyWeighingFuseBead {
@@ -96,6 +101,7 @@ export interface DailyWDXRF {
 
 export interface DailyQCData {
   os: number;
+  received?: number;
   finishShift: number;
   finishDay: number;
   finishWkly: number;

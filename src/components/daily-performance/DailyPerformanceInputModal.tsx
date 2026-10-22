@@ -4,7 +4,7 @@ import {
   FileCheck, ArrowRight, Save, UserCheck, AlertCircle, 
   Plus, RefreshCw, Filter, Shield, Clock, ChevronDown, 
   CheckSquare, Square, Building2, Beaker, FileSpreadsheet,
-  Send, UserX, Stethoscope
+  Send, UserX, Stethoscope, ArrowDownRight, CheckCircle2
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { DailyPerformanceRecord, ShiftType, ReguType } from './daily-performance-types';
@@ -73,11 +73,14 @@ export const DailyPerformanceInputModal: React.FC<DailyPerformanceInputModalProp
     status: string;
   }>>([]);
 
-  // JALUR 1: GC & EDXRF (Single Entry di Press Pellet)
-  // Input 1x: Sampel masuk dari Preparasi Kering ke Lab
-  const [pulpDryReceived, setPulpDryReceived] = useState(450);
-  const [pressFinish, setPressFinish] = useState(450);
-  // Scan EDXRF per alat
+  // JALUR 1: GC (PRESS PELLET ➔ EDXRF)
+  // Press Pellet
+  const [pressOsAwal, setPressOsAwal] = useState(0); // Sisa serbuk shift sebelumnya
+  const [pulpDryReceived, setPulpDryReceived] = useState(450); // Sampel serbuk kering masuk dari Prep Kering ke Lab
+  const [pressFinish, setPressFinish] = useState(450); // Pelet yang selesai dipress
+  
+  // EDXRF
+  const [edxrfOsAwal, setEdxrfOsAwal] = useState(0); // Pelet jadi dari shift sebelumnya belum discan
   const [epsC, setEpsC] = useState(60);
   const [epsD, setEpsD] = useState(0);
   const [epsE, setEpsE] = useState(80);
@@ -128,11 +131,11 @@ export const DailyPerformanceInputModal: React.FC<DailyPerformanceInputModalProp
   const [ztmBStd, setZtmBStd] = useState(20);
   const [ztmBBlk, setZtmBBlk] = useState(4);
 
-  // QC & Report
-  const [qcOs, setQcOs] = useState(150);
-  const [qcFinish, setQcFinish] = useState(120);
-  const [reportOs, setReportOs] = useState(50);
-  const [reportDone, setReportDone] = useState(100);
+  // QC & Reporting (Bersambung Otomatis dari Finished WDXRF)
+  const [qcOs, setQcOs] = useState(0);
+  const [qcFinish, setQcFinish] = useState(0);
+  const [reportOs, setReportOs] = useState(0);
+  const [reportDone, setReportDone] = useState(0);
 
   // Load Roster Live
   useEffect(() => {
@@ -207,12 +210,21 @@ export const DailyPerformanceInputModal: React.FC<DailyPerformanceInputModalProp
     saveStoredSampleBatches(updated);
   };
 
-  // Auto Calculations
-  // Jalur 1: Press Pellet ➔ EDXRF
-  const edxrfTotal = epsC + epsD + epsE + epsF + epsG + epsH + s2Puma;
-  const osEdxrf = Math.max(0, pressFinish - edxrfTotal);
+  // ==================== AUTO CALCULATIONS & CASCADING ====================
+  // 1. Jalur GC (Press Pellet ➔ EDXRF)
+  // Total beban serbuk masuk di Press
+  const totalPressLoad = pressOsAwal + pulpDryReceived;
+  // Sisa OS Press (serbuk belum dipress karena finished press di bawah received)
+  const osPress = Math.max(0, totalPressLoad - pressFinish);
 
-  // Jalur 2: Weighing ➔ Fusion ➔ WDXRF
+  // Antrean Meja EDXRF: HANYA yang finished di press yang otomatis masuk ke EDXRF!
+  const edxrfReceived = pressFinish;
+  const totalEdxrfLoad = edxrfOsAwal + edxrfReceived;
+  const edxrfTotal = epsC + epsD + epsE + epsF + epsG + epsH + s2Puma;
+  // Sisa OS EDXRF (pelet sudah jadi tapi belum discan mesin)
+  const osEdxrf = Math.max(0, totalEdxrfLoad - edxrfTotal);
+
+  // 2. Jalur 2: Weighing ➔ Fusion ➔ WDXRF
   const finishedBatches = batches.filter(b => b.isFinished);
   const outstandingBatches = batches.filter(b => !b.isFinished);
   const fusionFinishCount = finishedBatches.reduce((acc, b) => acc + b.sampleCount, 0);
@@ -222,15 +234,35 @@ export const DailyPerformanceInputModal: React.FC<DailyPerformanceInputModalProp
   const loiFinish = loiW2 + loiW4 + loiW5;
   const loiBal = Math.max(0, loiOs - loiFinish);
 
-  // WDXRF
+  // WDXRF (Total Run Zetium A & B)
   const ztmATotal = ztmAPrd + ztmAExp + ztASml + ztmAGts + ztmARarr + ztmAVer + ztmAStd + ztmABlk;
   const ztmBTotal = ztmBPrd + ztmBExp + ztmBSml + ztmBGts + ztmBRarr + ztmBVer + ztmBStd + ztmBBlk;
   const wdxrfTotal = ztmATotal + ztmBTotal;
   const wdxrfBal = Math.max(0, fusionFinishCount - wdxrfTotal);
 
-  // QC & Report
-  const qcBal = Math.max(0, qcOs - qcFinish);
-  const reportBal = Math.max(0, reportOs - reportDone);
+  // 3. QC & Reporting (Cascading otomatis dari WDXRF)
+  // Received QC otomatis bersambung dari Finished WDXRF
+  const qcReceived = wdxrfTotal;
+  const totalQcLoad = qcOs + qcReceived;
+  // Jika qcFinish belum pernah diisi manual dan qcReceived berubah, sinkronkan awal
+  useEffect(() => {
+    if (qcFinish === 0 && qcReceived > 0) {
+      setQcFinish(qcReceived);
+    }
+  }, [qcReceived]);
+
+  const qcBal = Math.max(0, totalQcLoad - qcFinish);
+
+  // Received Reporting otomatis bersambung dari Finished QC
+  const reportReceived = qcFinish;
+  const totalReportLoad = reportOs + reportReceived;
+  useEffect(() => {
+    if (reportDone === 0 && reportReceived > 0) {
+      setReportDone(reportReceived);
+    }
+  }, [reportReceived]);
+
+  const reportBal = Math.max(0, totalReportLoad - reportDone);
 
   // Submit Quick Absence (Izin / Sakit) to /api/employee-leaves for Administrative Review
   const handleQuickAbsenceSubmit = async () => {
@@ -346,12 +378,17 @@ export const DailyPerformanceInputModal: React.FC<DailyPerformanceInputModalProp
         smelter: { shift: smelterShift, day: smelterShift, wkly: smelterShift }
       },
       pressPowder: {
+        os: pressOsAwal,
         received: { shift: pulpDryReceived, day: pulpDryReceived, wkly: pulpDryReceived },
-        finish: { shift: pressFinish, day: pressFinish, wkly: pressFinish }
+        finish: { shift: pressFinish, day: pressFinish, wkly: pressFinish },
+        bal: osPress
       },
       edxrf: {
+        os: edxrfOsAwal,
+        received: edxrfReceived,
         epsC, epsD, epsE, epsF, epsG, epsH, s2Puma,
-        shift: edxrfTotal, day: edxrfTotal, wkly: edxrfTotal
+        shift: edxrfTotal, day: edxrfTotal, wkly: edxrfTotal,
+        bal: osEdxrf
       },
       fuseBead: {
         osExp: fusionOsCount,
@@ -379,10 +416,19 @@ export const DailyPerformanceInputModal: React.FC<DailyPerformanceInputModalProp
         bal: wdxrfBal
       },
       qc: {
-        os: qcOs, finishShift: qcFinish, finishDay: qcFinish, finishWkly: qcFinish, bal: qcBal
+        os: qcOs,
+        received: qcReceived,
+        finishShift: qcFinish, 
+        finishDay: qcFinish, 
+        finishWkly: qcFinish, 
+        bal: qcBal
       },
       report: {
-        osReport: reportOs, received: expShift, finishReportDay: reportDone, finishReportWkly: reportDone, bal: reportBal
+        osReport: reportOs, 
+        received: reportReceived, 
+        finishReportDay: reportDone, 
+        finishReportWkly: reportDone, 
+        bal: reportBal
       },
       manpowerNotes: manpowerNotes || undefined,
       updatedAt: new Date().toISOString()
@@ -405,7 +451,7 @@ export const DailyPerformanceInputModal: React.FC<DailyPerformanceInputModalProp
               Input Log Daily Performance Shift Baru
             </h3>
             <p className="text-xs text-slate-500">
-              Penginputan terstruktur per-stasiun oleh Foreman dengan otomasi antrean & sinkronisasi roster
+              Penginputan terstruktur per-stasiun oleh Foreman dengan otomasi antrean bersambung & sinkronisasi roster
             </p>
           </div>
           <button 
@@ -427,7 +473,7 @@ export const DailyPerformanceInputModal: React.FC<DailyPerformanceInputModalProp
               { id: 'all', label: 'Semua Stasiun (Admin/Spv)' },
               { id: 'foreman_gc', label: '1. GC & EDXRF' },
               { id: 'foreman_weighing', label: '2. Monitoring & Weighing/LOI' },
-              { id: 'foreman_wdxrf', label: '3. Fusion & WDXRF' },
+              { id: 'foreman_wdxrf', label: '3. Fusion, WDXRF & QC/Report' },
             ].map(r => (
               <button
                 key={r.id}
@@ -456,7 +502,7 @@ export const DailyPerformanceInputModal: React.FC<DailyPerformanceInputModalProp
             { id: 'info', label: '1. Shift & Manpower Roster', icon: <Users className="w-3.5 h-3.5" />, visible: true },
             { id: 'gc_edxrf', label: '2. Jalur 1: Press Pellet & EDXRF', icon: <Layers className="w-3.5 h-3.5" />, visible: roleMode === 'all' || roleMode === 'foreman_gc' },
             { id: 'weighing_loi', label: '3. Jalur 2: Weighing (Batch) & LOI', icon: <Flame className="w-3.5 h-3.5" />, visible: roleMode === 'all' || roleMode === 'foreman_weighing' },
-            { id: 'fusion_wdxrf', label: '4. Jalur 2: Fusion Bead & WDXRF', icon: <Cpu className="w-3.5 h-3.5" />, visible: roleMode === 'all' || roleMode === 'foreman_wdxrf' },
+            { id: 'fusion_wdxrf', label: '4. Jalur 2: Fusion, WDXRF & QC/Report', icon: <Cpu className="w-3.5 h-3.5" />, visible: roleMode === 'all' || roleMode === 'foreman_wdxrf' },
             { id: 'qc', label: '5. QC & Pelaporan CoA', icon: <FileCheck className="w-3.5 h-3.5" />, visible: roleMode === 'all' },
           ].filter(t => t.visible).map(t => (
             <button
@@ -724,7 +770,7 @@ export const DailyPerformanceInputModal: React.FC<DailyPerformanceInputModalProp
             </div>
           )}
 
-          {/* TAB 2: JALUR 1 - GC & EDXRF (SINGLE ENTRY DI PRESS PELLET) */}
+          {/* TAB 2: JALUR 1 - GC & EDXRF (PRESS PELLET ➔ EDXRF RUN) */}
           {activeTab === 'gc_edxrf' && (
             <div className="space-y-4">
               <div className="p-3.5 rounded-2xl bg-teal-50 dark:bg-teal-950/30 border border-teal-200 dark:border-teal-800/60">
@@ -733,55 +779,102 @@ export const DailyPerformanceInputModal: React.FC<DailyPerformanceInputModalProp
                   Jalur 1: Grade Control Pit (Press Pellet ➔ Antrean EDXRF)
                 </span>
                 <p className="text-[11px] text-teal-700 dark:text-teal-400 mt-0.5">
-                  Input 1x di stasiun Press Pellet (dari preparasi kering ke lab). Pelet selesai dipress otomatis menjadi antrean EDXRF dan dikurangi hasil finish scan per unit.
+                  Pulp kering masuk lab dari prep kering. Pelet yang <strong>selesai dipress</strong> otomatis masuk ke antrean EDXRF. Di akhir shift, bisa terdapat <strong>OS Press</strong> (serbuk belum dipress) dan <strong>OS EDXRF</strong> (pelet sudah dicetak tapi belum discan).
                 </p>
               </div>
 
-              {/* Input 1x: Masuk ke Press Pellet */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 space-y-1">
-                  <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block">
-                    1. Pulp Masuk Lab dari Prep Kering (1x Entry)
-                  </label>
-                  <p className="text-[10px] text-slate-500">Jumlah kantong sampel serbuk kering diserahterimakan ke lab</p>
-                  <input 
-                    type="number" 
-                    value={pulpDryReceived} 
-                    onChange={e => {
-                      const val = Number(e.target.value);
-                      setPulpDryReceived(val);
-                      setPressFinish(val); // default sync
-                    }}
-                    className="w-full mt-1 px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 font-mono font-bold text-slate-800 dark:text-white"
-                  />
+              {/* Tahap 1: Stasiun Press Pellet */}
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-800 dark:text-white flex items-center gap-1.5">
+                    <Layers className="w-4 h-4 text-teal-600" />
+                    Tahap 1: Pengepresan Bubuk Padat (Press Pellet)
+                  </span>
+                  <div className="flex items-center gap-2 text-xs">
+                    <span className="text-slate-500">Total Beban Press: <strong>{totalPressLoad} spl</strong></span>
+                    <span className="text-slate-300">|</span>
+                    <span className="font-bold text-amber-600 dark:text-amber-400">
+                      OS Press: {osPress} spl
+                    </span>
+                  </div>
                 </div>
 
-                <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 space-y-1">
-                  <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block">
-                    2. Press Powder Selesai Dipress (Finish Press)
-                  </label>
-                  <p className="text-[10px] text-slate-500">Otomatis menjadi antrean masuk instrumen EDXRF</p>
-                  <input 
-                    type="number" 
-                    value={pressFinish} 
-                    onChange={e => setPressFinish(Number(e.target.value))}
-                    className="w-full mt-1 px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 font-mono font-bold text-teal-600 dark:text-teal-400"
-                  />
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                  <div>
+                    <label className="text-[10px] text-slate-500 font-medium">OS Press Awal (Sisa Serbuk Shift Lalu)</label>
+                    <input 
+                      type="number" 
+                      value={pressOsAwal} 
+                      onChange={e => setPressOsAwal(Number(e.target.value))}
+                      className="w-full mt-1 px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 font-mono text-center font-bold"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] text-teal-700 dark:text-teal-400 font-bold">Pulp Masuk Lab dari Prep Kering (1x Entry)</label>
+                    <input 
+                      type="number" 
+                      value={pulpDryReceived} 
+                      onChange={e => {
+                        const val = Number(e.target.value);
+                        setPulpDryReceived(val);
+                        setPressFinish(val); // default sync
+                      }}
+                      className="w-full mt-1 px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-teal-300 dark:border-teal-700 font-mono text-center font-bold text-teal-700 dark:text-teal-300"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] text-emerald-700 dark:text-emerald-400 font-bold">Press Selesai (Finished Press)</label>
+                    <input 
+                      type="number" 
+                      value={pressFinish} 
+                      onChange={e => setPressFinish(Number(e.target.value))}
+                      className="w-full mt-1 px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-emerald-300 dark:border-emerald-700 font-mono text-center font-bold text-emerald-700 dark:text-emerald-300"
+                    />
+                  </div>
                 </div>
+
+                {osPress > 0 && (
+                  <div className="p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 text-[11px] text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800 flex items-center justify-between">
+                    <span>⚠️ Terdapat sisa serbuk belum dipress:</span>
+                    <strong className="font-mono">{totalPressLoad} beban − {pressFinish} selesai = {osPress} spl OS Press</strong>
+                  </div>
+                )}
               </div>
 
-              {/* EDXRF Run Per Mesin */}
-              <div className="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-2.5">
+              {/* Tahap 2: Stasiun EDXRF (Menerima HANYA pelet yang selesai dipress) */}
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                    3. Hasil Scan Selesai per Mesin EDXRF
-                  </span>
-                  <span className="text-xs font-bold text-teal-700 dark:text-teal-300">
-                    Total Finish EDXRF: {edxrfTotal} sampel
-                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <Cpu className="w-4 h-4 text-blue-600" />
+                    <span className="text-xs font-bold text-slate-800 dark:text-white">
+                      Tahap 2: Pembacaan Spektrometer EDXRF
+                    </span>
+                    <span className="text-[10px] bg-teal-100 dark:bg-teal-900/60 text-teal-800 dark:text-teal-300 px-2 py-0.5 rounded font-bold">
+                      Antrean Pelet Masuk: {edxrfReceived} spl (dari Finish Press)
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs">
+                    <span className="text-slate-500">Scan Selesai: <strong>{edxrfTotal} spl</strong></span>
+                    <span className="text-slate-300">|</span>
+                    <span className="font-bold text-blue-600 dark:text-blue-400">
+                      OS EDXRF: {osEdxrf} pelet
+                    </span>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                  <div className="p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
+                    <label className="text-[10px] text-slate-500 block font-medium">OS Pelet Awal</label>
+                    <input 
+                      type="number" 
+                      value={edxrfOsAwal} 
+                      onChange={e => setEdxrfOsAwal(Number(e.target.value))}
+                      className="w-full mt-1 px-2 py-1 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono text-center font-bold"
+                    />
+                  </div>
+
                   {[
                     ['Epsilon C', epsC, setEpsC], 
                     ['Epsilon D', epsD, setEpsD], 
@@ -791,34 +884,44 @@ export const DailyPerformanceInputModal: React.FC<DailyPerformanceInputModalProp
                     ['Epsilon H', epsH, setEpsH], 
                     ['S2 Puma', s2Puma, setS2Puma]
                   ].map(([name, val, setter]: any) => (
-                    <div key={name} className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700">
+                    <div key={name} className="p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
                       <label className="text-[10px] text-slate-500 block font-medium">{name}</label>
                       <input 
                         type="number" 
                         value={val} 
                         onChange={e => setter(Number(e.target.value))}
-                        className="w-full mt-1 px-2 py-1 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 font-mono text-center font-bold"
+                        className="w-full mt-1 px-2 py-1 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono text-center font-bold"
                       />
                     </div>
                   ))}
+                </div>
 
-                  {/* Summary Box OS EDXRF */}
-                  <div className="p-2.5 rounded-xl bg-teal-50 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-800 flex flex-col justify-center items-center text-center">
-                    <span className="text-[10px] text-teal-600 dark:text-teal-400 font-semibold">OS EDXRF Sisa</span>
-                    <span className="text-base font-extrabold text-teal-700 dark:text-teal-300 font-mono">
-                      {osEdxrf} spl
+                {/* Dua Kotak Ringkasan OS yang Jelas */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                  <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 flex items-center justify-between text-xs">
+                    <div>
+                      <span className="font-bold text-amber-800 dark:text-amber-300 block">1. OS Press (Serbuk Belum Dipress):</span>
+                      <span className="text-[10px] text-amber-600 dark:text-amber-400">
+                        {totalPressLoad} total serbuk − {pressFinish} selesai press
+                      </span>
+                    </div>
+                    <span className="text-base font-extrabold text-amber-700 dark:text-amber-300 font-mono">
+                      {osPress} spl
                     </span>
-                    <span className="text-[9px] text-teal-500">(Pelet belum dirun)</span>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 flex items-center justify-between text-xs">
+                    <div>
+                      <span className="font-bold text-blue-800 dark:text-blue-300 block">2. OS EDXRF (Pelet Belum Discan):</span>
+                      <span className="text-[10px] text-blue-600 dark:text-blue-400">
+                        {totalEdxrfLoad} total pelet − {edxrfTotal} selesai scan
+                      </span>
+                    </div>
+                    <span className="text-base font-extrabold text-blue-700 dark:text-blue-300 font-mono">
+                      {osEdxrf} pelet
+                    </span>
                   </div>
                 </div>
-              </div>
-
-              {/* Formula Explanation Callout */}
-              <div className="p-3 rounded-xl bg-slate-100 dark:bg-slate-800 text-[11px] text-slate-600 dark:text-slate-300 flex items-center justify-between">
-                <span>Kalkulasi Otomatis Saldo Antrean:</span>
-                <span className="font-mono font-bold text-teal-700 dark:text-teal-400">
-                  {pressFinish} pelet selesai dipress − {edxrfTotal} selesai scan = {osEdxrf} pelet OS
-                </span>
               </div>
             </div>
           )}
@@ -1013,16 +1116,16 @@ export const DailyPerformanceInputModal: React.FC<DailyPerformanceInputModalProp
             </div>
           )}
 
-          {/* TAB 4: JALUR 2 HILIR - FUSION & WDXRF */}
+          {/* TAB 4: JALUR 2 HILIR - FUSION, WDXRF & QC/REPORT */}
           {activeTab === 'fusion_wdxrf' && (
             <div className="space-y-4">
               <div className="p-3.5 rounded-2xl bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-800/60">
                 <span className="text-xs font-bold text-indigo-900 dark:text-indigo-200 flex items-center gap-1.5">
                   <Cpu className="w-4 h-4 text-indigo-600" />
-                  Jalur 2 Hilir: Checklist Finish Fusion & Spektrometri WDXRF
+                  Jalur 2 Hilir: Checklist Finish Fusion, Spektrometri WDXRF & Rantai QC/Pelaporan
                 </span>
                 <p className="text-[11px] text-indigo-700 dark:text-indigo-400 mt-0.5">
-                  Foreman WDXRF cukup mencentang batch yang selesai dilebur di Fusion. Sisa batch yang belum dicentang otomatis menjadi OS Fusion & Balance.
+                  Checklist batch finish di Fusion otomatis masuk ke WDXRF. Hasil finish scan WDXRF langsung bersambung menjadi data Received di QC, dan yang lolos QC otomatis menjadi Received di Pelaporan CoA.
                 </p>
               </div>
 
@@ -1031,7 +1134,7 @@ export const DailyPerformanceInputModal: React.FC<DailyPerformanceInputModalProp
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-slate-800 dark:text-white flex items-center gap-1.5">
                     <CheckSquare className="w-4 h-4 text-teal-600" />
-                    Checklist Penyelesaian Batch di Stasiun Fusion
+                    1. Checklist Penyelesaian Batch di Stasiun Fusion
                   </span>
                   <div className="flex items-center gap-2 text-xs">
                     <span className="text-emerald-600 font-bold">Finish: {fusionFinishCount} spl</span>
@@ -1045,12 +1148,12 @@ export const DailyPerformanceInputModal: React.FC<DailyPerformanceInputModalProp
                     Belum ada batch yang didaftarkan di stasiun Weighing.
                   </p>
                 ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 max-h-48 overflow-y-auto pr-1">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 max-h-40 overflow-y-auto pr-1">
                     {batches.map(b => (
                       <div 
                         key={b.id}
                         onClick={() => handleToggleBatchFinish(b.id)}
-                        className={`p-2.5 rounded-xl border cursor-pointer transition-all flex items-center justify-between text-xs ${
+                        className={`p-2 rounded-xl border cursor-pointer transition-all flex items-center justify-between text-xs ${
                           b.isFinished 
                             ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-300 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200' 
                             : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:border-teal-400'
@@ -1079,14 +1182,20 @@ export const DailyPerformanceInputModal: React.FC<DailyPerformanceInputModalProp
               </div>
 
               {/* WDXRF Runs: Zetium A & B */}
-              <div className="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-3">
-                <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                  Pengukuran Spektrometri WDXRF (Zetium A & B)
-                </span>
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                    <Cpu className="w-4 h-4 text-indigo-600" />
+                    2. Pengukuran Spektrometri WDXRF (Zetium A & B)
+                  </span>
+                  <span className="text-xs font-bold text-indigo-700 dark:text-indigo-300">
+                    Total Finish WDXRF: {wdxrfTotal} run
+                  </span>
+                </div>
                 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                   {/* Zetium A */}
-                  <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 space-y-2">
+                  <div className="p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 space-y-2">
                     <div className="flex items-center justify-between">
                       <span className="font-bold text-blue-600">Zetium A</span>
                       <span className="font-mono font-bold text-blue-700 dark:text-blue-300">Total: {ztmATotal}</span>
@@ -1094,25 +1203,25 @@ export const DailyPerformanceInputModal: React.FC<DailyPerformanceInputModalProp
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[10px]">
                       <div>
                         <label className="text-slate-500">Produksi</label>
-                        <input type="number" value={ztmAPrd} onChange={e => setZtmAPrd(Number(e.target.value))} className="w-full mt-0.5 px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono text-center font-bold" />
+                        <input type="number" value={ztmAPrd} onChange={e => setZtmAPrd(Number(e.target.value))} className="w-full mt-0.5 px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-mono text-center font-bold" />
                       </div>
                       <div>
                         <label className="text-slate-500">Eksplorasi</label>
-                        <input type="number" value={ztmAExp} onChange={e => setZtmAExp(Number(e.target.value))} className="w-full mt-0.5 px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono text-center font-bold" />
+                        <input type="number" value={ztmAExp} onChange={e => setZtmAExp(Number(e.target.value))} className="w-full mt-0.5 px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-mono text-center font-bold" />
                       </div>
                       <div>
                         <label className="text-slate-500">Smelter</label>
-                        <input type="number" value={ztASml} onChange={e => setZtmASml(Number(e.target.value))} className="w-full mt-0.5 px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono text-center font-bold" />
+                        <input type="number" value={ztASml} onChange={e => setZtmASml(Number(e.target.value))} className="w-full mt-0.5 px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-mono text-center font-bold" />
                       </div>
                       <div>
                         <label className="text-slate-500">GTS</label>
-                        <input type="number" value={ztmAGts} onChange={e => setZtmAGts(Number(e.target.value))} className="w-full mt-0.5 px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono text-center font-bold" />
+                        <input type="number" value={ztmAGts} onChange={e => setZtmAGts(Number(e.target.value))} className="w-full mt-0.5 px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-mono text-center font-bold" />
                       </div>
                     </div>
                   </div>
 
                   {/* Zetium B */}
-                  <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 space-y-2">
+                  <div className="p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 space-y-2">
                     <div className="flex items-center justify-between">
                       <span className="font-bold text-indigo-600">Zetium B</span>
                       <span className="font-mono font-bold text-indigo-700 dark:text-indigo-300">Total: {ztmBTotal}</span>
@@ -1120,58 +1229,186 @@ export const DailyPerformanceInputModal: React.FC<DailyPerformanceInputModalProp
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[10px]">
                       <div>
                         <label className="text-slate-500">Produksi</label>
-                        <input type="number" value={ztmBPrd} onChange={e => setZtmBPrd(Number(e.target.value))} className="w-full mt-0.5 px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono text-center font-bold" />
+                        <input type="number" value={ztmBPrd} onChange={e => setZtmBPrd(Number(e.target.value))} className="w-full mt-0.5 px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-mono text-center font-bold" />
                       </div>
                       <div>
                         <label className="text-slate-500">Eksplorasi</label>
-                        <input type="number" value={ztmBExp} onChange={e => setZtmBExp(Number(e.target.value))} className="w-full mt-0.5 px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono text-center font-bold" />
+                        <input type="number" value={ztmBExp} onChange={e => setZtmBExp(Number(e.target.value))} className="w-full mt-0.5 px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-mono text-center font-bold" />
                       </div>
                       <div>
                         <label className="text-slate-500">Smelter</label>
-                        <input type="number" value={ztmBSml} onChange={e => setZtmBSml(Number(e.target.value))} className="w-full mt-0.5 px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono text-center font-bold" />
+                        <input type="number" value={ztmBSml} onChange={e => setZtmBSml(Number(e.target.value))} className="w-full mt-0.5 px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-mono text-center font-bold" />
                       </div>
                       <div>
                         <label className="text-slate-500">GTS</label>
-                        <input type="number" value={ztmBGts} onChange={e => setZtmBGts(Number(e.target.value))} className="w-full mt-0.5 px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono text-center font-bold" />
+                        <input type="number" value={ztmBGts} onChange={e => setZtmBGts(Number(e.target.value))} className="w-full mt-0.5 px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-mono text-center font-bold" />
                       </div>
                     </div>
                   </div>
                 </div>
 
-                {/* Balance WDXRF */}
-                <div className="p-3 rounded-xl bg-teal-50 dark:bg-teal-950/40 text-xs text-teal-800 dark:text-teal-300 flex items-center justify-between">
-                  <span>Total Finish Spektrometri WDXRF: <strong>{wdxrfTotal} run</strong></span>
-                  <span>Saldo Sisa Bead Antrean (Bal): <strong>{wdxrfBal} bead</strong></span>
+                <div className="p-2.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 text-xs text-indigo-800 dark:text-indigo-300 flex items-center justify-between">
+                  <span>Antrean Bead Masuk: <strong>{fusionFinishCount} bead</strong> (dari Finish Fusion)</span>
+                  <span>Saldo Sisa Bead Antrean (OS WDXRF): <strong>{wdxrfBal} bead</strong></span>
+                </div>
+              </div>
+
+              {/* Rantai QC & Reporting Bersambung Otomatis */}
+              <div className="p-4 rounded-2xl bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800/60 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-emerald-900 dark:text-emerald-200 flex items-center gap-1.5">
+                    <FileCheck className="w-4 h-4 text-emerald-600" />
+                    3. Rantai Validasi QC & Pelaporan CoA (Bersambung Otomatis)
+                  </span>
+                  <span className="text-[11px] text-emerald-700 dark:text-emerald-300 font-semibold">
+                    WDXRF ➔ QC ➔ CoA Release
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                  {/* QC Block */}
+                  <div className="p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-slate-800 dark:text-white">A. Kontrol Mutu (QC)</span>
+                      <span className="text-[10px] bg-blue-100 text-blue-700 dark:bg-blue-900/60 dark:text-blue-300 px-2 py-0.5 rounded font-bold">
+                        Received: {qcReceived} spl (dari Finish WDXRF)
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-2 text-[10px]">
+                      <div>
+                        <label className="text-slate-500">QC OS Awal</label>
+                        <input type="number" value={qcOs} onChange={e => setQcOs(Number(e.target.value))} className="w-full mt-0.5 px-2 py-1 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-center font-mono font-bold" />
+                      </div>
+                      <div>
+                        <label className="text-emerald-600 font-bold">Finished QC</label>
+                        <input type="number" value={qcFinish} onChange={e => setQcFinish(Number(e.target.value))} className="w-full mt-0.5 px-2 py-1 rounded border border-emerald-300 dark:border-emerald-700 bg-slate-50 dark:bg-slate-800 text-center font-mono font-bold text-emerald-700 dark:text-emerald-300" />
+                      </div>
+                      <div>
+                        <label className="text-amber-600 font-bold">OS QC Sisa</label>
+                        <div className="w-full mt-0.5 px-2 py-1 rounded bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-center font-mono font-bold text-amber-700 dark:text-amber-300">
+                          {qcBal} spl
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Reporting Block */}
+                  <div className="p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-slate-800 dark:text-white">B. Pelaporan CoA</span>
+                      <span className="text-[10px] bg-emerald-100 text-emerald-700 dark:bg-emerald-900/60 dark:text-emerald-300 px-2 py-0.5 rounded font-bold">
+                        Received: {reportReceived} spl (dari Finished QC)
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-2 text-[10px]">
+                      <div>
+                        <label className="text-slate-500">Report OS Awal</label>
+                        <input type="number" value={reportOs} onChange={e => setReportOs(Number(e.target.value))} className="w-full mt-0.5 px-2 py-1 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-center font-mono font-bold" />
+                      </div>
+                      <div>
+                        <label className="text-emerald-600 font-bold">CoA Rilis (Done)</label>
+                        <input type="number" value={reportDone} onChange={e => setReportDone(Number(e.target.value))} className="w-full mt-0.5 px-2 py-1 rounded border border-emerald-300 dark:border-emerald-700 bg-slate-50 dark:bg-slate-800 text-center font-mono font-bold text-emerald-700 dark:text-emerald-300" />
+                      </div>
+                      <div>
+                        <label className="text-amber-600 font-bold">Pending CoA</label>
+                        <div className="w-full mt-0.5 px-2 py-1 rounded bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-center font-mono font-bold text-amber-700 dark:text-amber-300">
+                          {reportBal} spl
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
           )}
 
-          {/* TAB 5: QC & REPORT */}
+          {/* TAB 5: QC & REPORT (FULL STANDALONE VIEW) */}
           {activeTab === 'qc' && (
             <div className="space-y-4">
-              <span className="text-xs font-bold text-slate-700 dark:text-slate-300">Kontrol Mutu (QC) & Laporan CoA</span>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-                <div>
-                  <label className="text-[10px] text-slate-500">QC O/S</label>
-                  <input type="number" value={qcOs} onChange={e => setQcOs(Number(e.target.value))} className="w-full mt-0.5 px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono" />
-                </div>
-                <div>
-                  <label className="text-[10px] text-slate-500">QC Finish Shift</label>
-                  <input type="number" value={qcFinish} onChange={e => setQcFinish(Number(e.target.value))} className="w-full mt-0.5 px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono" />
-                </div>
-                <div>
-                  <label className="text-[10px] text-slate-500">Report O/S</label>
-                  <input type="number" value={reportOs} onChange={e => setReportOs(Number(e.target.value))} className="w-full mt-0.5 px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono" />
-                </div>
-                <div>
-                  <label className="text-[10px] text-slate-500">Report Done (Rilis)</label>
-                  <input type="number" value={reportDone} onChange={e => setReportDone(Number(e.target.value))} className="w-full mt-0.5 px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono" />
-                </div>
+              <div className="p-3.5 rounded-2xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/60">
+                <span className="text-xs font-bold text-emerald-900 dark:text-emerald-200 flex items-center gap-1.5">
+                  <FileCheck className="w-4 h-4 text-emerald-600" />
+                  Kontrol Mutu (QC) & Pelaporan Sertifikat Analisis (CoA)
+                </span>
+                <p className="text-[11px] text-emerald-700 dark:text-emerald-400 mt-0.5">
+                  Data <strong>Received QC</strong> otomatis terisi dari hasil <strong>Finish Spektrometri WDXRF ({wdxrfTotal} run)</strong>. Data yang <strong>Lolos QC ({qcFinish})</strong> otomatis menjadi beban antrean <strong>Received di Pelaporan CoA</strong>.
+                </p>
               </div>
 
-              <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-xs text-emerald-800 dark:text-emerald-300">
-                Sisa Saldo Laporan: <strong>{reportBal} pending</strong>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                {/* QC Panel */}
+                <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-slate-800 dark:text-white">Validasi Quality Control (QC)</span>
+                    <span className="text-[10px] bg-blue-100 text-blue-700 dark:bg-blue-900/60 dark:text-blue-300 px-2 py-0.5 rounded font-bold">
+                      Otomatis: {qcReceived} dari WDXRF
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 text-xs">
+                    <div>
+                      <label className="text-[10px] text-slate-500 font-medium">QC Saldo Awal (OS)</label>
+                      <input 
+                        type="number" 
+                        value={qcOs} 
+                        onChange={e => setQcOs(Number(e.target.value))} 
+                        className="w-full mt-0.5 px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 font-mono" 
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-emerald-600 font-bold">Finished QC (Lolos Validasi)</label>
+                      <input 
+                        type="number" 
+                        value={qcFinish} 
+                        onChange={e => setQcFinish(Number(e.target.value))} 
+                        className="w-full mt-0.5 px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-emerald-300 dark:border-emerald-700 font-mono font-bold text-emerald-700 dark:text-emerald-300" 
+                      />
+                    </div>
+                  </div>
+
+                  <div className="p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 text-[11px] text-amber-800 dark:text-amber-300 flex items-center justify-between">
+                    <span>Sisa Saldo Antrean QC (Bal):</span>
+                    <strong className="font-mono">{qcBal} sampel</strong>
+                  </div>
+                </div>
+
+                {/* Reporting Panel */}
+                <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-slate-800 dark:text-white">Pelaporan CoA (Release Report)</span>
+                    <span className="text-[10px] bg-emerald-100 text-emerald-700 dark:bg-emerald-900/60 dark:text-emerald-300 px-2 py-0.5 rounded font-bold">
+                      Otomatis: {reportReceived} dari QC Finish
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 text-xs">
+                    <div>
+                      <label className="text-[10px] text-slate-500 font-medium">Report Saldo Awal (OS)</label>
+                      <input 
+                        type="number" 
+                        value={reportOs} 
+                        onChange={e => setReportOs(Number(e.target.value))} 
+                        className="w-full mt-0.5 px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 font-mono" 
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-emerald-600 font-bold">CoA Selesai Rilis (Done)</label>
+                      <input 
+                        type="number" 
+                        value={reportDone} 
+                        onChange={e => setReportDone(Number(e.target.value))} 
+                        className="w-full mt-0.5 px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-emerald-300 dark:border-emerald-700 font-mono font-bold text-emerald-700 dark:text-emerald-300" 
+                      />
+                    </div>
+                  </div>
+
+                  <div className="p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-[11px] text-emerald-800 dark:text-emerald-300 flex items-center justify-between">
+                    <span>Pending Laporan Belum Rilis (Bal):</span>
+                    <strong className="font-mono">{reportBal} CoA</strong>
+                  </div>
+                </div>
               </div>
             </div>
           )}
