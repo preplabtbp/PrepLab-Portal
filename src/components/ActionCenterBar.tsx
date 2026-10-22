@@ -361,6 +361,16 @@ export function ActionCenterBar({
     return null;
   });
 
+  const [isInspectionSchedulePublished, setIsInspectionSchedulePublished] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('p2h_cached_inspection_published');
+      return saved !== null ? saved === 'true' : false;
+    } catch {
+      return false;
+    }
+  });
+  const [showCompleted, setShowCompleted] = useState<boolean>(false);
+
   const [showLvDamageModal, setShowLvDamageModal] = useState<boolean>(false);
   const [openFindings, setOpenFindings] = useState<any[]>([]);
   const [isFindingsExpanded, setIsFindingsExpanded] = useState<boolean>(false);
@@ -634,17 +644,31 @@ export function ActionCenterBar({
       }
 
       // Process Weekly Inspection Schedule
-      if (schedData && schedData.found && schedData.schedule) {
-        setCompletedInspectionInfo(schedData.schedule);
-        if (!schedData.schedule.isCompleted && !schedData.schedule.isCuti) {
-          setInspectionSchedule(schedData.schedule);
-          try { localStorage.setItem('p2h_cached_my_schedule', JSON.stringify(schedData.schedule)); } catch {}
+      if (schedData) {
+        const isPub = Boolean(
+          schedData.isPublished !== undefined
+            ? schedData.isPublished
+            : (schedData.found || (schedData.totalScheduled && schedData.totalScheduled > 0) || schedData.schedule)
+        );
+        setIsInspectionSchedulePublished(isPub);
+        try { localStorage.setItem('p2h_cached_inspection_published', String(isPub)); } catch {}
+
+        if (schedData.found && schedData.schedule) {
+          setCompletedInspectionInfo(schedData.schedule);
+          if (!schedData.schedule.isCompleted && !schedData.schedule.isCuti) {
+            setInspectionSchedule(schedData.schedule);
+            try { localStorage.setItem('p2h_cached_my_schedule', JSON.stringify(schedData.schedule)); } catch {}
+          } else {
+            setInspectionSchedule(null);
+          }
         } else {
           setInspectionSchedule(null);
+          setCompletedInspectionInfo(null);
         }
       } else {
         setInspectionSchedule(null);
         setCompletedInspectionInfo(null);
+        setIsInspectionSchedulePublished(false);
       }
 
       // Process User Inspection Proof
@@ -865,20 +889,22 @@ export function ActionCenterBar({
       navParams: { formId: inspectionSchedule?.inspeksi, subArea: inspectionSchedule?.area }
     });
 
-    // 2. Laporan KTA / TTA
-    list.push({
-      id: 'kta',
-      title: 'Laporan Bahaya KTA / TTA',
-      subtitle: isKtaPending 
-        ? `Kewajiban: ${ktaObligation.label} (Belum Lapor Week Ini)` 
-        : 'Target laporan minggu ini terpenuhi',
-      count: isKtaPending ? (ktaObligation.targetCount || 1) : 0,
-      isPending: isKtaPending,
-      icon: <Camera className="w-4 h-4" />,
-      iconColor: 'text-orange-600 dark:text-orange-400',
-      bgColor: 'bg-orange-500/10 border-orange-500/25',
-      navKey: 'kta'
-    });
+    // 2. Laporan KTA / TTA — Hanya muncul jika Jadwal Inspeksi sudah terbit
+    if (isInspectionSchedulePublished) {
+      list.push({
+        id: 'kta',
+        title: 'Laporan Bahaya KTA / TTA',
+        subtitle: isKtaPending 
+          ? `Kewajiban: ${ktaObligation.label} (Belum Lapor Week Ini)` 
+          : 'Target laporan minggu ini terpenuhi',
+        count: isKtaPending ? (ktaObligation.targetCount || 1) : 0,
+        isPending: isKtaPending,
+        icon: <Camera className="w-4 h-4" />,
+        iconColor: 'text-orange-600 dark:text-orange-400',
+        bgColor: 'bg-orange-500/10 border-orange-500/25',
+        navKey: 'kta'
+      });
+    }
 
     // 3. Penugasan Pemateri / Materi P5M Mingguan
     const pendingP5mList = p5mAssignments.filter((a: any) => !a.isCompleted && !a.isPast);
@@ -1090,12 +1116,23 @@ export function ActionCenterBar({
     openFindings,
     overdueLeaves,
     trainingAlerts,
-    trainingOnly
+    trainingOnly,
+    isInspectionSchedulePublished
   ]);
 
   // Total count is sum of pending counts across all applicable categories
   const totalActionCount = useMemo(() => {
     return categoriesList.reduce((acc, cat) => acc + (cat.isPending ? cat.count : 0), 0);
+  }, [categoriesList]);
+
+  // Active pending categories (tasks that require attention)
+  const pendingCategories = useMemo(() => {
+    return categoriesList.filter(cat => cat.isPending);
+  }, [categoriesList]);
+
+  // Completed categories (tasks already done in this period)
+  const completedCategories = useMemo(() => {
+    return categoriesList.filter(cat => !cat.isPending);
   }, [categoriesList]);
 
   // Navigate helper
@@ -1348,7 +1385,7 @@ export function ActionCenterBar({
             >
               <div className="flex items-center justify-between pb-1.5 px-1 border-b border-slate-200/60 dark:border-slate-800">
                 <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
-                  Kategori Operasional & Item Tindak Lanjut
+                  Kategori Operasional & Item Tindak Lanjut {pendingCategories.length > 0 ? `(${pendingCategories.length})` : ''}
                 </span>
                 <button
                   type="button"
@@ -1365,9 +1402,23 @@ export function ActionCenterBar({
                 </button>
               </div>
 
-              {/* Category Rows Container */}
+              {/* Category Rows Container — Tugas yang selesai otomatis hilang dari Action Center */}
               <div className="space-y-1.5">
-                {categoriesList.map((cat) => (
+                {pendingCategories.length === 0 && (
+                  <div className="flex items-center gap-3 p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/25 text-emerald-800 dark:text-emerald-200">
+                    <div className="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center shrink-0">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold">Semua Tugas Operasional Selesai ✓</p>
+                      <p className="text-[10.5px] text-emerald-700/80 dark:text-emerald-300/80">
+                        Tidak ada tugas yang memerlukan perhatian Anda saat ini. Tugas akan muncul kembali pada periode berikutnya.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {(showCompleted ? categoriesList : pendingCategories).map((cat) => (
                   <React.Fragment key={cat.id}>
                   <div
                     onClick={() => handleItemNav(cat.navKey, cat.navParams)}
@@ -1950,6 +2001,21 @@ export function ActionCenterBar({
                   )}
                   </React.Fragment>
                 ))}
+
+                {/* Tombol opsi membuka tugas yang telah selesai periode ini */}
+                {completedCategories.length > 0 && (
+                  <div className="pt-2 border-t border-slate-200/60 dark:border-slate-800">
+                    <button
+                      type="button"
+                      onClick={() => setShowCompleted(prev => !prev)}
+                      className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 transition-colors cursor-pointer"
+                    >
+                      <Check className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>{showCompleted ? 'Sembunyikan' : 'Lihat'} {completedCategories.length} Tugas Selesai Periode Ini</span>
+                      <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${showCompleted ? 'rotate-180' : ''}`} />
+                    </button>
+                  </div>
+                )}
               </div>
             </motion.div>
           )}

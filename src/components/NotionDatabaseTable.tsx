@@ -67,8 +67,7 @@ import {
   ClipboardCheck,
 Link2,
   PlaneTakeoff,
-  Coffee,
-  Clock
+  Coffee
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Button } from './ui';

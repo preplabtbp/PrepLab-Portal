@@ -49,7 +49,8 @@ export async function ensureEmployeeLeavesTable() {
       ADD COLUMN IF NOT EXISTS jam_shift TEXT,
       ADD COLUMN IF NOT EXISTS penempatan TEXT,
       ADD COLUMN IF NOT EXISTS source TEXT DEFAULT 'web',
-      ADD COLUMN IF NOT EXISTS sheet_row_id TEXT;
+      ADD COLUMN IF NOT EXISTS sheet_row_id TEXT,
+      ADD COLUMN IF NOT EXISTS kategori_izin TEXT;
     `);
     await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_leave_requests_nik ON employee_leave_requests(nik);`);
     await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_leave_requests_dates ON employee_leave_requests(awal_absensi, akhir_absensi);`);
@@ -80,6 +81,7 @@ interface SheetLeaveItem {
   akhirAbsensi: string;
   lamanyaIzin: string;
   jumlah: number;
+  kategoriIzin?: 'I' | 'IK' | 'SS' | 'SL' | string;
   alasanAbsensi: string;
   pengawasMengetahui: string;
   lampiran: string;
@@ -102,6 +104,184 @@ let sheetCache: {
   totalRows: 0,
   spreadsheetId: REKAPAN_IZIN_SPREADSHEET_ID
 };
+
+// ID Google Sheet Database Rooster Prep & Lab
+export const ROOSTER_SPREADSHEET_ID =
+  process.env.ROOSTER_SPREADSHEET_ID || "1iijlFReGxHyMiFAbd0J5-yfs1udWvZo4ydrJJKJBCNo";
+
+export const ROOSTER_STAFF_CSV_URL = `https://docs.google.com/spreadsheets/d/${ROOSTER_SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet=Rooster_Staff`;
+export const ROOSTER_CREW_CSV_URL = `https://docs.google.com/spreadsheets/d/${ROOSTER_SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet=Rooster_Crew`;
+
+const EN_MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+let roosterCache: {
+  map: Map<string, string>; // `${cleanNik}_${headerDate}` -> status (I, IK, SS, SL)
+  lastFetchedAt: number;
+} = {
+  map: new Map(),
+  lastFetchedAt: 0
+};
+
+export async function fetchRoosterLeaveCodes(force = false): Promise<Map<string, string>> {
+  const now = Date.now();
+  const CACHE_TTL = 60 * 1000; // 60 detik cache
+
+  if (!force && roosterCache.map.size > 0 && (now - roosterCache.lastFetchedAt < CACHE_TTL)) {
+    return roosterCache.map;
+  }
+
+  try {
+    const urls = [
+      { type: 'Staff', url: ROOSTER_STAFF_CSV_URL, dateStartCol: 15, nikCol: 2 },
+      { type: 'Crew', url: ROOSTER_CREW_CSV_URL, dateStartCol: 14, nikCol: 2 }
+    ];
+
+    const newMap = new Map<string, string>();
+
+    await Promise.all(
+      urls.map(async ({ type, url, dateStartCol, nikCol }) => {
+        try {
+          const res = await fetch(url);
+          if (!res.ok) return;
+          const text = await res.text();
+          const lines = text.split(/\r?\n/);
+          if (lines.length < 2) return;
+
+          const parseLine = (line: string): string[] => {
+            const cells: string[] = [];
+            let inQuote = false;
+            let curr = '';
+            for (let i = 0; i < line.length; i++) {
+              const c = line[i];
+              if (c === '"') inQuote = !inQuote;
+              else if (c === ',' && !inQuote) { cells.push(curr.trim()); curr = ''; }
+              else curr += c;
+            }
+            cells.push(curr.trim());
+            return cells;
+          };
+
+          const headerRow = parseLine(lines[0] || '').map(h => h.replace(/"/g, '').trim());
+
+          for (let r = 2; r < lines.length; r++) {
+            const row = parseLine(lines[r]);
+            const nik = row[nikCol] ? row[nikCol].replace(/"/g, '').trim().toUpperCase() : '';
+            if (!nik || nik.length < 3) continue;
+
+            for (let c = dateStartCol; c < row.length; c++) {
+              const rawStatus = row[c] ? row[c].replace(/"/g, '').trim().toUpperCase() : '';
+              if (!rawStatus) continue;
+              if (['I', 'IK', 'SS', 'SL', 'S'].includes(rawStatus)) {
+                const dHeader = headerRow[c];
+                if (dHeader) {
+                  const statusNormalized = rawStatus === 'S' ? 'SS' : rawStatus;
+                  newMap.set(`${nik}_${dHeader}`, statusNormalized);
+                }
+              }
+            }
+          }
+        } catch (err: any) {
+          console.warn(`[Employee Leaves] Failed to fetch Rooster_${type}:`, err.message);
+        }
+      })
+    );
+
+    if (newMap.size > 0) {
+      roosterCache = {
+        map: newMap,
+        lastFetchedAt: now
+      };
+      console.log(`[Employee Leaves] Synced ${newMap.size} leave status entries from Database Rooster Prep & Lab.`);
+    }
+
+    return roosterCache.map;
+  } catch (error: any) {
+    console.error('[Employee Leaves] Error syncing Rooster leave codes:', error.message);
+    return roosterCache.map;
+  }
+}
+
+export function getRosterDateKeys(startIso?: string, endIso?: string): string[] {
+  const keys: string[] = [];
+  if (!startIso) return keys;
+  const start = new Date(startIso);
+  const end = endIso ? new Date(endIso) : new Date(startIso);
+  if (isNaN(start.getTime())) {
+    return [String(startIso).trim()];
+  }
+  const cur = new Date(start);
+  const maxDays = 14;
+  let count = 0;
+  while (cur <= end && count < maxDays) {
+    const y = cur.getUTCFullYear() % 100;
+    const mon = cur.getUTCMonth();
+    const d = cur.getUTCDate();
+    keys.push(`${d} ${EN_MONTHS_SHORT[mon]} ${y}`);
+    cur.setUTCDate(cur.getUTCDate() + 1);
+    count++;
+  }
+  if (keys.length === 0) {
+    const y = start.getUTCFullYear() % 100;
+    const mon = start.getUTCMonth();
+    const d = start.getUTCDate();
+    keys.push(`${d} ${EN_MONTHS_SHORT[mon]} ${y}`);
+  }
+  return keys;
+}
+
+export function resolveKategoriIzin(
+  nik: string,
+  awalAbsensi: string,
+  akhirAbsensi: string,
+  alasan: string,
+  overrideKategori?: string | null,
+  rosterMap?: Map<string, string>
+): 'I' | 'IK' | 'SS' | 'SL' {
+  // 1. Manual override dari database
+  if (overrideKategori) {
+    const u = overrideKategori.trim().toUpperCase();
+    if (u === 'I' || u === 'IK' || u === 'SS' || u === 'SL') return u as any;
+  }
+
+  // 2. Lookup sinkronisasi Google Sheet Database Rooster Prep & Lab
+  if (rosterMap && nik) {
+    const cleanNik = nik.trim().toUpperCase();
+    const dateKeys = getRosterDateKeys(awalAbsensi, akhirAbsensi);
+
+    // Prioritas: SS / SL > IK > I
+    let foundCode: 'I' | 'IK' | 'SS' | 'SL' | '' = '';
+    for (const dKey of dateKeys) {
+      const st = rosterMap.get(`${cleanNik}_${dKey}`);
+      if (!st) continue;
+      if (st === 'SS' || st === 'SL') {
+        foundCode = st;
+        break;
+      }
+      if (st === 'IK') {
+        foundCode = st;
+      }
+      if (st === 'I' && !foundCode) {
+        foundCode = st;
+      }
+    }
+    if (foundCode) return foundCode;
+  }
+
+  // 3. Fallback: Inferensi cerdas dari alasan izin
+  const r = String(alasan || '').toLowerCase();
+  if (r.includes('sakit') || r.includes('demam') || r.includes('pusing') || r.includes('klinik') || r.includes('flu') || r.includes('batuk') || r.includes('opname') || r.includes('rawat') || r.includes('muntaber') || r.includes('diare') || r.includes('gigi')) {
+    if (r.includes('rujukan') || r.includes('luar') || r.includes('rs') || r.includes('rumah sakit') || r.includes('kampung') || r.includes('ternate') || r.includes('labuha') || r.includes('luar site')) {
+      return 'SL'; // Sakit Luar Site
+    }
+    return 'SS'; // Sakit Site
+  }
+
+  if (r.includes('duka') || r.includes('menikah') || r.includes('nikah') || r.includes('melahirkan') || r.includes('kematian') || r.includes('istri melahirkan') || r.includes('anak lahir') || r.includes('khitanan') || r.includes('baptis') || r.includes('khusus') || r.includes('hakikad') || r.includes('aqiqah')) {
+    return 'IK'; // Izin Khusus
+  }
+
+  return 'I'; // Izin Biasa
+}
 
 // Helper: Format tanggal excel / serial / string ke 'YYYY-MM-DD'
 function formatExcelDate(val: any): string {
@@ -357,9 +537,12 @@ employeeLeavesRouter.get("/api/employee-leaves", async (req, res) => {
       pengawas?: string;
     };
 
-    // 1. Ambil data dari Google Sheet (di-cache)
+    // 1. Ambil data dari Google Sheet (di-cache) & sinkronkan kategori izin dari Google Sheet Rooster
     const forceRefresh = req.query.force === "true" || req.query.refresh === "true";
-    const sheetData = await fetchGoogleSheetLeaves(forceRefresh);
+    const [sheetData, rosterLeaveMap] = await Promise.all([
+      fetchGoogleSheetLeaves(forceRefresh),
+      fetchRoosterLeaveCodes(forceRefresh)
+    ]);
 
     // 2. Ambil data dari Database Postgres & Master Employees untuk penentuan Golongan
     let dbLeaves: any[] = [];
@@ -392,32 +575,43 @@ employeeLeavesRouter.get("/api/employee-leaves", async (req, res) => {
     }
 
     // Format dbLeaves agar selaras dengan interface (jangan beri default yang merusak override)
-    const formattedDbLeaves: SheetLeaveItem[] = dbLeaves.map(d => ({
-      id: d.id,
-      sheetRowId: d.sheetRowId,
-      source: 'web',
-      nik: d.nik,
-      name: d.name,
-      jabatan: d.jabatan || '',
-      section: d.section || 'Preparation',
-      penempatan: d.penempatan || d.section || 'Preparation',
-      tempatTinggal: d.tempatTinggal || '-',
-      shift: d.shift || '',
-      jamShift: d.jamShift || '',
-      awalAbsensi: d.awalAbsensi,
-      akhirAbsensi: d.akhirAbsensi,
-      lamanyaIzin: d.lamanyaIzin || `${d.jumlah || 1} Hari`,
-      jumlah: d.jumlah || 1,
-      alasanAbsensi: d.alasanAbsensi,
-      pengawasMengetahui: d.pengawasMengetahui || '',
-      lampiran: d.lampiran || '',
-      acc: d.acc || 'Pending',
-      accBy: d.accBy || '',
-      accAt: d.accAt || '',
-      catatan: d.catatan || '',
-      createdAt: d.createdAt ? new Date(d.createdAt).toISOString() : new Date().toISOString(),
-      updatedAt: d.updatedAt ? new Date(d.updatedAt).toISOString() : new Date().toISOString()
-    }));
+    const formattedDbLeaves: SheetLeaveItem[] = dbLeaves.map(d => {
+      const kat = resolveKategoriIzin(
+        d.nik,
+        d.awalAbsensi,
+        d.akhirAbsensi,
+        d.alasanAbsensi,
+        (d as any).kategoriIzin || (d as any).kategori_izin,
+        rosterLeaveMap
+      );
+      return {
+        id: d.id,
+        sheetRowId: d.sheetRowId,
+        source: 'web',
+        nik: d.nik,
+        name: d.name,
+        jabatan: d.jabatan || '',
+        section: d.section || 'Preparation',
+        penempatan: d.penempatan || d.section || 'Preparation',
+        tempatTinggal: d.tempatTinggal || '-',
+        shift: d.shift || '',
+        jamShift: d.jamShift || '',
+        awalAbsensi: d.awalAbsensi,
+        akhirAbsensi: d.akhirAbsensi,
+        lamanyaIzin: d.lamanyaIzin || `${d.jumlah || 1} Hari`,
+        jumlah: d.jumlah || 1,
+        kategoriIzin: kat,
+        alasanAbsensi: d.alasanAbsensi,
+        pengawasMengetahui: d.pengawasMengetahui || '',
+        lampiran: d.lampiran || '',
+        acc: d.acc || 'Pending',
+        accBy: d.accBy || '',
+        accAt: d.accAt || '',
+        catatan: d.catatan || '',
+        createdAt: d.createdAt ? new Date(d.createdAt).toISOString() : new Date().toISOString(),
+        updatedAt: d.updatedAt ? new Date(d.updatedAt).toISOString() : new Date().toISOString()
+      };
+    });
 
     // Pisahkan override sheet dari pure web records
     const sheetOverrides = new Map<string, SheetLeaveItem>();
@@ -451,6 +645,15 @@ employeeLeavesRouter.get("/api/employee-leaves", async (req, res) => {
         // Hanya timpa pengawas jika override memiliki nama pengawas valid (bukan '-' atau kosong)
         const validOverridePengawas = (override.pengawasMengetahui && override.pengawasMengetahui !== '-' && override.pengawasMengetahui.trim() !== '') ? override.pengawasMengetahui : '';
 
+        const kat = resolveKategoriIzin(
+          override.nik || s.nik,
+          override.awalAbsensi || s.awalAbsensi,
+          override.akhirAbsensi || s.akhirAbsensi,
+          override.alasanAbsensi || s.alasanAbsensi,
+          override.kategoriIzin,
+          rosterLeaveMap
+        );
+
         return {
           ...s,
           nik: (override.nik && override.nik.trim()) ? override.nik : s.nik,
@@ -465,6 +668,7 @@ employeeLeavesRouter.get("/api/employee-leaves", async (req, res) => {
           akhirAbsensi: override.akhirAbsensi || s.akhirAbsensi,
           lamanyaIzin: override.lamanyaIzin || s.lamanyaIzin,
           jumlah: override.jumlah || s.jumlah,
+          kategoriIzin: kat,
           alasanAbsensi: (override.alasanAbsensi && override.alasanAbsensi.trim()) ? override.alasanAbsensi : s.alasanAbsensi,
           pengawasMengetahui: validOverridePengawas || s.pengawasMengetahui,
           acc: override.acc || s.acc,
@@ -475,9 +679,20 @@ employeeLeavesRouter.get("/api/employee-leaves", async (req, res) => {
           isEdited: true
         } as any;
       }
+
+      const kat = resolveKategoriIzin(
+        s.nik,
+        s.awalAbsensi,
+        s.akhirAbsensi,
+        s.alasanAbsensi,
+        s.kategoriIzin,
+        rosterLeaveMap
+      );
+
       return {
         ...s,
-        shift: finalShift
+        shift: finalShift,
+        kategoriIzin: kat
       };
     });
 
@@ -701,6 +916,8 @@ employeeLeavesRouter.post("/api/employee-leaves", async (req, res) => {
       pengawasMengetahui,
       lampiran,
       acc,
+      kategoriIzin,
+      kategori_izin,
       catatan
     } = req.body;
 
@@ -724,6 +941,10 @@ employeeLeavesRouter.post("/api/employee-leaves", async (req, res) => {
 
     const durasiText = lamanyaIzin ? String(lamanyaIzin).trim() : `${jmlHari} Hari`;
 
+    const katIzin = (kategoriIzin || kategori_izin)
+      ? String(kategoriIzin || kategori_izin).trim().toUpperCase()
+      : resolveKategoriIzin(nik, awalAbsensi, akhirAbsensi, alasanAbsensi);
+
     const inserted = await db
       .insert(employeeLeaveRequests)
       .values({
@@ -739,6 +960,7 @@ employeeLeavesRouter.post("/api/employee-leaves", async (req, res) => {
         akhirAbsensi: String(akhirAbsensi).trim(),
         jumlah: jmlHari,
         lamanyaIzin: durasiText,
+        kategoriIzin: katIzin,
         alasanAbsensi: String(alasanAbsensi).trim(),
         pengawasMengetahui: pengawasMengetahui ? String(pengawasMengetahui).trim() : '-',
         lampiran: lampiran ? String(lampiran).trim() : null,
@@ -847,10 +1069,14 @@ employeeLeavesRouter.put("/api/employee-leaves/:id", async (req, res) => {
       lamanyaIzin,
       alasanAbsensi,
       pengawasMengetahui,
+      kategoriIzin,
+      kategori_izin,
       acc,
       accBy,
       catatan
     } = req.body;
+
+    const finalKategori = (kategoriIzin || kategori_izin) ? String(kategoriIzin || kategori_izin).trim().toUpperCase() : undefined;
 
     let jmlHari = Number(jumlah) || 1;
     if (!jumlah && awalAbsensi && akhirAbsensi) {
@@ -888,6 +1114,7 @@ employeeLeavesRouter.put("/api/employee-leaves/:id", async (req, res) => {
             akhirAbsensi: akhirAbsensi ? String(akhirAbsensi).trim() : existing[0].akhirAbsensi,
             jumlah: jmlHari,
             lamanyaIzin: durasiText,
+            kategoriIzin: finalKategori !== undefined ? finalKategori : (existing[0] as any).kategoriIzin,
             alasanAbsensi: alasanAbsensi !== undefined ? String(alasanAbsensi).trim() : existing[0].alasanAbsensi,
             pengawasMengetahui: pengawasMengetahui !== undefined ? String(pengawasMengetahui).trim() : existing[0].pengawasMengetahui,
             acc: acc !== undefined ? String(acc).trim() : existing[0].acc,
@@ -914,6 +1141,7 @@ employeeLeavesRouter.put("/api/employee-leaves/:id", async (req, res) => {
             akhirAbsensi: String(akhirAbsensi || '').trim(),
             jumlah: jmlHari,
             lamanyaIzin: durasiText,
+            kategoriIzin: finalKategori || null,
             alasanAbsensi: String(alasanAbsensi || '').trim(),
             pengawasMengetahui: pengawasMengetahui ? String(pengawasMengetahui).trim() : '-',
             acc: acc ? String(acc).trim() : 'Disetujui',
@@ -931,6 +1159,7 @@ employeeLeavesRouter.put("/api/employee-leaves/:id", async (req, res) => {
         data: {
           ...savedRecord,
           id: rawId,
+          kategoriIzin: finalKategori || savedRecord.kategoriIzin,
           source: 'google_sheet',
           isEdited: true
         }
@@ -956,6 +1185,7 @@ employeeLeavesRouter.put("/api/employee-leaves/:id", async (req, res) => {
           akhirAbsensi: akhirAbsensi ? String(akhirAbsensi).trim() : undefined,
           jumlah: jmlHari,
           lamanyaIzin: durasiText,
+          kategoriIzin: finalKategori !== undefined ? finalKategori : undefined,
           alasanAbsensi: alasanAbsensi !== undefined ? String(alasanAbsensi).trim() : undefined,
           pengawasMengetahui: pengawasMengetahui !== undefined ? String(pengawasMengetahui).trim() : undefined,
           acc: acc !== undefined ? String(acc).trim() : undefined,
