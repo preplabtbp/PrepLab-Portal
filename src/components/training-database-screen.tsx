@@ -6023,52 +6023,52 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
           </div>
         ) : (
           <>
-            {/* Tabel (desktop / tablet) */}
-            <div className="hidden md:block rounded-2xl border border-slate-100 dark:border-slate-800 overflow-hidden">
+            {/* Tabel (desktop / tablet) dengan border pemisah rapi & modern */}
+            <div className="hidden md:block rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-xs bg-white dark:bg-slate-900">
               <div className="overflow-x-auto max-h-[70vh]">
                 <table className="w-full text-left border-collapse">
-                  <thead className="sticky top-0 z-10 bg-slate-50 dark:bg-slate-800">
+                  <thead className="sticky top-0 z-10 bg-slate-100/90 dark:bg-slate-800 backdrop-blur-xs shadow-xs">
                     {program === 'pra_pop' ? (
-                    <tr className="text-[10px] font-bold uppercase tracking-wider text-slate-700 bg-sky-50/70 border-b-2 border-sky-200">
-                      <th className="px-3 py-2.5 text-center">No</th>
-                      <th className="px-3 py-2.5">NIK</th>
-                      <th className="px-3 py-2.5">Nama</th>
-                      <th className="px-3 py-2.5">Bagian</th>
-                      <th className="px-3 py-2.5 text-center">PT</th>
-                      <th className="px-3 py-2.5 text-center">GOL</th>
-                      <th className="px-3 py-2.5 text-center">Shift</th>
-                      <th className="px-3 py-2.5 text-center">Tgl Pra POP</th>
-                      <th className="px-3 py-2.5">Instruktur</th>
-                      <th className="px-3 py-2.5 text-center">Pre-Test</th>
-                      <th className="px-3 py-2.5 text-center">Post-Test</th>
-                      <th className="px-3 py-2.5 text-center">Hasil Pra POP</th>
+                    <tr className="text-[10px] font-bold uppercase tracking-wider text-slate-700 bg-sky-50/90 border-b border-sky-200">
+                      <th className="px-3 py-2.5 text-center border-r border-sky-200/70">No</th>
+                      <th className="px-3 py-2.5 border-r border-sky-200/70">NIK</th>
+                      <th className="px-3 py-2.5 border-r border-sky-200/70">Nama</th>
+                      <th className="px-3 py-2.5 border-r border-sky-200/70">Bagian</th>
+                      <th className="px-3 py-2.5 text-center border-r border-sky-200/70">PT</th>
+                      <th className="px-3 py-2.5 text-center border-r border-sky-200/70">GOL</th>
+                      <th className="px-3 py-2.5 text-center border-r border-sky-200/70">Shift</th>
+                      <th className="px-3 py-2.5 text-center border-r border-sky-200/70">Tgl Pra POP</th>
+                      <th className="px-3 py-2.5 border-r border-sky-200/70">Instruktur</th>
+                      <th className="px-3 py-2.5 text-center border-r border-sky-200/70">Pre-Test</th>
+                      <th className="px-3 py-2.5 text-center border-r border-sky-200/70">Post-Test</th>
+                      <th className="px-3 py-2.5 text-center border-r border-sky-200/70">Hasil Pra POP</th>
                       {canManage && <th className="px-3 py-2.5 text-center">Aksi</th>}
                     </tr>
                     ) : program === 'pop' ? (
-                    <tr className="text-[10px] font-bold uppercase tracking-wider text-slate-700 bg-teal-50/70 border-b-2 border-teal-200">
-                      <th className="px-3 py-2.5 text-center">No</th>
-                      <th className="px-3 py-2.5">NIK</th>
-                      <th className="px-3 py-2.5">Nama</th>
-                      <th className="px-3 py-2.5 text-center">PT</th>
-                      <th className="px-3 py-2.5" title="Dihitung dari tanggal awal bergabung (DOH)">Masa Kerja</th>
-                      <th className="px-3 py-2.5 text-center" title="Pengawas Operasional Pertama">POP</th>
-                      <th className="px-3 py-2.5">Kualifikasi</th>
-                      <th className="px-3 py-2.5 text-center">Keterangan POP</th>
+                    <tr className="text-[10px] font-bold uppercase tracking-wider text-slate-700 bg-teal-50/90 border-b border-teal-200">
+                      <th className="px-3 py-2.5 text-center border-r border-teal-200/70">No</th>
+                      <th className="px-3 py-2.5 border-r border-teal-200/70">NIK</th>
+                      <th className="px-3 py-2.5 border-r border-teal-200/70">Nama</th>
+                      <th className="px-3 py-2.5 text-center border-r border-teal-200/70">PT</th>
+                      <th className="px-3 py-2.5 border-r border-teal-200/70" title="Dihitung dari tanggal awal bergabung (DOH)">Masa Kerja</th>
+                      <th className="px-3 py-2.5 text-center border-r border-teal-200/70" title="Pengawas Operasional Pertama">POP</th>
+                      <th className="px-3 py-2.5 border-r border-teal-200/70">Kualifikasi</th>
+                      <th className="px-3 py-2.5 text-center border-r border-teal-200/70">Keterangan POP</th>
                       {canManage && <th className="px-3 py-2.5 text-center">Aksi</th>}
                     </tr>
                     ) : (
-                    <tr className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-                      <th className="px-3 py-2.5 text-center">No</th>
-                      <th className="px-3 py-2.5">NIK</th>
-                      <th className="px-3 py-2.5">Nama</th>
-                      {program === 'k3' && <th className="px-3 py-2.5">Bagian</th>}
-                      {program === 'k3' && <th className="px-3 py-2.5 text-center">PT</th>}
-                      <th className="px-3 py-2.5 text-center">GOL</th>
-                      <th className="px-3 py-2.5 text-center">Shift</th>
+                    <tr className="text-[10px] font-bold uppercase tracking-wider text-slate-700 bg-slate-100/95 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
+                      <th className="px-3 py-2.5 text-center border-r border-slate-200 dark:border-slate-700">No</th>
+                      <th className="px-3 py-2.5 border-r border-slate-200 dark:border-slate-700">NIK</th>
+                      <th className="px-3 py-2.5 border-r border-slate-200 dark:border-slate-700">Nama</th>
+                      {program === 'k3' && <th className="px-3 py-2.5 border-r border-slate-200 dark:border-slate-700">Bagian</th>}
+                      {program === 'k3' && <th className="px-3 py-2.5 text-center border-r border-slate-200 dark:border-slate-700">PT</th>}
+                      <th className="px-3 py-2.5 text-center border-r border-slate-200 dark:border-slate-700">GOL</th>
+                      <th className="px-3 py-2.5 text-center border-r border-slate-200 dark:border-slate-700">Shift</th>
                       {(program === 'sap' ? SAP_TRAININGS : K3_TRAININGS).map(t => (
-                        <th key={t.key} className="px-3 py-2.5 text-center whitespace-nowrap" title={t.desc}>{t.label}</th>
+                        <th key={t.key} className="px-3 py-2.5 text-center whitespace-nowrap border-r border-slate-200 dark:border-slate-700" title={t.desc}>{t.label}</th>
                       ))}
-                      <th className="px-3 py-2.5 text-center">Status</th>
+                      <th className="px-3 py-2.5 text-center border-r border-slate-200 dark:border-slate-700">Status</th>
                       {canManage && <th className="px-3 py-2.5 text-center">Aksi</th>}
                     </tr>
                     )}
@@ -6076,52 +6076,52 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                   <tbody>
                     {jabatanGroups.map(group => (
                       <React.Fragment key={group.jabatan}>
-                        <tr className="border-t border-slate-100" style={{ backgroundColor: DASH.brandSoft }}>
-                          <td colSpan={tableColSpan} className="px-3 py-2">
+                        <tr className="border-t-2 border-b border-teal-200/80 dark:border-teal-900/60" style={{ backgroundColor: DASH.brandSoft }}>
+                          <td colSpan={tableColSpan} className="px-3.5 py-2 bg-gradient-to-r from-teal-50/90 via-teal-50/40 to-transparent">
                             <div className="flex items-center gap-2">
-                              <span className="text-xs font-bold" style={{ color: DASH.brand }}>{group.jabatan}</span>
-                              <span className="px-2 py-px rounded-full text-[10px] font-bold text-white" style={{ backgroundColor: DASH.brand }}>{group.rows.length}</span>
+                              <span className="text-xs font-extrabold tracking-tight" style={{ color: DASH.brand }}>{group.jabatan}</span>
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold text-white shadow-2xs" style={{ backgroundColor: DASH.brand }}>{group.rows.length}</span>
                             </div>
                           </td>
                         </tr>
                     {group.rows.map((r, idx) => (
-                      <tr key={r.id} className="border-t border-slate-100 dark:border-slate-800 hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition-colors">
-                        <td className="px-3 py-2 text-center text-[11px] font-mono font-bold text-slate-600">{idx + 1}</td>
-                        <td className="px-3 py-2 text-[11px] font-mono font-bold text-slate-800 whitespace-nowrap">{r.nik}</td>
-                        <td className="px-3 py-2 text-xs font-black text-slate-950 whitespace-nowrap min-w-[200px]">{r.nama}</td>
+                      <tr key={r.id} className="border-b border-slate-200/75 dark:border-slate-800/80 hover:bg-teal-50/35 dark:hover:bg-slate-800/60 transition-colors">
+                        <td className="px-3 py-2 text-center text-[11px] font-mono font-bold text-slate-600 border-r border-slate-100 dark:border-slate-800/70">{idx + 1}</td>
+                        <td className="px-3 py-2 text-[11px] font-mono font-bold text-slate-800 whitespace-nowrap border-r border-slate-100 dark:border-slate-800/70">{r.nik}</td>
+                        <td className="px-3 py-2 text-xs font-black text-slate-950 whitespace-nowrap min-w-[200px] border-r border-slate-100 dark:border-slate-800/70">{r.nama}</td>
                         {program === 'pra_pop' ? (
                           <>
-                            <td className="px-3 py-2 text-[11px] font-semibold text-slate-700 whitespace-nowrap">{r.bagian || '-'}</td>
-                            <td className="px-3 py-2 text-center text-[11px] font-black text-slate-800">{r.pt || '-'}</td>
-                            <td className="px-3 py-2 text-center text-[11px] font-black text-slate-800">{r.gol || '-'}</td>
-                            <td className="px-3 py-2 text-center text-[11px] font-bold text-slate-800 whitespace-nowrap">{r.shift || '-'}</td>
-                            <td className="px-3 py-2 text-center text-[11px] font-mono whitespace-nowrap">{r.popData?.praPop ? formatTrainingDate(r.popData.praPop) : '-'}</td>
-                            <td className="px-3 py-2 text-[11px] text-slate-700">{r.popData?.praPopIns || '-'}</td>
-                            <td className="px-3 py-2 text-center text-[11px] font-mono font-bold">{r.popData?.praPopPre ?? '-'}</td>
-                            <td className="px-3 py-2 text-center text-[11px] font-mono font-bold">{r.popData?.praPopPost ?? '-'}</td>
-                            <td className="px-3 py-2 text-center">{renderPraPop(r.popData)}</td>
+                            <td className="px-3 py-2 text-[11px] font-semibold text-slate-700 whitespace-nowrap border-r border-slate-100 dark:border-slate-800/70">{r.bagian || '-'}</td>
+                            <td className="px-3 py-2 text-center text-[11px] font-black text-slate-800 border-r border-slate-100 dark:border-slate-800/70">{r.pt || '-'}</td>
+                            <td className="px-3 py-2 text-center text-[11px] font-black text-slate-800 border-r border-slate-100 dark:border-slate-800/70">{r.gol || '-'}</td>
+                            <td className="px-3 py-2 text-center text-[11px] font-bold text-slate-800 whitespace-nowrap border-r border-slate-100 dark:border-slate-800/70">{r.shift || '-'}</td>
+                            <td className="px-3 py-2 text-center text-[11px] font-mono whitespace-nowrap border-r border-slate-100 dark:border-slate-800/70">{r.popData?.praPop ? formatTrainingDate(r.popData.praPop) : '-'}</td>
+                            <td className="px-3 py-2 text-[11px] text-slate-700 border-r border-slate-100 dark:border-slate-800/70">{r.popData?.praPopIns || '-'}</td>
+                            <td className="px-3 py-2 text-center text-[11px] font-mono font-bold border-r border-slate-100 dark:border-slate-800/70">{r.popData?.praPopPre ?? '-'}</td>
+                            <td className="px-3 py-2 text-center text-[11px] font-mono font-bold border-r border-slate-100 dark:border-slate-800/70">{r.popData?.praPopPost ?? '-'}</td>
+                            <td className="px-3 py-2 text-center border-r border-slate-100 dark:border-slate-800/70">{renderPraPop(r.popData)}</td>
                           </>
                         ) : program === 'pop' ? (
                           <>
-                            <td className="px-3 py-2 text-center text-[11px] font-black text-slate-800">{r.pt || '-'}</td>
-                            <td className="px-3 py-2 text-[11px] whitespace-nowrap">
+                            <td className="px-3 py-2 text-center text-[11px] font-black text-slate-800 border-r border-slate-100 dark:border-slate-800/70">{r.pt || '-'}</td>
+                            <td className="px-3 py-2 text-[11px] whitespace-nowrap border-r border-slate-100 dark:border-slate-800/70">
                               <span className="font-bold text-slate-800">{popMasaKerja(r.popData) || '-'}</span>
                               {r.popData?.doh && <span className="block text-[10px] font-semibold text-slate-500">DOH {formatTrainingDate(r.popData.doh)}</span>}
                             </td>
-                            <td className="px-3 py-2 text-center">{renderPopBatch(r.popData)}</td>
-                            <td className="px-3 py-2 min-w-[140px]">{renderKualifikasi(r.popData)}</td>
-                            <td className="px-3 py-2 text-center">{renderPopKeterangan(r.popData?.popKeterangan)}</td>
+                            <td className="px-3 py-2 text-center border-r border-slate-100 dark:border-slate-800/70">{renderPopBatch(r.popData)}</td>
+                            <td className="px-3 py-2 min-w-[140px] border-r border-slate-100 dark:border-slate-800/70">{renderKualifikasi(r.popData)}</td>
+                            <td className="px-3 py-2 text-center border-r border-slate-100 dark:border-slate-800/70">{renderPopKeterangan(r.popData?.popKeterangan)}</td>
                           </>
                         ) : (
                           <>
-                        {program === 'k3' && <td className="px-3 py-2 text-[11px] font-semibold text-slate-700 whitespace-nowrap">{r.bagian || '-'}</td>}
-                        {program === 'k3' && <td className="px-3 py-2 text-center text-[11px] font-black text-slate-800">{r.pt || '-'}</td>}
-                        <td className="px-3 py-2 text-center text-[11px] font-black text-slate-800">{r.gol || '-'}</td>
-                        <td className="px-3 py-2 text-center text-[11px] font-bold text-slate-800 whitespace-nowrap">{r.shift || '-'}</td>
+                        {program === 'k3' && <td className="px-3 py-2 text-[11px] font-semibold text-slate-700 whitespace-nowrap border-r border-slate-100 dark:border-slate-800/70">{r.bagian || '-'}</td>}
+                        {program === 'k3' && <td className="px-3 py-2 text-center text-[11px] font-black text-slate-800 border-r border-slate-100 dark:border-slate-800/70">{r.pt || '-'}</td>}
+                        <td className="px-3 py-2 text-center text-[11px] font-black text-slate-800 border-r border-slate-100 dark:border-slate-800/70">{r.gol || '-'}</td>
+                        <td className="px-3 py-2 text-center text-[11px] font-bold text-slate-800 whitespace-nowrap border-r border-slate-100 dark:border-slate-800/70">{r.shift || '-'}</td>
                         {program === 'sap'
-                          ? SAP_TRAININGS.map(t => <td key={t.key} className="px-3 py-2 text-center">{renderSapCell(r, t.key, t.statusKey)}</td>)
-                          : K3_TRAININGS.map(t => <td key={t.key} className="px-3 py-2 text-center">{renderK3Cell(r, t.key, t.statusKey)}</td>)}
-                        <td className="px-3 py-2 text-center">{renderStatusBadge(r)}</td>
+                          ? SAP_TRAININGS.map(t => <td key={t.key} className="px-3 py-2 text-center border-r border-slate-100 dark:border-slate-800/70">{renderSapCell(r, t.key, t.statusKey)}</td>)
+                          : K3_TRAININGS.map(t => <td key={t.key} className="px-3 py-2 text-center border-r border-slate-100 dark:border-slate-800/70">{renderK3Cell(r, t.key, t.statusKey)}</td>)}
+                        <td className="px-3 py-2 text-center border-r border-slate-100 dark:border-slate-800/70">{renderStatusBadge(r)}</td>
                           </>
                         )}
                         {canManage && (
