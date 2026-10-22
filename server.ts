@@ -2653,8 +2653,8 @@ async function getNotificationTargets(dept) {
   });
 
   // Ensure critical DB columns exist in background
-  pool.query('ALTER TABLE employees ADD COLUMN IF NOT EXISTS tanggal_efektif_tidak_bekerja text;').catch(() => {});
-  pool.query('ALTER TABLE employees ADD COLUMN IF NOT EXISTS masa_kerja_jabatan_sebelumnya text;').catch(() => {});
+  // pool.query('ALTER TABLE employees ADD COLUMN IF NOT EXISTS tanggal_efektif_tidak_bekerja text;').catch(() => {});
+  // pool.query('ALTER TABLE employees ADD COLUMN IF NOT EXISTS masa_kerja_jabatan_sebelumnya text;').catch(() => {});
 
   // Mulai pelayan (server) di port 3000
   initRosterCron();
