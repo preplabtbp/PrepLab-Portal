@@ -5,7 +5,7 @@ import {
   CheckSquare, Eye, AlertTriangle, ClipboardCheck, Package, Box, FileText, FileSpreadsheet, 
   Settings, BookOpen, Info, Briefcase, Users, Calendar, Clock, Utensils, 
   Receipt, LayoutDashboard, User, Search, X, ArrowRight, LayoutGrid, UploadCloud, ExternalLink, Sparkles,
-  ClipboardList, BriefcaseMedical, GraduationCap, Award, Sliders, TrendingUp, BarChart3, Layers
+  ClipboardList, BriefcaseMedical, GraduationCap, Award, Sliders, TrendingUp, BarChart3, Layers, Beaker
 } from 'lucide-react';
 import { Button } from './ui';
 import { FoodReportModal } from './food-report-modal';

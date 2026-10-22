@@ -6,7 +6,7 @@ import {
   Settings, BookOpen, Info, Briefcase, Users, Calendar, Clock, Utensils, 
   LayoutDashboard, User, Search, X, ArrowRight, LayoutGrid, UploadCloud, ExternalLink,
   Trophy, ChevronDown, ChevronsUpDown, ClipboardList, BriefcaseMedical, GraduationCap, Award, Sliders, TrendingUp,
-  Sparkles, BarChart3, Layers,
+  Sparkles, BarChart3, Layers, Beaker,
 } from 'lucide-react';
 import { Button } from './ui';
 import { FoodReportModal } from './food-report-modal';
