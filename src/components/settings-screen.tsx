@@ -4,6 +4,7 @@ import { LogOut, User, Lock, Mail, Settings2, Palette, ShieldAlert, Settings, Be
 import { toast } from 'sonner';
 import { getAppSettings } from '../sheets-api';
 import { PageHeader } from './PageHeader';
+import { formatAvatarUrl } from '../lib/avatarUtils';
 import { FONT_SIZE_OPTIONS, FontSizeOption, applyFontSize, getStoredFontSize } from '../utils/fontSize';
 import { SignatureSettingsCard } from './SignatureSettingsCard';
 import { DevRoleplaySwitcher } from './DevRoleplaySwitcher';
@@ -47,12 +48,32 @@ export function SettingsScreen({
   const [resetNewPass, setResetNewPass] = useState('');
   const [waTarget, setWaTarget] = useState('');
 
+  const [imgFailed, setImgFailed] = useState(false);
+  const rawAvatar = profile?.avatar || profile?.photo || (inspectorNik ? localStorage.getItem(`p2h_inspector_avatar_${inspectorNik}`) : null);
+  const avatarUrl = !imgFailed && rawAvatar ? formatAvatarUrl(rawAvatar, 400) : null;
+
   useEffect(() => {
     try {
       const p = JSON.parse(localStorage.getItem('p2h_inspector_profile') || '{}');
       setProfile(p);
       setEmail(p.email || '');
     } catch(e) {}
+
+    if (inspectorNik) {
+      fetch(`/api/employees/${encodeURIComponent(inspectorNik)}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data?.status === 'success' && data.employee) {
+            setProfile(data.employee);
+            if (data.employee.avatar) {
+              localStorage.setItem(`p2h_inspector_avatar_${inspectorNik}`, data.employee.avatar);
+            } else if (data.employee.photo) {
+              localStorage.setItem(`p2h_inspector_avatar_${inspectorNik}`, data.employee.photo);
+            }
+          }
+        })
+        .catch(() => {});
+    }
     
     if (isDeveloper) {
        getAppSettings().then(res => {
@@ -137,12 +158,22 @@ export function SettingsScreen({
             className="flex items-center gap-4 mb-6 pb-6 border-b"
             style={{ borderColor: 'var(--border-main, #E2E8F0)' }}
           >
-            <div 
-              className="w-14 h-14 rounded-xl flex items-center justify-center font-display font-semibold text-xl shadow-xs" 
-              style={{ backgroundColor: 'var(--primary, #2A9D8F)', color: '#FFFFFF' }}
-            >
-               {inspectorName.charAt(0).toUpperCase()}
-            </div>
+            {avatarUrl ? (
+              <img 
+                src={avatarUrl} 
+                alt={inspectorName || 'Profile'} 
+                className="w-14 h-14 rounded-xl object-cover shadow-xs border border-slate-200 dark:border-slate-700 shrink-0" 
+                referrerPolicy="no-referrer"
+                onError={() => setImgFailed(true)}
+              />
+            ) : (
+              <div 
+                className="w-14 h-14 rounded-xl flex items-center justify-center font-display font-semibold text-xl shadow-xs shrink-0" 
+                style={{ backgroundColor: 'var(--primary, #2A9D8F)', color: '#FFFFFF' }}
+              >
+                 {inspectorName?.charAt(0).toUpperCase()}
+              </div>
+            )}
             <div>
               <div className="font-bold text-lg font-display" style={{ color: 'var(--text-main, #1E293B)' }}>
                 {inspectorName}

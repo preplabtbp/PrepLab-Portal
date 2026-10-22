@@ -16,7 +16,10 @@
 
 ## 📌 3. Prosedur Kerja Standar (Local-First Workflow)
 1. **Implementasi & Perbaikan**: Selesaikan perubahan kode di file yang dituju.
-2. **Uji Validitas Lokal**: Jalankan `npm run lint` (`tsc --noEmit`) dan pastikan 0 error.
+2. **Uji Validitas Lokal & Verifikasi Integritas Labnote & Database**:
+   - Jalankan `npm run lint` (`tsc --noEmit`) dan pastikan 0 error.
+   - **Verifikasi Labnote (Bulletin Board & Section Hub)**: Pastikan render aman dari re-render loop/crash, cache `localStorage` aman, dan navigasi virtual hub tidak memicu error ID numerik/400/500.
+   - **Verifikasi Database (PostgreSQL Cloud SQL & Auth)**: Pastikan query aman, timeout DB toleran (3.5s - 4s), dan alur autentikasi tidak mereset data akun/password karyawan.
 3. **Lapor ke User**: Informasikan kepada user apa saja yang telah diperbaiki/dibuat.
 4. **Tunggu Instruksi**: Tunggu user menguji atau memberi arahan eksplisit sebelum melakukan push atau deploy.
 

@@ -26,6 +26,21 @@ Setiap kali menerima permintaan baru, bug report, fitur, atau perbaikan:
 - Pastikan tidak ada branch aktif rekan tim yang tertinggal sebelum perubahan dirilis ke remote `main`.
 - Lakukan validasi `npm run lint` (`tsc --noEmit`) pada hasil gabungan merge untuk memastikan 0 konflik dan 0 error kompilasi.
 
+### 1c. SOP Mutlak: Verifikasi Integritas Labnote & Database Sebelum Push ke Main
+Setiap kali ada instruksi untuk melakukan push/merge ke `main`, asisten **WAJIB** melakukan pengecekan menyeluruh dan memastikan bahwa perubahan tidak menimbulkan error pada:
+1. **Modul Labnote (Bulletin Board & Section Hub)**:
+   - Pastikan render thread aman dari crash/loop re-render.
+   - Pastikan penanganan key unik React, memoization, dan alur cache `localStorage` (`preplab_cached_bulletin_posts_*`) tidak korup atau melebihi batas kuota browser.
+   - Pastikan navigasi & polling virtual section hub (seperti ID `section-*`) ditangani secara aman tanpa memicu request ID non-numerik yang menyebabkan error 400/500.
+   - Pastikan format postingan, thread komentar, dan data lampiran tetap sinkron lintas-PT.
+2. **Koneksi & Operasi Database (PostgreSQL Cloud SQL & Auth)**:
+   - Pastikan semua query SQL, parameter, dan alur autentikasi tidak memicu runtime error atau syntax error pada database.
+   - Pastikan timeout query DB diset dengan toleransi aman (3.5s - 4s) agar koneksi internet jarak jauh dari PC lokal ke Cloud SQL tidak memicu false fallback ke CSV yang mereset status `first_login_complete` karyawan yang sudah memiliki password hash.
+   - Pastikan tidak ada skrip migrasi atau mutasi query yang berpotensi menimpa, menghapus, atau mengosongkan data karyawan (`employees` / `user_roles`).
+3. **Verifikasi Mutlak Sebelum Push**:
+   - Jalankan `npm run lint` (`tsc --noEmit`) hingga mendapatkan hasil **0 error**.
+   - Laporkan hasil audit Labnote dan DB kepada user dan **TUNGGU instruksi eksplisit** sebelum menjalankan perintah `git push`.
+
 ### 2. Dilarang Menjalankan Cloud Build & Deploy Tanpa Instruksi Eksplisit
 - **JANGAN PERNAH** menjalankan perintah deploy atau submit build ke cloud (seperti `gcloud run deploy`, `gcloud builds submit`, `docker build`, `npm run deploy:*`, dsb.) jika user tidak meminta secara eksplisit.
 - Lakukan validasi kode secara lokal:
