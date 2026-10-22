@@ -1,16 +1,44 @@
 import { DailyPerformanceRecord } from './daily-performance-types';
 
-export const STORAGE_KEY_DAILY_PERFORMANCE = 'preplab_daily_performance_records_v1';
+export const STORAGE_KEY_DAILY_PERFORMANCE = 'preplab_daily_performance_records_v2';
 
 export function getStoredRecords(initialFallback: DailyPerformanceRecord[]): DailyPerformanceRecord[] {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY_DAILY_PERFORMANCE);
+    let raw = localStorage.getItem(STORAGE_KEY_DAILY_PERFORMANCE);
+    
+    // Auto-migration from v1 if v2 not yet present
     if (!raw) {
+      const rawV1 = localStorage.getItem('preplab_daily_performance_records_v1');
+      if (rawV1) {
+        try {
+          const parsedV1 = JSON.parse(rawV1);
+          if (Array.isArray(parsedV1) && parsedV1.length > 0) {
+            const hasSeptember = parsedV1.some(r => r.date && r.date.includes('/09/2026'));
+            const septemberRecs = initialFallback.filter(r => r.date && r.date.includes('/09/2026'));
+            const merged = hasSeptember ? parsedV1 : [...septemberRecs, ...parsedV1];
+            merged.sort((a, b) => a.isoDate.localeCompare(b.isoDate) || (a.shiftType === 'DAY' ? -1 : 1));
+            localStorage.setItem(STORAGE_KEY_DAILY_PERFORMANCE, JSON.stringify(merged));
+            return merged;
+          }
+        } catch (migErr) {
+          console.warn('Could not migrate daily performance v1 records:', migErr);
+        }
+      }
       localStorage.setItem(STORAGE_KEY_DAILY_PERFORMANCE, JSON.stringify(initialFallback));
       return initialFallback;
     }
+
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed) && parsed.length > 0) {
+      // Ensure September records are present if cache was created before September update
+      const hasSeptember = parsed.some(r => r.date && r.date.includes('/09/2026'));
+      if (!hasSeptember) {
+        const septemberRecs = initialFallback.filter(r => r.date && r.date.includes('/09/2026'));
+        const merged = [...septemberRecs, ...parsed];
+        merged.sort((a, b) => a.isoDate.localeCompare(b.isoDate) || (a.shiftType === 'DAY' ? -1 : 1));
+        localStorage.setItem(STORAGE_KEY_DAILY_PERFORMANCE, JSON.stringify(merged));
+        return merged;
+      }
       return parsed;
     }
   } catch (e) {

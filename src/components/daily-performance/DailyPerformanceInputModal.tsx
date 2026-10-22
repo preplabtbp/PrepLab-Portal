@@ -253,26 +253,26 @@ export const DailyPerformanceInputModal: React.FC<DailyPerformanceInputModalProp
                   />
                 </div>
                 <div>
-                  <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-400">Regu</label>
+                  <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-400">Shift</label>
                   <select
                     value={regu}
                     onChange={e => setRegu(e.target.value as any)}
                     className="w-full mt-1 px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs text-slate-800 dark:text-white cursor-pointer"
                   >
-                    <option value="A">Regu A</option>
-                    <option value="B">Regu B</option>
+                    <option value="A">Shift A</option>
+                    <option value="B">Shift B</option>
                   </select>
                 </div>
                 <div>
-                  <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-400">Shift</label>
+                  <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-400">Waktu / Jadwal Shift</label>
                   <select
                     value={shiftType}
                     onChange={e => setShiftType(e.target.value as any)}
                     className="w-full mt-1 px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs text-slate-800 dark:text-white cursor-pointer"
                   >
-                    <option value="DAY">DAY (Siang)</option>
-                    <option value="NIGHT">NIGHT (Malam)</option>
-                    <option value="LS">LS (Long Shift)</option>
+                    <option value="DAY">DAY (Pagi: 07:00 - 19:00 WITA)</option>
+                    <option value="NIGHT">NIGHT (Malam: 19:00 - 07:00 WITA)</option>
+                    <option value="LS">LS (Long Shift: 07:00 - 24:00 WITA)</option>
                   </select>
                 </div>
               </div>

@@ -20,6 +20,17 @@ import {
   XrfInstrumentsTrendChart, 
   QcReportingTrendChart 
 } from './DailyPerformanceCharts';
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip as RechartsTooltip,
+  Legend,
+  CartesianGrid,
+  LabelList
+} from 'recharts';
 
 interface DailyPerformanceStructuredPresentationProps {
   records: DailyPerformanceRecord[];
@@ -40,6 +51,7 @@ export interface LabPersonnelItem {
   roleCategory: 'staff' | 'crew';
   keterangan: string;
   badgeColor: string;
+  tglMasukKembali?: string;
 }
 
 export function isStaffRole(item: { jabatan?: string; gol?: string; roleCategory?: string }): boolean {
@@ -132,18 +144,122 @@ export function getJabatanBadgeStyle(jabatan?: string): { bg: string; text: stri
   return { bg: 'bg-slate-100 dark:bg-slate-800', text: 'text-slate-700 dark:text-slate-300', border: 'border-slate-300 dark:border-slate-700', label: 'Staff' };
 }
 
+
+// Helper to parse roster date key
+function parseRosterDateKey(keyStr: string): Date | null {
+  if (!keyStr) return null;
+  const s = keyStr.trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+    const [y, m, d] = s.split('-').map(Number);
+    return new Date(y, m - 1, d);
+  }
+  if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(s)) {
+    const [d, m, y] = s.split('/').map(Number);
+    return new Date(y, m - 1, d);
+  }
+  const parts = s.split(/\s+/);
+  if (parts.length === 3) {
+    const day = parseInt(parts[0], 10);
+    let year = parseInt(parts[2], 10);
+    if (year < 100) year += 2000;
+    const mStr = parts[1].toLowerCase().slice(0, 3);
+    const monthsMap: Record<string, number> = {
+      jan: 0, feb: 1, mar: 2, apr: 3, mei: 4, may: 4, jun: 5,
+      jul: 6, agu: 7, aug: 7, sep: 8, okt: 9, oct: 9, nov: 10, des: 11, dec: 11
+    };
+    const m = monthsMap[mStr];
+    if (!isNaN(day) && m !== undefined && !isNaN(year)) {
+      return new Date(year, m, day);
+    }
+  }
+  return null;
+}
+
+function formatDateDDMMYYYY(d: Date): string {
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const year = d.getFullYear();
+  return `${day}-${month}-${year}`;
+}
+
+// Mencari tanggal kembali bekerja dari roster (diambil dari kode X1 atau hari kerja pertama setelah cuti)
+export function getReturnToWorkDate(emp: any, selectedDateStr: string): string | null {
+  let curDate: Date | null = null;
+  if (selectedDateStr.includes('/')) {
+    const [d, m, y] = selectedDateStr.split('/').map(Number);
+    curDate = new Date(y, m - 1, d);
+  } else if (selectedDateStr.includes('-')) {
+    const [y, m, d] = selectedDateStr.split('-').map(Number);
+    curDate = new Date(y, m - 1, d);
+  }
+  const curTime = curDate ? curDate.getTime() : 0;
+
+  if (emp.fullSchedule && typeof emp.fullSchedule === 'object') {
+    const entries: { date: Date; code: string }[] = [];
+    for (const [k, v] of Object.entries(emp.fullSchedule)) {
+      const parsed = parseRosterDateKey(k);
+      if (parsed) {
+        entries.push({ date: parsed, code: String(v || '').trim().toUpperCase() });
+      }
+    }
+    entries.sort((a, b) => a.date.getTime() - b.date.getTime());
+
+    // Prioritas 1: Cari kode X1 / 1X pada atau setelah selectedDate
+    const x1Entry = entries.find(e => e.date.getTime() >= curTime && (e.code === 'X1' || e.code === '1X'));
+    if (x1Entry) {
+      return formatDateDDMMYYYY(x1Entry.date);
+    }
+
+    // Prioritas 2: Cari shift kerja (D atau N) pertama setelah tanggal cuti
+    const workEntry = entries.find(e => e.date.getTime() > curTime && (e.code === 'D' || e.code === 'N'));
+    if (workEntry) {
+      return formatDateDDMMYYYY(workEntry.date);
+    }
+  }
+
+  if (Array.isArray(emp.schedule)) {
+    const entries: { date: Date; code: string }[] = [];
+    for (const item of emp.schedule) {
+      const parsed = parseRosterDateKey(item.date || item.dateStr || item.keyDateStr);
+      if (parsed) {
+        entries.push({ date: parsed, code: String(item.shift || item.code || '').trim().toUpperCase() });
+      }
+    }
+    entries.sort((a, b) => a.date.getTime() - b.date.getTime());
+
+    const x1Entry = entries.find(e => e.date.getTime() >= curTime && (e.code === 'X1' || e.code === '1X'));
+    if (x1Entry) {
+      return formatDateDDMMYYYY(x1Entry.date);
+    }
+
+    const workEntry = entries.find(e => e.date.getTime() > curTime && (e.code === 'D' || e.code === 'N'));
+    if (workEntry) {
+      return formatDateDDMMYYYY(workEntry.date);
+    }
+  }
+
+  return null;
+}
+
+export const formatShiftName = (regu?: string) => {
+  if (!regu || regu === '-') return '-';
+  if (regu.toLowerCase().includes('non')) return 'Non-Shift';
+  const clean = regu.replace(/^(Regu|Shift)\s*/i, '').trim();
+  return `Shift ${clean}`;
+};
+
 const FALLBACK_TBP_LAB_PERSONNEL: LabPersonnelItem[] = [
   // Shift A (Pagi - Pure TBP & GPS)
-  { nik: '02D22000023', name: 'Muhammad Reza Satria', jabatan: 'Laboratory Foreman', section: 'Laboratory', regu: 'Regu A', shiftSchedule: 'D', category: 'pagi', roleCategory: 'staff', keterangan: 'Hadir Shift Pagi', badgeColor: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-300' },
-  { nik: '04D24000068', name: 'Muhammad Fandy Septiawan', jabatan: 'Laboratory Foreman', section: 'Laboratory', regu: 'Regu A', shiftSchedule: 'D', category: 'pagi', roleCategory: 'staff', keterangan: 'Hadir Shift Pagi', badgeColor: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-300' },
-  { nik: '04D26000070', name: 'Rahmad Azizul Khakim', jabatan: 'Laboratory Foreman', section: 'Laboratory', regu: 'Regu A', shiftSchedule: 'D', category: 'pagi', roleCategory: 'staff', keterangan: 'Hadir Shift Pagi', badgeColor: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-300' },
-  { nik: '04D26000015', name: 'Gusti Nur Firdaus', jabatan: 'Laboratory Foreman', section: 'Laboratory', regu: 'Regu A', shiftSchedule: 'D', category: 'pagi', roleCategory: 'staff', keterangan: 'Hadir Shift Pagi', badgeColor: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-300' },
-  { nik: 'M0406220796', name: 'Naslim Muksin', jabatan: 'Crew, Preparation & Laboratory', section: 'Laboratory', regu: 'Regu A', shiftSchedule: 'D', category: 'pagi', roleCategory: 'crew', keterangan: 'Hadir Shift Pagi', badgeColor: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-300' },
-  { nik: 'M0203220102', name: 'Ramadhan W. Anwar', jabatan: 'Crew, Preparation & Laboratory', section: 'Laboratory', regu: 'Regu A', shiftSchedule: 'D', category: 'pagi', roleCategory: 'crew', keterangan: 'Hadir Shift Pagi', badgeColor: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-300' },
-  { nik: 'M0405240290', name: 'Randi Zakaria', jabatan: 'Crew, Preparation & Laboratory', section: 'Laboratory', regu: 'Regu A', shiftSchedule: 'D', category: 'pagi', roleCategory: 'crew', keterangan: 'Hadir Shift Pagi', badgeColor: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-300' },
-  { nik: 'M0212210097', name: 'Riko Saputra Day', jabatan: 'Crew, Preparation & Laboratory', section: 'Laboratory', regu: 'Regu A', shiftSchedule: 'D', category: 'pagi', roleCategory: 'crew', keterangan: 'Hadir Shift Pagi', badgeColor: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-300' },
-  { nik: 'M0412221652', name: 'Suryadi La Samusu', jabatan: 'Crew, Preparation & Laboratory', section: 'Laboratory', regu: 'Regu A', shiftSchedule: 'D', category: 'pagi', roleCategory: 'crew', keterangan: 'Hadir Shift Pagi', badgeColor: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-300' },
-  { nik: 'M0402230134', name: 'Wahyu Jabir', jabatan: 'Crew, Preparation & Laboratory', section: 'Laboratory', regu: 'Regu A', shiftSchedule: 'D', category: 'pagi', roleCategory: 'crew', keterangan: 'Hadir Shift Pagi', badgeColor: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-300' },
+  { nik: '02D22000023', name: 'Muhammad Reza Satria', jabatan: 'Laboratory Foreman', section: 'Laboratory', regu: 'Shift A', shiftSchedule: 'D', category: 'pagi', roleCategory: 'staff', keterangan: 'Hadir Shift Pagi', badgeColor: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-300' },
+  { nik: '04D24000068', name: 'Muhammad Fandy Septiawan', jabatan: 'Laboratory Foreman', section: 'Laboratory', regu: 'Shift A', shiftSchedule: 'D', category: 'pagi', roleCategory: 'staff', keterangan: 'Hadir Shift Pagi', badgeColor: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-300' },
+  { nik: '04D26000070', name: 'Rahmad Azizul Khakim', jabatan: 'Laboratory Foreman', section: 'Laboratory', regu: 'Shift A', shiftSchedule: 'D', category: 'pagi', roleCategory: 'staff', keterangan: 'Hadir Shift Pagi', badgeColor: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-300' },
+  { nik: '04D26000015', name: 'Gusti Nur Firdaus', jabatan: 'Laboratory Foreman', section: 'Laboratory', regu: 'Shift A', shiftSchedule: 'D', category: 'pagi', roleCategory: 'staff', keterangan: 'Hadir Shift Pagi', badgeColor: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-300' },
+  { nik: 'M0406220796', name: 'Naslim Muksin', jabatan: 'Crew, Preparation & Laboratory', section: 'Laboratory', regu: 'Shift A', shiftSchedule: 'D', category: 'pagi', roleCategory: 'crew', keterangan: 'Hadir Shift Pagi', badgeColor: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-300' },
+  { nik: 'M0203220102', name: 'Ramadhan W. Anwar', jabatan: 'Crew, Preparation & Laboratory', section: 'Laboratory', regu: 'Shift A', shiftSchedule: 'D', category: 'pagi', roleCategory: 'crew', keterangan: 'Hadir Shift Pagi', badgeColor: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-300' },
+  { nik: 'M0405240290', name: 'Randi Zakaria', jabatan: 'Crew, Preparation & Laboratory', section: 'Laboratory', regu: 'Shift A', shiftSchedule: 'D', category: 'pagi', roleCategory: 'crew', keterangan: 'Hadir Shift Pagi', badgeColor: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-300' },
+  { nik: 'M0212210097', name: 'Riko Saputra Day', jabatan: 'Crew, Preparation & Laboratory', section: 'Laboratory', regu: 'Shift A', shiftSchedule: 'D', category: 'pagi', roleCategory: 'crew', keterangan: 'Hadir Shift Pagi', badgeColor: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-300' },
+  { nik: 'M0412221652', name: 'Suryadi La Samusu', jabatan: 'Crew, Preparation & Laboratory', section: 'Laboratory', regu: 'Shift A', shiftSchedule: 'D', category: 'pagi', roleCategory: 'crew', keterangan: 'Hadir Shift Pagi', badgeColor: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-300' },
+  { nik: 'M0402230134', name: 'Wahyu Jabir', jabatan: 'Crew, Preparation & Laboratory', section: 'Laboratory', regu: 'Shift A', shiftSchedule: 'D', category: 'pagi', roleCategory: 'crew', keterangan: 'Hadir Shift Pagi', badgeColor: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-300' },
 
   // Non-Shift (Merged into Shift Pagi - Pure TBP & GPS Staff)
   { nik: '04D23000004', name: 'Tigwa Anggawikara', jabatan: 'Laboratory Superintendent', section: 'Laboratory', regu: 'Non-Shift', shiftSchedule: 'D', category: 'pagi', roleCategory: 'staff', keterangan: 'Hadir Non-Shift Pagi', badgeColor: 'bg-teal-100 text-teal-800 dark:bg-teal-950/60 dark:text-teal-300 border-teal-300' },
@@ -153,42 +269,42 @@ const FALLBACK_TBP_LAB_PERSONNEL: LabPersonnelItem[] = [
   { nik: 'M0403190701', name: 'Murti Tamisari Harun', jabatan: 'Preparation Foreman, Wet', section: 'Laboratory', regu: 'Non-Shift', shiftSchedule: 'D', category: 'pagi', roleCategory: 'staff', keterangan: 'Hadir Non-Shift Pagi', badgeColor: 'bg-teal-100 text-teal-800 dark:bg-teal-950/60 dark:text-teal-300 border-teal-300' },
 
   // Shift B (Malam - Pure TBP & GPS)
-  { nik: '02D18000192', name: 'Khaufi Wirawan Aligora', jabatan: 'Laboratory Supervisor', section: 'Laboratory', regu: 'Regu B', shiftSchedule: 'N', category: 'malam', roleCategory: 'staff', keterangan: 'Hadir Shift Malam', badgeColor: 'bg-indigo-900 text-white border-indigo-700' },
-  { nik: '04D21001049', name: 'Muhammad Amran Selang', jabatan: 'Laboratory Supervisor', section: 'Laboratory', regu: 'Regu B', shiftSchedule: 'N', category: 'malam', roleCategory: 'staff', keterangan: 'Hadir Shift Malam', badgeColor: 'bg-indigo-900 text-white border-indigo-700' },
-  { nik: '04D25000067', name: 'Andika Dafa Rusdiarta', jabatan: 'Laboratory Foreman', section: 'Laboratory', regu: 'Regu B', shiftSchedule: 'N', category: 'malam', roleCategory: 'staff', keterangan: 'Hadir Shift Malam', badgeColor: 'bg-indigo-900 text-white border-indigo-700' },
-  { nik: '02D23000024', name: 'Fachmi Amarullah', jabatan: 'Laboratory Foreman', section: 'Laboratory', regu: 'Regu B', shiftSchedule: 'N', category: 'malam', roleCategory: 'staff', keterangan: 'Hadir Shift Malam', badgeColor: 'bg-indigo-900 text-white border-indigo-700' },
-  { nik: '04D24000057', name: 'Herwin Predianto', jabatan: 'Laboratory Foreman', section: 'Laboratory', regu: 'Regu B', shiftSchedule: 'N', category: 'malam', roleCategory: 'staff', keterangan: 'Hadir Shift Malam', badgeColor: 'bg-indigo-900 text-white border-indigo-700' },
-  { nik: '04D26000067', name: 'Muhammad Furqan', jabatan: 'Laboratory Foreman', section: 'Laboratory', regu: 'Regu B', shiftSchedule: 'N', category: 'malam', roleCategory: 'staff', keterangan: 'Hadir Shift Malam', badgeColor: 'bg-indigo-900 text-white border-indigo-700' },
-  { nik: '04D24000056', name: 'Rizal Zaelani', jabatan: 'Laboratory Foreman', section: 'Laboratory', regu: 'Regu B', shiftSchedule: 'N', category: 'malam', roleCategory: 'staff', keterangan: 'Hadir Shift Malam', badgeColor: 'bg-indigo-900 text-white border-indigo-700' },
-  { nik: 'M0407221011', name: 'Agusman Suaib', jabatan: 'Crew, Preparation & Laboratory', section: 'Laboratory', regu: 'Regu B', shiftSchedule: 'N', category: 'malam', roleCategory: 'crew', keterangan: 'Hadir Shift Malam', badgeColor: 'bg-indigo-900 text-white border-indigo-700' },
-  { nik: 'M0411221527', name: 'Hasbi Nuh', jabatan: 'Crew, Preparation & Laboratory', section: 'Laboratory', regu: 'Regu B', shiftSchedule: 'N', category: 'malam', roleCategory: 'crew', keterangan: 'Hadir Shift Malam', badgeColor: 'bg-indigo-900 text-white border-indigo-700' },
-  { nik: 'M0201250032', name: 'Imran Sebualamo', jabatan: 'Crew, Preparation & Laboratory', section: 'Laboratory', regu: 'Regu B', shiftSchedule: 'N', category: 'malam', roleCategory: 'crew', keterangan: 'Hadir Shift Malam', badgeColor: 'bg-indigo-900 text-white border-indigo-700' },
-  { nik: 'M0412221625', name: 'Iran Rumbia', jabatan: 'Crew, Preparation & Laboratory', section: 'Laboratory', regu: 'Regu B', shiftSchedule: 'N', category: 'malam', roleCategory: 'crew', keterangan: 'Hadir Shift Malam', badgeColor: 'bg-indigo-900 text-white border-indigo-700' },
-  { nik: 'M0406220795', name: 'Irman Welhemus', jabatan: 'Crew, Preparation & Laboratory', section: 'Laboratory', regu: 'Regu B', shiftSchedule: 'N', category: 'malam', roleCategory: 'crew', keterangan: 'Hadir Shift Malam', badgeColor: 'bg-indigo-900 text-white border-indigo-700' },
-  { nik: 'M0402230188', name: 'Jarfin Saharudin', jabatan: 'Crew, Preparation & Laboratory', section: 'Laboratory', regu: 'Regu B', shiftSchedule: 'N', category: 'malam', roleCategory: 'crew', keterangan: 'Hadir Shift Malam', badgeColor: 'bg-indigo-900 text-white border-indigo-700' },
-  { nik: 'M0403240155', name: 'Jasri', jabatan: 'Crew, Preparation & Laboratory', section: 'Laboratory', regu: 'Regu B', shiftSchedule: 'N', category: 'malam', roleCategory: 'crew', keterangan: 'Hadir Shift Malam', badgeColor: 'bg-indigo-900 text-white border-indigo-700' },
-  { nik: 'M0406210029', name: 'La Dai', jabatan: 'Crew, Preparation & Laboratory', section: 'Laboratory', regu: 'Regu B', shiftSchedule: 'N', category: 'malam', roleCategory: 'crew', keterangan: 'Hadir Shift Malam', badgeColor: 'bg-indigo-900 text-white border-indigo-700' },
-  { nik: 'M0209240583', name: 'La Wisnu', jabatan: 'Crew, Preparation & Laboratory', section: 'Laboratory', regu: 'Regu B', shiftSchedule: 'N', category: 'malam', roleCategory: 'crew', keterangan: 'Hadir Shift Malam', badgeColor: 'bg-indigo-900 text-white border-indigo-700' },
-  { nik: 'M0402240078', name: 'Muh. Alif Multazam NH', jabatan: 'Crew, Preparation & Laboratory', section: 'Laboratory', regu: 'Regu B', shiftSchedule: 'N', category: 'malam', roleCategory: 'crew', keterangan: 'Hadir Shift Malam', badgeColor: 'bg-indigo-900 text-white border-indigo-700' },
-  { nik: 'M0202220051', name: 'Rahmat Purnomo', jabatan: 'Crew, Preparation & Laboratory', section: 'Laboratory', regu: 'Regu B', shiftSchedule: 'N', category: 'malam', roleCategory: 'crew', keterangan: 'Hadir Shift Malam', badgeColor: 'bg-indigo-900 text-white border-indigo-700' },
-  { nik: 'M0203220144', name: 'Risdiyanto Ladedi', jabatan: 'Crew, Preparation & Laboratory', section: 'Laboratory', regu: 'Regu B', shiftSchedule: 'N', category: 'malam', roleCategory: 'crew', keterangan: 'Hadir Shift Malam', badgeColor: 'bg-indigo-900 text-white border-indigo-700' },
-  { nik: 'M0402230199', name: 'Sukri Koco', jabatan: 'Crew, Preparation & Laboratory', section: 'Laboratory', regu: 'Regu B', shiftSchedule: 'N', category: 'malam', roleCategory: 'crew', keterangan: 'Hadir Shift Malam', badgeColor: 'bg-indigo-900 text-white border-indigo-700' },
-  { nik: 'M0409251014', name: 'Zhiran Arrazy Barmawi Putra', jabatan: 'Crew, Preparation & Laboratory', section: 'Laboratory', regu: 'Regu B', shiftSchedule: 'N', category: 'malam', roleCategory: 'crew', keterangan: 'Hadir Shift Malam', badgeColor: 'bg-indigo-900 text-white border-indigo-700' },
+  { nik: '02D18000192', name: 'Khaufi Wirawan Aligora', jabatan: 'Laboratory Supervisor', section: 'Laboratory', regu: 'Shift B', shiftSchedule: 'N', category: 'malam', roleCategory: 'staff', keterangan: 'Hadir Shift Malam', badgeColor: 'bg-indigo-900 text-white border-indigo-700' },
+  { nik: '04D21001049', name: 'Muhammad Amran Selang', jabatan: 'Laboratory Supervisor', section: 'Laboratory', regu: 'Shift B', shiftSchedule: 'N', category: 'malam', roleCategory: 'staff', keterangan: 'Hadir Shift Malam', badgeColor: 'bg-indigo-900 text-white border-indigo-700' },
+  { nik: '04D25000067', name: 'Andika Dafa Rusdiarta', jabatan: 'Laboratory Foreman', section: 'Laboratory', regu: 'Shift B', shiftSchedule: 'N', category: 'malam', roleCategory: 'staff', keterangan: 'Hadir Shift Malam', badgeColor: 'bg-indigo-900 text-white border-indigo-700' },
+  { nik: '02D23000024', name: 'Fachmi Amarullah', jabatan: 'Laboratory Foreman', section: 'Laboratory', regu: 'Shift B', shiftSchedule: 'N', category: 'malam', roleCategory: 'staff', keterangan: 'Hadir Shift Malam', badgeColor: 'bg-indigo-900 text-white border-indigo-700' },
+  { nik: '04D24000057', name: 'Herwin Predianto', jabatan: 'Laboratory Foreman', section: 'Laboratory', regu: 'Shift B', shiftSchedule: 'N', category: 'malam', roleCategory: 'staff', keterangan: 'Hadir Shift Malam', badgeColor: 'bg-indigo-900 text-white border-indigo-700' },
+  { nik: '04D26000067', name: 'Muhammad Furqan', jabatan: 'Laboratory Foreman', section: 'Laboratory', regu: 'Shift B', shiftSchedule: 'N', category: 'malam', roleCategory: 'staff', keterangan: 'Hadir Shift Malam', badgeColor: 'bg-indigo-900 text-white border-indigo-700' },
+  { nik: '04D24000056', name: 'Rizal Zaelani', jabatan: 'Laboratory Foreman', section: 'Laboratory', regu: 'Shift B', shiftSchedule: 'N', category: 'malam', roleCategory: 'staff', keterangan: 'Hadir Shift Malam', badgeColor: 'bg-indigo-900 text-white border-indigo-700' },
+  { nik: 'M0407221011', name: 'Agusman Suaib', jabatan: 'Crew, Preparation & Laboratory', section: 'Laboratory', regu: 'Shift B', shiftSchedule: 'N', category: 'malam', roleCategory: 'crew', keterangan: 'Hadir Shift Malam', badgeColor: 'bg-indigo-900 text-white border-indigo-700' },
+  { nik: 'M0411221527', name: 'Hasbi Nuh', jabatan: 'Crew, Preparation & Laboratory', section: 'Laboratory', regu: 'Shift B', shiftSchedule: 'N', category: 'malam', roleCategory: 'crew', keterangan: 'Hadir Shift Malam', badgeColor: 'bg-indigo-900 text-white border-indigo-700' },
+  { nik: 'M0201250032', name: 'Imran Sebualamo', jabatan: 'Crew, Preparation & Laboratory', section: 'Laboratory', regu: 'Shift B', shiftSchedule: 'N', category: 'malam', roleCategory: 'crew', keterangan: 'Hadir Shift Malam', badgeColor: 'bg-indigo-900 text-white border-indigo-700' },
+  { nik: 'M0412221625', name: 'Iran Rumbia', jabatan: 'Crew, Preparation & Laboratory', section: 'Laboratory', regu: 'Shift B', shiftSchedule: 'N', category: 'malam', roleCategory: 'crew', keterangan: 'Hadir Shift Malam', badgeColor: 'bg-indigo-900 text-white border-indigo-700' },
+  { nik: 'M0406220795', name: 'Irman Welhemus', jabatan: 'Crew, Preparation & Laboratory', section: 'Laboratory', regu: 'Shift B', shiftSchedule: 'N', category: 'malam', roleCategory: 'crew', keterangan: 'Hadir Shift Malam', badgeColor: 'bg-indigo-900 text-white border-indigo-700' },
+  { nik: 'M0402230188', name: 'Jarfin Saharudin', jabatan: 'Crew, Preparation & Laboratory', section: 'Laboratory', regu: 'Shift B', shiftSchedule: 'N', category: 'malam', roleCategory: 'crew', keterangan: 'Hadir Shift Malam', badgeColor: 'bg-indigo-900 text-white border-indigo-700' },
+  { nik: 'M0403240155', name: 'Jasri', jabatan: 'Crew, Preparation & Laboratory', section: 'Laboratory', regu: 'Shift B', shiftSchedule: 'N', category: 'malam', roleCategory: 'crew', keterangan: 'Hadir Shift Malam', badgeColor: 'bg-indigo-900 text-white border-indigo-700' },
+  { nik: 'M0406210029', name: 'La Dai', jabatan: 'Crew, Preparation & Laboratory', section: 'Laboratory', regu: 'Shift B', shiftSchedule: 'N', category: 'malam', roleCategory: 'crew', keterangan: 'Hadir Shift Malam', badgeColor: 'bg-indigo-900 text-white border-indigo-700' },
+  { nik: 'M0209240583', name: 'La Wisnu', jabatan: 'Crew, Preparation & Laboratory', section: 'Laboratory', regu: 'Shift B', shiftSchedule: 'N', category: 'malam', roleCategory: 'crew', keterangan: 'Hadir Shift Malam', badgeColor: 'bg-indigo-900 text-white border-indigo-700' },
+  { nik: 'M0402240078', name: 'Muh. Alif Multazam NH', jabatan: 'Crew, Preparation & Laboratory', section: 'Laboratory', regu: 'Shift B', shiftSchedule: 'N', category: 'malam', roleCategory: 'crew', keterangan: 'Hadir Shift Malam', badgeColor: 'bg-indigo-900 text-white border-indigo-700' },
+  { nik: 'M0202220051', name: 'Rahmat Purnomo', jabatan: 'Crew, Preparation & Laboratory', section: 'Laboratory', regu: 'Shift B', shiftSchedule: 'N', category: 'malam', roleCategory: 'crew', keterangan: 'Hadir Shift Malam', badgeColor: 'bg-indigo-900 text-white border-indigo-700' },
+  { nik: 'M0203220144', name: 'Risdiyanto Ladedi', jabatan: 'Crew, Preparation & Laboratory', section: 'Laboratory', regu: 'Shift B', shiftSchedule: 'N', category: 'malam', roleCategory: 'crew', keterangan: 'Hadir Shift Malam', badgeColor: 'bg-indigo-900 text-white border-indigo-700' },
+  { nik: 'M0402230199', name: 'Sukri Koco', jabatan: 'Crew, Preparation & Laboratory', section: 'Laboratory', regu: 'Shift B', shiftSchedule: 'N', category: 'malam', roleCategory: 'crew', keterangan: 'Hadir Shift Malam', badgeColor: 'bg-indigo-900 text-white border-indigo-700' },
+  { nik: 'M0409251014', name: 'Zhiran Arrazy Barmawi Putra', jabatan: 'Crew, Preparation & Laboratory', section: 'Laboratory', regu: 'Shift B', shiftSchedule: 'N', category: 'malam', roleCategory: 'crew', keterangan: 'Hadir Shift Malam', badgeColor: 'bg-indigo-900 text-white border-indigo-700' },
 
   // Tidak Bertugas (Izin, Sakit, Off, Cuti - Pure TBP & GPS)
-  { nik: '04D25000059', name: 'Anresansia Winesha Pandit', jabatan: 'Laboratory Foreman', section: 'Laboratory', regu: 'Regu B', shiftSchedule: 'CT', category: 'tidak_bertugas', roleCategory: 'staff', keterangan: 'Cuti Tahunan (CT)', badgeColor: 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border-amber-300' },
-  { nik: '02D25000050', name: 'Ayup Riyan Redondo', jabatan: 'Laboratory Foreman', section: 'Laboratory', regu: 'Regu B', shiftSchedule: 'CR', category: 'tidak_bertugas', roleCategory: 'staff', keterangan: 'Cuti Roster (CR)', badgeColor: 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border-amber-300' },
-  { nik: '04D23000025', name: 'M. Harits Asyardy', jabatan: 'Laboratory Foreman', section: 'Laboratory', regu: 'Regu B', shiftSchedule: 'OFF', category: 'tidak_bertugas', roleCategory: 'staff', keterangan: 'Off Roster (Libur)', badgeColor: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border-slate-300' },
-  { nik: '04D23000035', name: 'Ahmad Jusma Azhari Annur', jabatan: 'Laboratory Foreman', section: 'Laboratory', regu: 'Regu B', shiftSchedule: 'SL', category: 'tidak_bertugas', roleCategory: 'staff', keterangan: 'Sakit Surat Dokter (SL)', badgeColor: 'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300 border-rose-300' },
-  { nik: '04D26000016', name: 'Riyan Panji Putra', jabatan: 'Laboratory Foreman', section: 'Laboratory', regu: 'Regu B', shiftSchedule: 'I', category: 'tidak_bertugas', roleCategory: 'staff', keterangan: 'Izin Resmi (I)', badgeColor: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-950/60 dark:text-yellow-300 border-yellow-300' },
-  { nik: '04D25000045', name: 'Kevin Murheza', jabatan: 'Laboratory Foreman', section: 'Laboratory', regu: 'Regu B', shiftSchedule: 'OFF', category: 'tidak_bertugas', roleCategory: 'staff', keterangan: 'Off Roster (Libur)', badgeColor: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border-slate-300' },
-  { nik: 'M0203250155', name: 'Sahrul Sanusi', jabatan: 'Crew, Preparation & Laboratory', section: 'Laboratory', regu: 'Regu B', shiftSchedule: 'OFF', category: 'tidak_bertugas', roleCategory: 'crew', keterangan: 'Off Roster (Libur)', badgeColor: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border-slate-300' }
+  { nik: '04D25000059', name: 'Anresansia Winesha Pandit', jabatan: 'Laboratory Foreman', section: 'Laboratory', regu: 'Shift B', shiftSchedule: 'CT', category: 'tidak_bertugas', roleCategory: 'staff', keterangan: 'Cuti', badgeColor: 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border-amber-300' },
+  { nik: '02D25000050', name: 'Ayup Riyan Redondo', jabatan: 'Laboratory Foreman', section: 'Laboratory', regu: 'Shift B', shiftSchedule: 'CR', category: 'tidak_bertugas', roleCategory: 'staff', keterangan: 'Cuti', badgeColor: 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border-amber-300' },
+  { nik: '04D23000025', name: 'M. Harits Asyardy', jabatan: 'Laboratory Foreman', section: 'Laboratory', regu: 'Shift B', shiftSchedule: 'OFF', category: 'tidak_bertugas', roleCategory: 'staff', keterangan: 'Off Roster', badgeColor: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border-slate-300' },
+  { nik: '04D23000035', name: 'Ahmad Jusma Azhari Annur', jabatan: 'Laboratory Foreman', section: 'Laboratory', regu: 'Shift B', shiftSchedule: 'SL', category: 'tidak_bertugas', roleCategory: 'staff', keterangan: 'Sakit', badgeColor: 'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300 border-rose-300' },
+  { nik: '04D26000016', name: 'Riyan Panji Putra', jabatan: 'Laboratory Foreman', section: 'Laboratory', regu: 'Shift B', shiftSchedule: 'I', category: 'tidak_bertugas', roleCategory: 'staff', keterangan: 'Izin', badgeColor: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-950/60 dark:text-yellow-300 border-yellow-300' },
+  { nik: '04D25000045', name: 'Kevin Murheza', jabatan: 'Laboratory Foreman', section: 'Laboratory', regu: 'Shift B', shiftSchedule: 'OFF', category: 'tidak_bertugas', roleCategory: 'staff', keterangan: 'Off Roster', badgeColor: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border-slate-300' },
+  { nik: 'M0203250155', name: 'Sahrul Sanusi', jabatan: 'Crew, Preparation & Laboratory', section: 'Laboratory', regu: 'Shift B', shiftSchedule: 'OFF', category: 'tidak_bertugas', roleCategory: 'crew', keterangan: 'Off Roster', badgeColor: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border-slate-300' }
 ];
 
 const FALLBACK_GTS_LAB_PERSONNEL: LabPersonnelItem[] = [
   // Shift A (Pagi - Dedicated GTS)
-  { nik: '03D24000058', name: 'Rafi Fadlurrahman', jabatan: 'Laboratory Foreman', section: 'Laboratory', regu: 'Regu A', shiftSchedule: 'D', category: 'pagi', roleCategory: 'staff', keterangan: 'Hadir Shift Pagi', badgeColor: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-300' },
-  { nik: '03D24000060', name: 'Febrian Mauklesi Salatutin', jabatan: 'Laboratory Foreman', section: 'Laboratory', regu: 'Regu A', shiftSchedule: 'D', category: 'pagi', roleCategory: 'staff', keterangan: 'Hadir Shift Pagi', badgeColor: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-300' },
+  { nik: '03D24000058', name: 'Rafi Fadlurrahman', jabatan: 'Laboratory Foreman', section: 'Laboratory', regu: 'Shift A', shiftSchedule: 'D', category: 'pagi', roleCategory: 'staff', keterangan: 'Hadir Shift Pagi', badgeColor: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-300' },
+  { nik: '03D24000060', name: 'Febrian Mauklesi Salatutin', jabatan: 'Laboratory Foreman', section: 'Laboratory', regu: 'Shift A', shiftSchedule: 'D', category: 'pagi', roleCategory: 'staff', keterangan: 'Hadir Shift Pagi', badgeColor: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-300' },
   
   // Non-Shift (Dedicated GTS)
   { nik: '03D22000021', name: 'Agus Kusman', jabatan: 'Preparation & Laboratory Superintendent', section: 'Laboratory', regu: 'Non-Shift', shiftSchedule: 'D', category: 'pagi', roleCategory: 'staff', keterangan: 'Hadir Non-Shift Pagi', badgeColor: 'bg-teal-100 text-teal-800 dark:bg-teal-950/60 dark:text-teal-300 border-teal-300' },
@@ -199,11 +315,11 @@ const FALLBACK_GTS_LAB_PERSONNEL: LabPersonnelItem[] = [
   { nik: 'M0303240092', name: 'Mursalin Iskandar', jabatan: 'Admin, Inventory Control', section: 'Laboratory', regu: 'Non-Shift', shiftSchedule: 'D', category: 'pagi', roleCategory: 'staff', keterangan: 'Hadir Non-Shift Pagi', badgeColor: 'bg-teal-100 text-teal-800 dark:bg-teal-950/60 dark:text-teal-300 border-teal-300' },
 
   // Shift B (Malam - Dedicated GTS)
-  { nik: '03D24000061', name: 'Secwin Sello Manukrante', jabatan: 'Laboratory Foreman', section: 'Laboratory', regu: 'Regu B', shiftSchedule: 'N', category: 'malam', roleCategory: 'staff', keterangan: 'Hadir Shift Malam', badgeColor: 'bg-indigo-900 text-white border-indigo-700' },
+  { nik: '03D24000061', name: 'Secwin Sello Manukrante', jabatan: 'Laboratory Foreman', section: 'Laboratory', regu: 'Shift B', shiftSchedule: 'N', category: 'malam', roleCategory: 'staff', keterangan: 'Hadir Shift Malam', badgeColor: 'bg-indigo-900 text-white border-indigo-700' },
 
   // Tidak Bertugas (Dedicated GTS)
-  { nik: '03D24000062', name: 'M. Afdal Al Fatihah', jabatan: 'Laboratory Foreman', section: 'Laboratory', regu: 'Regu B', shiftSchedule: 'OFF', category: 'tidak_bertugas', roleCategory: 'staff', keterangan: 'Off Roster (Libur)', badgeColor: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border-slate-300' },
-  { nik: '03D24000063', name: 'Muhammad Faris Nur Fauzan', jabatan: 'Laboratory Foreman', section: 'Laboratory', regu: 'Regu B', shiftSchedule: 'SL', category: 'tidak_bertugas', roleCategory: 'staff', keterangan: 'Sakit Surat Dokter (SL)', badgeColor: 'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300 border-rose-300' }
+  { nik: '03D24000062', name: 'M. Afdal Al Fatihah', jabatan: 'Laboratory Foreman', section: 'Laboratory', regu: 'Shift B', shiftSchedule: 'OFF', category: 'tidak_bertugas', roleCategory: 'staff', keterangan: 'Off Roster', badgeColor: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border-slate-300' },
+  { nik: '03D24000063', name: 'Muhammad Faris Nur Fauzan', jabatan: 'Laboratory Foreman', section: 'Laboratory', regu: 'Shift B', shiftSchedule: 'SL', category: 'tidak_bertugas', roleCategory: 'staff', keterangan: 'Sakit', badgeColor: 'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300 border-rose-300' }
 ];
 
 const FALLBACK_LAB_PERSONNEL = FALLBACK_TBP_LAB_PERSONNEL;
@@ -318,11 +434,14 @@ export const DailyPerformanceStructuredPresentation: React.FC<DailyPerformanceSt
         if (isEmpGts) return false;
       }
 
-      // Klasifikasi murni berdasarkan kolom section roster: personil di luar seksi Laboratory
+      // Klasifikasi personil di luar seksi Laboratory (Admin & QA memiliki section tersendiri)
       const sec = String(emp.section || '').trim().toLowerCase();
-      const isLabSection = (sec.includes('lab') || sec.includes('laboratorium')) &&
-                           !sec.includes('maintenance') &&
+      const isLabSection = (sec === 'laboratory' || sec === 'laboratorium' || sec.includes('laboratory') || sec.includes('laboratorium')) &&
+                           !sec.includes('qa') &&
+                           !sec.includes('quality') &&
                            !sec.includes('admin') &&
+                           !sec.includes('administrasi') &&
+                           !sec.includes('maintenance') &&
                            !sec.includes('prep') &&
                            !sec.includes('dry') &&
                            !sec.includes('wet');
@@ -406,6 +525,7 @@ export const DailyPerformanceStructuredPresentation: React.FC<DailyPerformanceSt
   const dayRecords = records.filter(r => r.date === selectedDate || r.isoDate === selectedDate);
   const dayShift = dayRecords.find(r => r.shiftType === 'DAY' || r.shiftType === 'LS');
   const nightShift = dayRecords.find(r => r.shiftType === 'NIGHT');
+  const isLongShift = dayShift?.shiftType === 'LS';
 
   // Manpower Notes State (Persisted in localStorage & active record)
   const [manpowerNotes, setManpowerNotes] = useState<string>(() => {
@@ -455,12 +575,15 @@ export const DailyPerformanceStructuredPresentation: React.FC<DailyPerformanceSt
       }
 
       // KLASIFIKASI MURNI BERDASARKAN KOLOM SECTION:
-      // Kolom jabatan maupun departemen TIDAK BOLEH mempengaruhi penentuan seksi
+      // Hanya section Laboratory; Admin dan QA memiliki section tersendiri dan tidak digabungkan
       const sec = String(emp.section || '').trim().toLowerCase();
       return (
-        (sec.includes('lab') || sec.includes('laboratorium')) &&
-        !sec.includes('maintenance') &&
+        (sec === 'laboratory' || sec === 'laboratorium' || sec.includes('laboratory') || sec.includes('laboratorium')) &&
+        !sec.includes('qa') &&
+        !sec.includes('quality') &&
         !sec.includes('admin') &&
+        !sec.includes('administrasi') &&
+        !sec.includes('maintenance') &&
         !sec.includes('prep') &&
         !sec.includes('dry') &&
         !sec.includes('wet')
@@ -496,7 +619,8 @@ export const DailyPerformanceStructuredPresentation: React.FC<DailyPerformanceSt
       const upper = (shiftCode || '').toUpperCase().trim();
       const empShift = (emp.shift || '').toString().trim().toUpperCase();
       const jab = (emp.jabatan || emp.position || '').toLowerCase();
-      const isNonShift = empShift.includes('NON') || jab.includes('superintendent') || jab.includes('supervisor') || jab.includes('officer') || jab.includes('admin') || jab.includes('chemist');
+      // Non-Shift murni untuk section Laboratory (Supervisor, Chemist, Superintendent, dll.)
+      const isNonShift = empShift.includes('NON') || jab.includes('superintendent') || jab.includes('supervisor') || jab.includes('officer') || jab.includes('chemist');
 
       let category: 'pagi' | 'malam' | 'tidak_bertugas' = 'pagi';
       let keterangan = 'Hadir Shift Pagi';
@@ -505,49 +629,63 @@ export const DailyPerformanceStructuredPresentation: React.FC<DailyPerformanceSt
       // 1. Cek Apakah Tidak Bertugas (Izin, Sakit, Off, Cuti)
       if (upper === 'OFF' || upper === 'X') {
         category = 'tidak_bertugas';
-        keterangan = 'Off Roster (Libur)';
+        keterangan = 'Off Roster';
         badgeColor = 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border-slate-300';
       } else if (upper.startsWith('C') || upper === 'CT' || upper === 'CR' || upper === 'CE' || upper === 'CI' || upper === 'CS') {
-        const type = upper === 'CT' ? 'Tahunan' : upper === 'CR' ? 'Roster' : upper === 'CE' ? 'Emergency' : 'Izin Cuti';
         category = 'tidak_bertugas';
-        keterangan = `Cuti ${type} (${upper})`;
+        keterangan = 'Cuti';
         badgeColor = 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border-amber-300';
       } else if (['SL', 'SS', 'S1', 'S2'].includes(upper) || upper.startsWith('SAKIT')) {
         category = 'tidak_bertugas';
-        keterangan = upper === 'SL' ? 'Sakit Surat Dokter (SL)' : 'Sakit (SS)';
+        keterangan = 'Sakit';
         badgeColor = 'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300 border-rose-300';
       } else if (['I', 'IK', 'IA', 'DL', 'UL'].includes(upper) || upper.startsWith('IZIN')) {
         category = 'tidak_bertugas';
-        keterangan = upper === 'IK' ? 'Izin Khusus (IK)' : upper === 'DL' ? 'Dinas Luar (DL)' : 'Izin Resmi (I)';
+        keterangan = upper === 'DL' ? 'Dinas Luar' : 'Izin';
         badgeColor = 'bg-yellow-100 text-yellow-800 dark:bg-yellow-950/60 dark:text-yellow-300 border-yellow-300';
       } else if (upper === 'TRV' || upper === 'TV') {
         category = 'tidak_bertugas';
-        keterangan = 'Travel Roster (TRV)';
+        keterangan = 'Travel';
         badgeColor = 'bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300 border-purple-300';
       } else if (upper === 'A' || upper === 'ALPA') {
         category = 'tidak_bertugas';
-        keterangan = 'Alpa / Tanpa Keterangan';
+        keterangan = 'Alpa';
         badgeColor = 'bg-rose-200 text-rose-900 dark:bg-rose-900 dark:text-rose-200 border-rose-400';
       }
-      // 2. Cek Apakah Shift Malam
+      // 2. Cek Apakah Shift Malam vs Pagi
       else if (upper === 'N') {
         category = 'malam';
-        keterangan = 'Hadir Shift Malam (N)';
+        keterangan = 'Hadir Shift Malam';
         badgeColor = 'bg-indigo-900 text-white border-indigo-700';
-      }
-      // 3. Gabungkan Non-Shift dengan Shift Pagi
-      else {
+      } else if (upper === 'D') {
         category = 'pagi';
-        if (isNonShift) {
-          keterangan = 'Hadir Non-Shift Pagi';
-          badgeColor = 'bg-teal-100 text-teal-800 dark:bg-teal-950/60 dark:text-teal-300 border-teal-300';
+        keterangan = isNonShift ? 'Hadir Non-Shift Pagi' : 'Hadir Shift Pagi';
+        badgeColor = isNonShift 
+          ? 'bg-teal-100 text-teal-800 dark:bg-teal-950/60 dark:text-teal-300 border-teal-300'
+          : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-300';
+      } else {
+        // Jika kode kerja umum ('1', 'X1') atau belum spesifik, cocokkan dengan regu shift hari ini dari Daily Performance:
+        const personReguLetter = (emp.regu || empShift || '').toString().toUpperCase().replace(/[^A-D]/g, '');
+        const dayReguLetter = (dayShift?.regu || '').toUpperCase().replace(/[^A-D]/g, '');
+        const nightReguLetter = (nightShift?.regu || '').toUpperCase().replace(/[^A-D]/g, '');
+
+        if (!isNonShift && personReguLetter && nightReguLetter && personReguLetter === nightReguLetter) {
+          category = 'malam';
+          keterangan = 'Hadir Shift Malam';
+          badgeColor = 'bg-indigo-900 text-white border-indigo-700';
         } else {
-          keterangan = 'Hadir Shift Pagi (D)';
-          badgeColor = 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-300';
+          category = 'pagi';
+          if (isNonShift) {
+            keterangan = 'Hadir Non-Shift Pagi';
+            badgeColor = 'bg-teal-100 text-teal-800 dark:bg-teal-950/60 dark:text-teal-300 border-teal-300';
+          } else {
+            keterangan = 'Hadir Shift Pagi';
+            badgeColor = 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-300';
+          }
         }
       }
 
-      const regu = isNonShift ? 'Non-Shift' : emp.regu || (empShift === 'A' ? 'Regu A' : empShift === 'B' ? 'Regu B' : 'Regu Shift');
+      const regu = isNonShift ? 'Non-Shift' : emp.regu ? formatShiftName(emp.regu) : (empShift === 'A' ? 'Shift A' : empShift === 'B' ? 'Shift B' : 'Shift');
 
       const isStaff = isStaffRole({
         jabatan: emp.jabatan || emp.position,
@@ -555,6 +693,9 @@ export const DailyPerformanceStructuredPresentation: React.FC<DailyPerformanceSt
         roleCategory: emp.roleCategory
       });
       const roleCategory: 'staff' | 'crew' = isStaff ? 'staff' : 'crew';
+
+      const isCuti = upper.startsWith('C') || upper === 'CT' || upper === 'CR' || upper === 'CE' || upper === 'CI' || upper === 'CS';
+      const tglMasukKembali = isCuti ? (getReturnToWorkDate(emp, selectedDate) || undefined) : undefined;
 
       return {
         nik: emp.nik || '-',
@@ -566,10 +707,11 @@ export const DailyPerformanceStructuredPresentation: React.FC<DailyPerformanceSt
         category,
         roleCategory,
         keterangan,
-        badgeColor
+        badgeColor,
+        tglMasukKembali
       };
     });
-  }, [rosterList, dateKeys, userPt]);
+  }, [rosterList, dateKeys, userPt, selectedDate, dayShift, nightShift]);
 
   // Lists by Category & Role
   const staffList = useMemo(() => parsedLabPersonnel.filter(p => p.roleCategory === 'staff'), [parsedLabPersonnel]);
@@ -578,6 +720,37 @@ export const DailyPerformanceStructuredPresentation: React.FC<DailyPerformanceSt
   const pagiList = useMemo(() => parsedLabPersonnel.filter(p => p.category === 'pagi'), [parsedLabPersonnel]);
   const malamList = useMemo(() => parsedLabPersonnel.filter(p => p.category === 'malam'), [parsedLabPersonnel]);
   const tidakBertugasList = useMemo(() => parsedLabPersonnel.filter(p => p.category === 'tidak_bertugas'), [parsedLabPersonnel]);
+
+  // Kategorisasi Personil Tidak Hadir (Cuti, Sakit, Izin, Off)
+  const cutiList = useMemo(() => tidakBertugasList.filter(p => {
+    const k = (p.keterangan || '').toLowerCase();
+    const s = (p.shiftSchedule || '').toUpperCase();
+    return k.includes('cuti') || s === 'CT' || s === 'C';
+  }), [tidakBertugasList]);
+
+  const sakitList = useMemo(() => tidakBertugasList.filter(p => {
+    const k = (p.keterangan || '').toLowerCase();
+    const s = (p.shiftSchedule || '').toUpperCase();
+    const isCuti = k.includes('cuti') || s === 'CT' || s === 'C';
+    return !isCuti && (k.includes('sakit') || s === 'S');
+  }), [tidakBertugasList]);
+
+  const izinList = useMemo(() => tidakBertugasList.filter(p => {
+    const k = (p.keterangan || '').toLowerCase();
+    const s = (p.shiftSchedule || '').toUpperCase();
+    const isCuti = k.includes('cuti') || s === 'CT' || s === 'C';
+    const isSakit = k.includes('sakit') || s === 'S';
+    return !isCuti && !isSakit && (k.includes('izin') || k.includes('ijin') || s === 'I');
+  }), [tidakBertugasList]);
+
+  const offList = useMemo(() => tidakBertugasList.filter(p => {
+    const k = (p.keterangan || '').toLowerCase();
+    const s = (p.shiftSchedule || '').toUpperCase();
+    const isCuti = k.includes('cuti') || s === 'CT' || s === 'C';
+    const isSakit = k.includes('sakit') || s === 'S';
+    const isIzin = k.includes('izin') || k.includes('ijin') || s === 'I';
+    return !isCuti && !isSakit && !isIzin;
+  }), [tidakBertugasList]);
 
   // Staff breakdown
   const staffPagi = useMemo(() => staffList.filter(p => p.category === 'pagi'), [staffList]);
@@ -612,6 +785,117 @@ export const DailyPerformanceStructuredPresentation: React.FC<DailyPerformanceSt
   const crewHadirTotal = crewPagi.length + crewMalam.length;
   const crewBreakdownPagi = useMemo(() => getJabatanBreakdown(crewPagi), [crewPagi]);
   const crewBreakdownMalam = useMemo(() => getJabatanBreakdown(crewMalam), [crewMalam]);
+
+  // List personil alpa
+  const alpaList = useMemo(() => tidakBertugasList.filter(p => {
+    const k = (p.keterangan || '').toLowerCase();
+    const s = (p.shiftSchedule || '').toUpperCase();
+    return k.includes('alpa') || s === 'A' || s === 'ALPA';
+  }), [tidakBertugasList]);
+
+  // Distribusi Lengkap Personil Tidak Hadir (Cuti, Sakit, Izin, Alpa) ke Shift Pagi vs Shift Malam:
+  // - Regu shift pagi (misal Regu A) -> dialokasikan ke Shift Pagi
+  // - Non-shift section Laboratory (Spv, Chemist, Superintendent, dll) -> otomatis masuk Shift Pagi
+  // - Regu shift malam (misal Regu B) -> dialokasikan ke Shift Malam
+  // - Breakdown Staff Cuti vs Crew Cuti untuk masing-masing shift
+  const { 
+    cutiPagi, cutiMalam,
+    staffCutiPagi, crewCutiPagi,
+    staffCutiMalam, crewCutiMalam,
+    sakitPagi, sakitMalam,
+    izinPagi, izinMalam,
+    alpaPagi, alpaMalam,
+    kendalaPagi, kendalaMalam
+  } = useMemo(() => {
+    const activePagiRegus = new Set(
+      crewPagi
+        .map(p => (p.regu || '').trim())
+        .filter(r => r && r !== 'Non-Shift')
+    );
+
+    const activeMalamRegus = new Set(
+      crewMalam
+        .map(p => (p.regu || '').trim())
+        .filter(r => r && r !== 'Non-Shift')
+    );
+
+    const isMatchRegu = (personRegu: string, targetSet: Set<string>) => {
+      if (!personRegu) return false;
+      const clean = personRegu.toLowerCase().trim();
+      for (const act of targetSet) {
+        const actClean = act.toLowerCase().trim();
+        if (clean === actClean) return true;
+        const actLetter = actClean.replace(/[^a-d]/g, '');
+        const cleanLetter = clean.replace(/[^a-d]/g, '');
+        if (actLetter && cleanLetter && actLetter === cleanLetter) return true;
+      }
+      return false;
+    };
+
+    const isAssignedToPagi = (person: LabPersonnelItem) => {
+      // Pada hari Long Shift (Hari Minggu), dinas dilakukan 100% oleh Shift Pagi (07:00 - 24:00 WITA)
+      if (isLongShift) {
+        const personReguLetter = (person.regu || '').toUpperCase().replace(/[^A-D]/g, '');
+        const dayReguLetter = (dayShift?.regu || '').toUpperCase().replace(/[^A-D]/g, '');
+        if (personReguLetter && dayReguLetter && personReguLetter === dayReguLetter) return true;
+        if (person.regu === 'Non-Shift') return true;
+        return false;
+      }
+
+      // 1. Non-shift personnel (Spv, Superintendent, Chemist, Admin, QA) selalu dinas pagi (07:00 - 19:00)
+      if (person.regu === 'Non-Shift') return true;
+      const j = (person.jabatan || '').toLowerCase();
+      if (j.includes('supervisor') || j.includes('chemist') || j.includes('superintendent') || j.includes('admin') || j.includes('qa')) return true;
+
+      // 2. Hubungkan langsung dengan Shift hari ini dari Daily Performance Record:
+      const personReguLetter = (person.regu || '').toUpperCase().replace(/[^A-D]/g, '');
+      const dayReguLetter = (dayShift?.regu || '').toUpperCase().replace(/[^A-D]/g, '');
+      const nightReguLetter = (nightShift?.regu || '').toUpperCase().replace(/[^A-D]/g, '');
+
+      if (personReguLetter && dayReguLetter && personReguLetter === dayReguLetter) {
+        return true; // Sesuai Shift Pagi hari ini
+      }
+      if (personReguLetter && nightReguLetter && personReguLetter === nightReguLetter) {
+        return false; // Sesuai Shift Malam hari ini
+      }
+
+      // 3. Fallback berdasarkan jadwal shift jika tercatat D atau N
+      if (person.shiftSchedule === 'D') return true;
+      if (person.shiftSchedule === 'N') return false;
+
+      // 4. Fallback shift matching aktif
+      if (isMatchRegu(person.regu, activePagiRegus)) return true;
+      if (isMatchRegu(person.regu, activeMalamRegus)) return false;
+
+      return true;
+    };
+
+    const cPagi = cutiList.filter(p => isAssignedToPagi(p));
+    const cMalam = cutiList.filter(p => !isAssignedToPagi(p));
+    const sPagi = sakitList.filter(p => isAssignedToPagi(p));
+    const sMalam = sakitList.filter(p => !isAssignedToPagi(p));
+    const iPagi = izinList.filter(p => isAssignedToPagi(p));
+    const iMalam = izinList.filter(p => !isAssignedToPagi(p));
+    const aPagi = alpaList.filter(p => isAssignedToPagi(p));
+    const aMalam = alpaList.filter(p => !isAssignedToPagi(p));
+
+    return {
+      cutiPagi: cPagi,
+      cutiMalam: cMalam,
+      staffCutiPagi: cPagi.filter(p => p.roleCategory === 'staff'),
+      crewCutiPagi: cPagi.filter(p => p.roleCategory === 'crew'),
+      staffCutiMalam: cMalam.filter(p => p.roleCategory === 'staff'),
+      crewCutiMalam: cMalam.filter(p => p.roleCategory === 'crew'),
+      sakitPagi: sPagi,
+      sakitMalam: sMalam,
+      izinPagi: iPagi,
+      izinMalam: iMalam,
+      alpaPagi: aPagi,
+      alpaMalam: aMalam,
+      kendalaPagi: [...cPagi, ...sPagi, ...iPagi, ...aPagi],
+      kendalaMalam: [...cMalam, ...sMalam, ...iMalam, ...aMalam]
+    };
+  }, [cutiList, sakitList, izinList, alpaList, crewPagi, crewMalam, dayShift, nightShift, isLongShift]);
 
   // Filtered & Sorted Personnel (Sorted by Jabatan Hierarchy via compareEmployeesByJabatan)
   const filteredPersonnel = useMemo(() => {
@@ -695,31 +979,117 @@ export const DailyPerformanceStructuredPresentation: React.FC<DailyPerformanceSt
   const totalNightShift = gcNightShift + prodNightShift + expNightShift + smelterNightShift;
   const totalReceivedShift = gcShift + prodShift + expShift + smelterShift;
 
-  // STEP 3: PRODUCTIVITY PREPARASI (Balance, Received, Finished, Outstanding)
-  // 3a. Press Powder
-  const pressRecv = dayRecords.reduce((acc, r) => acc + r.pressPowder.received.shift, 0);
-  const pressFin = dayRecords.reduce((acc, r) => acc + r.pressPowder.finish.shift, 0);
-  const pressBal = Math.max(0, pressRecv - pressFin);
+  // STEP 3: PRODUCTIVITY (3 Garis Besar: Press Pellet GC, Fusion, LOI)
+  // Output Selesai Per-Shift
+  const pressDayShift = dayShift?.pressPowder.finish.shift || 0;
+  const pressNightShift = nightShift?.pressPowder.finish.shift || 0;
+  const weighDayShift = dayShift?.fuseBead.finishShift || 0;
+  const weighNightShift = nightShift?.fuseBead.finishShift || 0;
+  const fusionDayShift = weighDayShift;
+  const fusionNightShift = weighNightShift;
+  const loiDayShift = dayShift?.loi.finLoiShift || 0;
+  const loiNightShift = nightShift?.loi.finLoiShift || 0;
 
-  // 3b. Weighing (Fuse Bead Weighing)
-  const weighOs = dayRecords[0]?.fuseBead.osExp || 0;
-  const weighRecv = expShift;
-  const weighFin = dayRecords.reduce((acc, r) => acc + r.fuseBead.finishShift, 0);
-  const weighBal = dayRecords[dayRecords.length - 1]?.fuseBead.balExp || 0;
+  // 3a. Metode Press Pellet (Sample GC) - Neraca Per Shift
+  const pressBalAwalDay = 0;
+  const pressRecvDay = gcDayShift;
+  const pressFinDay = pressDayShift;
+  const pressBalDay = Math.max(0, pressBalAwalDay + pressRecvDay - pressFinDay);
 
-  // 3c. Fusion (Fuse Bead Formation)
+  const pressBalAwalNight = pressBalDay;
+  const pressRecvNight = gcNightShift;
+  const pressFinNight = pressNightShift;
+  const pressBalNight = Math.max(0, pressBalAwalNight + pressRecvNight - pressFinNight);
+
+  const pressBalAwal = pressBalAwalDay;
+  const pressRecv = gcShift;
+  const pressFin = pressFinDay + pressFinNight;
+  const pressBal = isLongShift ? pressBalDay : pressBalNight;
+
+  // 3b. Fusion (Exploration, Production, Smelter) - Neraca Per Shift
+  // Sub-Unit A: Weighing (Penimbangan Cawan & Fluks)
+  const weighOsDay = dayShift?.fuseBead.osExp || 0;
+  const weighRecvDay = expDayShift + (prodRcDay > 0 ? prodRcDay : 0) + smelterDayShift;
+  const weighFinDay = weighDayShift;
+  const weighBalDay = dayShift?.fuseBead.balExp ?? Math.max(0, weighOsDay + weighRecvDay - weighFinDay);
+
+  const weighOsNight = nightShift?.fuseBead.osExp || weighBalDay || 0;
+  const weighRecvNight = expNightShift + (prodRcNight > 0 ? prodRcNight : 0) + smelterNightShift;
+  const weighFinNight = weighNightShift;
+  const weighBalNight = nightShift?.fuseBead.balExp ?? Math.max(0, weighOsNight + weighRecvNight - weighFinNight);
+
+  const weighOs = weighOsDay;
+  const weighRecv = (weighRecvDay + weighRecvNight) > 0 ? (weighRecvDay + weighRecvNight) : expShift;
+  const weighFin = weighFinDay + weighFinNight;
+  const weighBal = isLongShift ? weighBalDay : (dayRecords[dayRecords.length - 1]?.fuseBead.balExp ?? weighBalNight);
+
+  // Sub-Unit B: Fusion (Peleburan Manik Kaca Borat)
+  const fusionBalAwalDay = weighOsDay;
+  const fusionRecvDay = weighFinDay;
+  const fusionFinDay = fusionDayShift;
+  const fusionBalDay = dayShift?.fuseBead.balExp ?? Math.max(0, fusionBalAwalDay + fusionRecvDay - fusionFinDay);
+
+  const fusionBalAwalNight = weighOsNight || fusionBalDay || 0;
+  const fusionRecvNight = weighFinNight;
+  const fusionFinNight = fusionNightShift;
+  const fusionBalNight = nightShift?.fuseBead.balExp ?? Math.max(0, fusionBalAwalNight + fusionRecvNight - fusionFinNight);
+
   const fusionBalAwal = weighOs;
-  const fusionRecv = expShift;
+  const fusionRecv = weighFin;
   const fusionFin = weighFin;
   const fusionBalAkhir = weighBal;
 
-  // 3d. LOI (Loss on Ignition)
-  const loiOs = dayRecords[0]?.loi.os || 0;
-  const loiW2 = dayRecords.reduce((acc, r) => acc + r.loi.w2, 0);
-  const loiW4 = dayRecords.reduce((acc, r) => acc + r.loi.w4, 0);
-  const loiW5 = dayRecords.reduce((acc, r) => acc + r.loi.w5, 0);
-  const loiFin = dayRecords.reduce((acc, r) => acc + r.loi.finLoiShift, 0);
-  const loiBal = dayRecords[dayRecords.length - 1]?.loi.bal || 0;
+  // 3c. LOI (Exploration): Balance, Received, Weighing, W1-W4, Outstanding (OS W1-W4) - Neraca Per Shift
+  const loiOsDay = dayShift?.loi.os || 0;
+  const loiRecvDay = expDayShift;
+  const loiWeighingDay = dayShift?.loi?.weighing || weighFinDay || dayShift?.loi.finLoiShift || 0;
+  const loiFinDay = loiDayShift;
+  const loiBalDay = dayShift?.loi.bal || 0;
+
+  const loiOsNight = nightShift?.loi.os || loiBalDay || 0;
+  const loiRecvNight = expNightShift;
+  const loiWeighingNight = nightShift?.loi?.weighing || weighFinNight || nightShift?.loi.finLoiShift || 0;
+  const loiFinNight = loiNightShift;
+  const loiBalNight = nightShift?.loi.bal || 0;
+
+  const loiOs = loiOsDay;
+  const loiRecv = expShift;
+  const loiWeighing = loiWeighingDay + loiWeighingNight;
+  const loiFin = loiFinDay + loiFinNight;
+  const loiBal = isLongShift ? loiBalDay : (dayRecords[dayRecords.length - 1]?.loi.bal || loiBalNight);
+
+  // Tahap Proses W1 - W4 LOI Per-Shift
+  const loiW1Day = dayShift?.loi?.w1 || dayShift?.loi?.w2 || loiFinDay;
+  const loiW1Night = nightShift?.loi?.w1 || nightShift?.loi?.w2 || loiFinNight;
+  const loiW1 = loiW1Day + loiW1Night;
+
+  const loiW2Day = dayShift?.loi.w2 || 0;
+  const loiW2Night = nightShift?.loi.w2 || 0;
+  const loiW2 = loiW2Day + loiW2Night;
+
+  const loiW3Day = dayShift?.loi?.w3 || dayShift?.loi?.w5 || dayShift?.loi?.w4 || 0;
+  const loiW3Night = nightShift?.loi?.w3 || nightShift?.loi?.w5 || nightShift?.loi?.w4 || 0;
+  const loiW3 = loiW3Day + loiW3Night;
+
+  const loiW4Day = dayShift?.loi.w4 || 0;
+  const loiW4Night = nightShift?.loi.w4 || 0;
+  const loiW4 = loiW4Day + loiW4Night;
+
+  const osW1Day = dayShift?.loi?.osW1 || Math.max(0, Math.round(loiBalDay * 0.3));
+  const osW1Night = nightShift?.loi?.osW1 || Math.max(0, Math.round(loiBalNight * 0.3));
+  const osW1 = isLongShift ? osW1Day : (osW1Day + osW1Night);
+
+  const osW2Day = dayShift?.loi?.osW2 || Math.max(0, Math.round(loiBalDay * 0.25));
+  const osW2Night = nightShift?.loi?.osW2 || Math.max(0, Math.round(loiBalNight * 0.25));
+  const osW2 = isLongShift ? osW2Day : (osW2Day + osW2Night);
+
+  const osW3Day = dayShift?.loi?.osW3 || Math.max(0, Math.round(loiBalDay * 0.25));
+  const osW3Night = nightShift?.loi?.osW3 || Math.max(0, Math.round(loiBalNight * 0.25));
+  const osW3 = isLongShift ? osW3Day : (osW3Day + osW3Night);
+
+  const osW4Day = dayShift?.loi?.osW4 || Math.max(0, loiBalDay - (osW1Day + osW2Day + osW3Day));
+  const osW4Night = nightShift?.loi?.osW4 || Math.max(0, loiBalNight - (osW1Night + osW2Night + osW3Night));
+  const osW4 = isLongShift ? osW4Day : (osW4Day + osW4Night);
 
   // STEP 4: INSTRUMEN (EDXRF 6 alat & WDXRF 2 alat)
   // 4a. EDXRF 6 alat Epsilon (C, D, E, F, G, H) + S2 Puma
@@ -734,6 +1104,16 @@ export const DailyPerformanceStructuredPresentation: React.FC<DailyPerformanceSt
   const edxrfBalAwal = pressFin;
   const edxrfRecv = pressRecv;
   const edxrfOutstanding = Math.max(0, edxrfRecv - edxrfTotalFin);
+
+  const edxrfBalAwalDay = 0;
+  const edxrfRecvDay = pressFinDay;
+  const edxrfFinDay = dayShift?.edxrf.shift || 0;
+  const edxrfBalDay = Math.max(0, edxrfBalAwalDay + edxrfRecvDay - edxrfFinDay);
+
+  const edxrfBalAwalNight = edxrfBalDay;
+  const edxrfRecvNight = pressFinNight;
+  const edxrfFinNight = nightShift?.edxrf.shift || 0;
+  const edxrfBalNight = Math.max(0, edxrfBalAwalNight + edxrfRecvNight - edxrfFinNight);
 
   // 4b. WDXRF 2 alat (Zetium A & Zetium B)
   const wdxrfBalAwal = dayRecords[0]?.wdxrf.osExp || 0;
@@ -789,19 +1169,12 @@ export const DailyPerformanceStructuredPresentation: React.FC<DailyPerformanceSt
   ) : 0;
 
   // GTS Sample Received (jika tercatat mandiri)
+  const gtsDayShift = dayShift?.sampleReceived.gts?.shift || 0;
+  const gtsNightShift = nightShift?.sampleReceived.gts?.shift || 0;
   const totalGtsReceived = dayRecords.reduce((acc, r) => acc + (r.sampleReceived.gts?.shift || 0), 0);
   const totalTbpGpsReceived = gcShift + prodShift + expShift + smelterShift;
 
-  // Preparasi Per-Shift
-  const pressDayShift = dayShift?.pressPowder.finish.shift || 0;
-  const pressNightShift = nightShift?.pressPowder.finish.shift || 0;
-  const weighDayShift = dayShift?.fuseBead.finishShift || 0;
-  const weighNightShift = nightShift?.fuseBead.finishShift || 0;
-  const fusionDayShift = weighDayShift;
-  const fusionNightShift = weighNightShift;
-  const loiDayShift = dayShift?.loi.finLoiShift || 0;
-  const loiNightShift = nightShift?.loi.finLoiShift || 0;
-
+  // Preparasi Per-Shift Agregat
   const totalPrepFin = pressFin + weighFin + fusionFin + loiFin;
   const totalPrepFinDay = pressDayShift + weighDayShift + fusionDayShift + loiDayShift;
   const totalPrepFinNight = pressNightShift + weighNightShift + fusionNightShift + loiNightShift;
@@ -910,6 +1283,201 @@ export const DailyPerformanceStructuredPresentation: React.FC<DailyPerformanceSt
   const prevQcFin = prevDayRecords.reduce((acc, r) => acc + r.qc.finishShift, 0);
   const prevReportFin = prevDayRecords.reduce((acc, r) => acc + r.report.finishReportDay, 0);
   const prevReportBal = prevDayRecords[prevDayRecords.length - 1]?.report.bal || 0;
+
+  // Active Month Records & Monthly Benchmarks (Rekor Tertinggi Bulan Ini)
+  const activeMonthRecords = useMemo(() => {
+    if (!records || records.length === 0) return [];
+    
+    let targetYear = 2026;
+    let targetMonth = 10; // 1-12
+    if (selectedDate.includes('/')) {
+      const parts = selectedDate.split('/');
+      targetMonth = parseInt(parts[1], 10) || 10;
+      targetYear = parseInt(parts[2], 10) || 2026;
+    } else if (selectedDate.includes('-')) {
+      const parts = selectedDate.split('-');
+      targetYear = parseInt(parts[0], 10) || 2026;
+      targetMonth = parseInt(parts[1], 10) || 10;
+    }
+
+    const filtered = records.filter(r => {
+      const d = r.isoDate || r.date || '';
+      if (d.includes('-')) {
+        const parts = d.split('-');
+        return parseInt(parts[0], 10) === targetYear && parseInt(parts[1], 10) === targetMonth;
+      } else if (d.includes('/')) {
+        const parts = d.split('/');
+        return parseInt(parts[2], 10) === targetYear && parseInt(parts[1], 10) === targetMonth;
+      }
+      return true;
+    });
+
+    return filtered.length > 0 ? filtered : records;
+  }, [records, selectedDate]);
+
+  // Compute maximum shift volume and maximum daily volume across this month
+  const monthlyBenchmarks = useMemo(() => {
+    const dailyGroups: Record<string, DailyPerformanceRecord[]> = {};
+    activeMonthRecords.forEach(r => {
+      const key = r.isoDate || r.date || 'unknown';
+      if (!dailyGroups[key]) dailyGroups[key] = [];
+      dailyGroups[key].push(r);
+    });
+
+    // 1. Press Pellet GC
+    let maxShiftPressFin = 0, maxShiftPressRecv = 0, maxShiftPressBal = 0;
+    let maxDailyPressFin = 0, maxDailyPressRecv = 0, maxDailyPressBal = 0;
+
+    // 2. Weighing
+    let maxShiftWeighFin = 0, maxShiftWeighRecv = 0, maxShiftWeighBal = 0;
+    let maxDailyWeighFin = 0, maxDailyWeighRecv = 0, maxDailyWeighBal = 0;
+
+    // 3. Fusion
+    let maxShiftFusionFin = 0, maxShiftFusionRecv = 0, maxShiftFusionBal = 0;
+    let maxDailyFusionFin = 0, maxDailyFusionRecv = 0, maxDailyFusionBal = 0;
+
+    // 4. LOI
+    let maxShiftLoiFin = 0, maxShiftLoiRecv = 0, maxShiftLoiWeigh = 0, maxShiftLoiBal = 0;
+    let maxDailyLoiFin = 0, maxDailyLoiRecv = 0, maxDailyLoiWeigh = 0, maxDailyLoiBal = 0;
+
+    // 5. LOI Workstations (W1 - W4 & OS W1 - OS W4)
+    let maxShiftW1 = 0, maxShiftW2 = 0, maxShiftW3 = 0, maxShiftW4 = 0;
+    let maxShiftOsW1 = 0, maxShiftOsW2 = 0, maxShiftOsW3 = 0, maxShiftOsW4 = 0;
+    let maxDailyW1 = 0, maxDailyW2 = 0, maxDailyW3 = 0, maxDailyW4 = 0;
+    let maxDailyOsW1 = 0, maxDailyOsW2 = 0, maxDailyOsW3 = 0, maxDailyOsW4 = 0;
+
+    // Calculate maximum per-shift in month
+    activeMonthRecords.forEach(r => {
+      // Press
+      const pFin = r.pressPowder?.finish?.shift || 0;
+      const pRecv = r.sampleReceived?.gc?.shift || 0;
+      maxShiftPressFin = Math.max(maxShiftPressFin, pFin);
+      maxShiftPressRecv = Math.max(maxShiftPressRecv, pRecv);
+
+      // Weighing & Fusion
+      const fFin = r.fuseBead?.finishShift || 0;
+      const fRecv = (r.sampleReceived?.exp?.shift || 0) + (r.sampleReceived?.prod?.rc || 0) + (r.sampleReceived?.smelter?.shift || 0);
+      const fBal = r.fuseBead?.balExp || 0;
+      const fOs = r.fuseBead?.osExp || 0;
+      maxShiftWeighFin = Math.max(maxShiftWeighFin, fFin);
+      maxShiftWeighRecv = Math.max(maxShiftWeighRecv, fRecv);
+      maxShiftWeighBal = Math.max(maxShiftWeighBal, fBal, fOs);
+
+      maxShiftFusionFin = Math.max(maxShiftFusionFin, fFin);
+      maxShiftFusionRecv = Math.max(maxShiftFusionRecv, fFin);
+      maxShiftFusionBal = Math.max(maxShiftFusionBal, fBal, fOs);
+
+      // LOI
+      const lFin = r.loi?.finLoiShift || 0;
+      const lRecv = r.sampleReceived?.exp?.shift || 0;
+      const lWeigh = r.loi?.weighing || fFin || lFin;
+      const lBal = r.loi?.bal || 0;
+      const lOs = r.loi?.os || 0;
+      maxShiftLoiFin = Math.max(maxShiftLoiFin, lFin);
+      maxShiftLoiRecv = Math.max(maxShiftLoiRecv, lRecv);
+      maxShiftLoiWeigh = Math.max(maxShiftLoiWeigh, lWeigh);
+      maxShiftLoiBal = Math.max(maxShiftLoiBal, lBal, lOs);
+
+      // W1 - W4
+      const w1 = r.loi?.w1 || r.loi?.w2 || lFin;
+      const w2 = r.loi?.w2 || 0;
+      const w3 = r.loi?.w3 || r.loi?.w5 || r.loi?.w4 || 0;
+      const w4 = r.loi?.w4 || 0;
+      maxShiftW1 = Math.max(maxShiftW1, w1);
+      maxShiftW2 = Math.max(maxShiftW2, w2);
+      maxShiftW3 = Math.max(maxShiftW3, w3);
+      maxShiftW4 = Math.max(maxShiftW4, w4);
+
+      const ow1 = r.loi?.osW1 || Math.round(lBal * 0.3);
+      const ow2 = r.loi?.osW2 || Math.round(lBal * 0.25);
+      const ow3 = r.loi?.osW3 || Math.round(lBal * 0.25);
+      const ow4 = r.loi?.osW4 || Math.max(0, lBal - (ow1 + ow2 + ow3));
+      maxShiftOsW1 = Math.max(maxShiftOsW1, ow1);
+      maxShiftOsW2 = Math.max(maxShiftOsW2, ow2);
+      maxShiftOsW3 = Math.max(maxShiftOsW3, ow3);
+      maxShiftOsW4 = Math.max(maxShiftOsW4, ow4);
+    });
+
+    // Calculate maximum daily totals in month
+    Object.values(dailyGroups).forEach(group => {
+      const dRec = group.find(r => r.shiftType === 'DAY' || r.shiftType === 'LS');
+      const nRec = group.find(r => r.shiftType === 'NIGHT');
+
+      // Press Daily
+      const pFinD = (dRec?.pressPowder?.finish?.shift || 0) + (nRec?.pressPowder?.finish?.shift || 0);
+      const pRecvD = (dRec?.sampleReceived?.gc?.shift || 0) + (nRec?.sampleReceived?.gc?.shift || 0);
+      const pBalD = Math.max(0, pRecvD - pFinD);
+      maxDailyPressFin = Math.max(maxDailyPressFin, pFinD);
+      maxDailyPressRecv = Math.max(maxDailyPressRecv, pRecvD);
+      maxDailyPressBal = Math.max(maxDailyPressBal, pBalD);
+
+      // Weighing Daily
+      const wFinD = (dRec?.fuseBead?.finishShift || 0) + (nRec?.fuseBead?.finishShift || 0);
+      const wRecvD = ((dRec?.sampleReceived?.exp?.shift || 0) + (dRec?.sampleReceived?.prod?.rc || 0) + (dRec?.sampleReceived?.smelter?.shift || 0)) +
+                     ((nRec?.sampleReceived?.exp?.shift || 0) + (nRec?.sampleReceived?.prod?.rc || 0) + (nRec?.sampleReceived?.smelter?.shift || 0));
+      const wBalD = group[group.length - 1]?.fuseBead?.balExp || Math.max(0, wRecvD - wFinD);
+      maxDailyWeighFin = Math.max(maxDailyWeighFin, wFinD);
+      maxDailyWeighRecv = Math.max(maxDailyWeighRecv, wRecvD);
+      maxDailyWeighBal = Math.max(maxDailyWeighBal, wBalD);
+
+      // Fusion Daily
+      maxDailyFusionFin = Math.max(maxDailyFusionFin, wFinD);
+      maxDailyFusionRecv = Math.max(maxDailyFusionRecv, wFinD);
+      maxDailyFusionBal = Math.max(maxDailyFusionBal, wBalD);
+
+      // LOI Daily
+      const lFinD = (dRec?.loi?.finLoiShift || 0) + (nRec?.loi?.finLoiShift || 0);
+      const lRecvD = (dRec?.sampleReceived?.exp?.shift || 0) + (nRec?.sampleReceived?.exp?.shift || 0);
+      const lWeighD = (dRec?.loi?.weighing || dRec?.fuseBead?.finishShift || 0) + (nRec?.loi?.weighing || nRec?.fuseBead?.finishShift || 0);
+      const lBalD = group[group.length - 1]?.loi?.bal || 0;
+      maxDailyLoiFin = Math.max(maxDailyLoiFin, lFinD);
+      maxDailyLoiRecv = Math.max(maxDailyLoiRecv, lRecvD);
+      maxDailyLoiWeigh = Math.max(maxDailyLoiWeigh, lWeighD);
+      maxDailyLoiBal = Math.max(maxDailyLoiBal, lBalD);
+
+      // W1 - W4 Daily
+      const w1D = (dRec?.loi?.w1 || dRec?.loi?.w2 || dRec?.loi?.finLoiShift || 0) + (nRec?.loi?.w1 || nRec?.loi?.w2 || nRec?.loi?.finLoiShift || 0);
+      const w2D = (dRec?.loi?.w2 || 0) + (nRec?.loi?.w2 || 0);
+      const w3D = (dRec?.loi?.w3 || dRec?.loi?.w5 || dRec?.loi?.w4 || 0) + (nRec?.loi?.w3 || nRec?.loi?.w5 || nRec?.loi?.w4 || 0);
+      const w4D = (dRec?.loi?.w4 || 0) + (nRec?.loi?.w4 || 0);
+      maxDailyW1 = Math.max(maxDailyW1, w1D);
+      maxDailyW2 = Math.max(maxDailyW2, w2D);
+      maxDailyW3 = Math.max(maxDailyW3, w3D);
+      maxDailyW4 = Math.max(maxDailyW4, w4D);
+
+      const ow1D = (dRec?.loi?.osW1 || Math.round((dRec?.loi?.bal || 0) * 0.3)) + (nRec?.loi?.osW1 || Math.round((nRec?.loi?.bal || 0) * 0.3));
+      const ow2D = (dRec?.loi?.osW2 || Math.round((dRec?.loi?.bal || 0) * 0.25)) + (nRec?.loi?.osW2 || Math.round((nRec?.loi?.bal || 0) * 0.25));
+      const ow3D = (dRec?.loi?.osW3 || Math.round((dRec?.loi?.bal || 0) * 0.25)) + (nRec?.loi?.osW3 || Math.round((nRec?.loi?.bal || 0) * 0.25));
+      const ow4D = (dRec?.loi?.osW4 || 0) + (nRec?.loi?.osW4 || 0);
+      maxDailyOsW1 = Math.max(maxDailyOsW1, ow1D);
+      maxDailyOsW2 = Math.max(maxDailyOsW2, ow2D);
+      maxDailyOsW3 = Math.max(maxDailyOsW3, ow3D);
+      maxDailyOsW4 = Math.max(maxDailyOsW4, ow4D);
+    });
+
+    return {
+      press: {
+        maxShift: { fin: maxShiftPressFin || 1, recv: maxShiftPressRecv || 1, bal: maxShiftPressBal || 1 },
+        maxDaily: { fin: maxDailyPressFin || 1, recv: maxDailyPressRecv || 1, bal: maxDailyPressBal || 1 }
+      },
+      weigh: {
+        maxShift: { fin: maxShiftWeighFin || 1, recv: maxShiftWeighRecv || 1, bal: maxShiftWeighBal || 1 },
+        maxDaily: { fin: maxDailyWeighFin || 1, recv: maxDailyWeighRecv || 1, bal: maxDailyWeighBal || 1 }
+      },
+      fusion: {
+        maxShift: { fin: maxShiftFusionFin || 1, recv: maxShiftFusionRecv || 1, bal: maxShiftFusionBal || 1 },
+        maxDaily: { fin: maxDailyFusionFin || 1, recv: maxDailyFusionRecv || 1, bal: maxDailyFusionBal || 1 }
+      },
+      loi: {
+        maxShift: { fin: maxShiftLoiFin || 1, recv: maxShiftLoiRecv || 1, weigh: maxShiftLoiWeigh || 1, bal: maxShiftLoiBal || 1 },
+        maxDaily: { fin: maxDailyLoiFin || 1, recv: maxDailyLoiRecv || 1, weigh: maxDailyLoiWeigh || 1, bal: maxDailyLoiBal || 1 }
+      },
+      loiFurnace: {
+        maxShift: { w1: maxShiftW1 || 1, w2: maxShiftW2 || 1, w3: maxShiftW3 || 1, w4: maxShiftW4 || 1, os1: maxShiftOsW1 || 1, os2: maxShiftOsW2 || 1, os3: maxShiftOsW3 || 1, os4: maxShiftOsW4 || 1 },
+        maxDaily: { w1: maxDailyW1 || 1, w2: maxDailyW2 || 1, w3: maxDailyW3 || 1, w4: maxDailyW4 || 1, os1: maxDailyOsW1 || 1, os2: maxDailyOsW2 || 1, os3: maxDailyOsW3 || 1, os4: maxDailyOsW4 || 1 }
+      }
+    };
+  }, [activeMonthRecords]);
 
   // =========================================================================
   // HELPER COMPONENTS FOR AT-A-GLANCE MANAGEMENT INTELLIGENCE
@@ -1145,7 +1713,7 @@ export const DailyPerformanceStructuredPresentation: React.FC<DailyPerformanceSt
     );
   };
 
-  // Component Helper for Standardized 4-Pillar Card
+  // Component Helper for Standardized 4-Pillar Card with Shift Breakdown
   const StandardProductivityCard = ({
     title,
     subtitle,
@@ -1153,6 +1721,14 @@ export const DailyPerformanceStructuredPresentation: React.FC<DailyPerformanceSt
     received,
     finished,
     outstanding,
+    balanceDay,
+    balanceNight,
+    receivedDay,
+    receivedNight,
+    finishedDay,
+    finishedNight,
+    outstandingDay,
+    outstandingNight,
     icon: Icon,
     color = 'teal',
     detailSnippet
@@ -1163,6 +1739,14 @@ export const DailyPerformanceStructuredPresentation: React.FC<DailyPerformanceSt
     received: number;
     finished: number;
     outstanding: number;
+    balanceDay?: number;
+    balanceNight?: number;
+    receivedDay?: number;
+    receivedNight?: number;
+    finishedDay?: number;
+    finishedNight?: number;
+    outstandingDay?: number;
+    outstandingNight?: number;
     icon: any;
     color?: string;
     detailSnippet?: React.ReactNode;
@@ -1192,48 +1776,116 @@ export const DailyPerformanceStructuredPresentation: React.FC<DailyPerformanceSt
           )}
         </div>
 
-        {/* 4 Standardized Metric Pillars */}
-        <div className="grid grid-cols-4 gap-2 text-center">
+        {/* 4 Standardized Metric Pillars with Shift Sub-Breakdown */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
           {/* 1. Balance Awal */}
-          <div className="p-2.5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800">
-            <span className="text-[10px] font-semibold text-slate-400 block uppercase tracking-wider">Balance</span>
-            <span className="text-base sm:text-lg font-black font-mono text-slate-700 dark:text-slate-300 mt-0.5 block">
-              {formatNumber(balance)}
-            </span>
-            <span className="text-[9px] text-slate-400">Saldo Awal</span>
+          <div className="p-2.5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 flex flex-col justify-between">
+            <div>
+              <span className="text-[10px] font-semibold text-slate-400 block uppercase tracking-wider">Balance</span>
+              <span className="text-base sm:text-lg font-black font-mono text-slate-700 dark:text-slate-300 mt-0.5 block">
+                {formatNumber(balance)}
+              </span>
+            </div>
+            <div className="pt-1.5 mt-1 border-t border-slate-200/50 dark:border-slate-700/50">
+              <span className="text-[8px] text-slate-400 block">Saldo Awal</span>
+              {balanceDay !== undefined && (
+                isLongShift ? (
+                  <span className="text-[9px] font-mono text-amber-700 dark:text-amber-400 font-bold block">
+                    LS: {formatNumber(balanceDay)}
+                  </span>
+                ) : (
+                  <div className="flex items-center justify-center gap-1 text-[9px] font-mono">
+                    <span className="text-amber-600 dark:text-amber-400 font-semibold">D: {formatNumber(balanceDay)}</span>
+                    <span className="text-slate-300 dark:text-slate-600">•</span>
+                    <span className="text-indigo-600 dark:text-indigo-400 font-semibold">N: {formatNumber(balanceNight || 0)}</span>
+                  </div>
+                )
+              )}
+            </div>
           </div>
 
           {/* 2. Received */}
-          <div className="p-2.5 rounded-2xl bg-sky-50/50 dark:bg-sky-950/30 border border-sky-100 dark:border-sky-900/40">
-            <span className="text-[10px] font-semibold text-sky-600 dark:text-sky-400 block uppercase tracking-wider">Received</span>
-            <span className="text-base sm:text-lg font-black font-mono text-sky-700 dark:text-sky-300 mt-0.5 block">
-              +{formatNumber(received)}
-            </span>
-            <span className="text-[9px] text-sky-500/70">Sampel Masuk</span>
+          <div className="p-2.5 rounded-2xl bg-sky-50/50 dark:bg-sky-950/30 border border-sky-100 dark:border-sky-900/40 flex flex-col justify-between">
+            <div>
+              <span className="text-[10px] font-semibold text-sky-600 dark:text-sky-400 block uppercase tracking-wider">Received</span>
+              <span className="text-base sm:text-lg font-black font-mono text-sky-700 dark:text-sky-300 mt-0.5 block">
+                +{formatNumber(received)}
+              </span>
+            </div>
+            <div className="pt-1.5 mt-1 border-t border-sky-200/50 dark:border-sky-800/50">
+              <span className="text-[8px] text-sky-500/70 block">Sampel Masuk</span>
+              {receivedDay !== undefined && (
+                isLongShift ? (
+                  <span className="text-[9px] font-mono text-amber-700 dark:text-amber-400 font-bold block">
+                    LS: +{formatNumber(receivedDay)}
+                  </span>
+                ) : (
+                  <div className="flex items-center justify-center gap-1 text-[9px] font-mono">
+                    <span className="text-amber-600 dark:text-amber-400 font-semibold">D: +{formatNumber(receivedDay)}</span>
+                    <span className="text-sky-300 dark:text-sky-700">•</span>
+                    <span className="text-indigo-600 dark:text-indigo-400 font-semibold">N: +{formatNumber(receivedNight || 0)}</span>
+                  </div>
+                )
+              )}
+            </div>
           </div>
 
           {/* 3. Finished */}
-          <div className="p-2.5 rounded-2xl bg-emerald-50/50 dark:bg-emerald-950/30 border border-emerald-100 dark:border-emerald-900/40">
-            <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 block uppercase tracking-wider">Finished</span>
-            <span className="text-base sm:text-lg font-black font-mono text-emerald-700 dark:text-emerald-300 mt-0.5 block">
-              {formatNumber(finished)}
-            </span>
-            <span className="text-[9px] text-emerald-500/70">Diselesaikan</span>
+          <div className="p-2.5 rounded-2xl bg-emerald-50/50 dark:bg-emerald-950/30 border border-emerald-100 dark:border-emerald-900/40 flex flex-col justify-between">
+            <div>
+              <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 block uppercase tracking-wider">Finished</span>
+              <span className="text-base sm:text-lg font-black font-mono text-emerald-700 dark:text-emerald-300 mt-0.5 block">
+                {formatNumber(finished)}
+              </span>
+            </div>
+            <div className="pt-1.5 mt-1 border-t border-emerald-200/50 dark:border-emerald-800/50">
+              <span className="text-[8px] text-emerald-500/70 block">Diselesaikan</span>
+              {finishedDay !== undefined && (
+                isLongShift ? (
+                  <span className="text-[9px] font-mono text-amber-700 dark:text-amber-400 font-bold block">
+                    LS: {formatNumber(finishedDay)}
+                  </span>
+                ) : (
+                  <div className="flex items-center justify-center gap-1 text-[9px] font-mono">
+                    <span className="text-amber-600 dark:text-amber-400 font-semibold">D: {formatNumber(finishedDay)}</span>
+                    <span className="text-emerald-300 dark:text-emerald-700">•</span>
+                    <span className="text-indigo-600 dark:text-indigo-400 font-semibold">N: {formatNumber(finishedNight || 0)}</span>
+                  </div>
+                )
+              )}
+            </div>
           </div>
 
           {/* 4. Outstanding (Balance Akhir) */}
-          <div className={`p-2.5 rounded-2xl border ${
+          <div className={`p-2.5 rounded-2xl border flex flex-col justify-between ${
             isBottleneck 
               ? 'bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-900/50' 
               : 'bg-teal-50/50 dark:bg-teal-950/30 border-teal-100 dark:border-teal-900/40'
           }`}>
-            <span className={`text-[10px] font-semibold block uppercase tracking-wider ${isBottleneck ? 'text-rose-600 dark:text-rose-400' : 'text-teal-600 dark:text-teal-400'}`}>
-              Outstanding
-            </span>
-            <span className={`text-base sm:text-lg font-black font-mono mt-0.5 block ${isBottleneck ? 'text-rose-700 dark:text-rose-300' : 'text-teal-700 dark:text-teal-300'}`}>
-              {formatNumber(outstanding)}
-            </span>
-            <span className="text-[9px] text-slate-400">Sisa Saldo</span>
+            <div>
+              <span className={`text-[10px] font-semibold block uppercase tracking-wider ${isBottleneck ? 'text-rose-600 dark:text-rose-400' : 'text-teal-600 dark:text-teal-400'}`}>
+                Outstanding
+              </span>
+              <span className={`text-base sm:text-lg font-black font-mono mt-0.5 block ${isBottleneck ? 'text-rose-700 dark:text-rose-300' : 'text-teal-700 dark:text-teal-300'}`}>
+                {formatNumber(outstanding)}
+              </span>
+            </div>
+            <div className={`pt-1.5 mt-1 border-t ${isBottleneck ? 'border-rose-200/50 dark:border-rose-900/40' : 'border-teal-200/50 dark:border-teal-800/50'}`}>
+              <span className="text-[8px] text-slate-400 block">Sisa Saldo</span>
+              {outstandingDay !== undefined && (
+                isLongShift ? (
+                  <span className="text-[9px] font-mono text-amber-700 dark:text-amber-400 font-bold block">
+                    LS: {formatNumber(outstandingDay)}
+                  </span>
+                ) : (
+                  <div className="flex items-center justify-center gap-1 text-[9px] font-mono">
+                    <span className="text-amber-600 dark:text-amber-400 font-semibold">D: {formatNumber(outstandingDay)}</span>
+                    <span className="text-slate-300 dark:text-slate-600">•</span>
+                    <span className="text-indigo-600 dark:text-indigo-400 font-semibold">N: {formatNumber(outstandingNight || 0)}</span>
+                  </div>
+                )
+              )}
+            </div>
           </div>
         </div>
 
@@ -1247,10 +1899,117 @@ export const DailyPerformanceStructuredPresentation: React.FC<DailyPerformanceSt
     );
   };
 
+  // Visual In-Bar Metric Component: Proporsional Volume terhadap Rekor Tertinggi Bulan Ini
+  const InBarMetricCell = ({
+    value,
+    maxValue,
+    prefix = '',
+    unit = '',
+    colorVariant = 'slate',
+    isHighlightPeak = true
+  }: {
+    value: number;
+    maxValue: number;
+    prefix?: string;
+    unit?: string;
+    colorVariant?: 'slate' | 'sky' | 'emerald' | 'amber' | 'indigo' | 'purple' | 'rose';
+    isHighlightPeak?: boolean;
+  }) => {
+    const safeMax = Math.max(1, maxValue, value);
+    const pct = safeMax > 0 ? Math.min(100, Math.round((value / safeMax) * 100)) : 0;
+    const isFullBar = value > 0 && value >= maxValue;
+
+    const variantStyles = {
+      slate: {
+        bar: isFullBar 
+          ? 'bg-gradient-to-r from-slate-400 to-slate-500 dark:from-slate-600 dark:to-slate-500' 
+          : 'bg-gradient-to-r from-slate-200 to-slate-300 dark:from-slate-700 dark:to-slate-600',
+        text: 'text-slate-800 dark:text-slate-100',
+        sub: 'text-slate-500 dark:text-slate-400'
+      },
+      sky: {
+        bar: isFullBar 
+          ? 'bg-gradient-to-r from-sky-400 to-cyan-500 shadow-xs' 
+          : 'bg-gradient-to-r from-sky-200 to-sky-300 dark:from-sky-900/70 dark:to-sky-700/70',
+        text: isFullBar ? 'text-sky-950 dark:text-white' : 'text-sky-900 dark:text-sky-200',
+        sub: 'text-sky-600 dark:text-sky-400'
+      },
+      emerald: {
+        bar: isFullBar 
+          ? 'bg-gradient-to-r from-emerald-400 to-teal-500 shadow-xs' 
+          : 'bg-gradient-to-r from-emerald-200 to-emerald-300 dark:from-emerald-900/70 dark:to-emerald-700/70',
+        text: isFullBar ? 'text-emerald-950 dark:text-white' : 'text-emerald-900 dark:text-emerald-200',
+        sub: 'text-emerald-600 dark:text-emerald-400'
+      },
+      amber: {
+        bar: isFullBar 
+          ? 'bg-gradient-to-r from-amber-400 to-yellow-500 shadow-xs' 
+          : 'bg-gradient-to-r from-amber-200 to-amber-300 dark:from-amber-900/70 dark:to-amber-700/70',
+        text: isFullBar ? 'text-amber-950 dark:text-white' : 'text-amber-900 dark:text-amber-200',
+        sub: 'text-amber-600 dark:text-amber-400'
+      },
+      indigo: {
+        bar: isFullBar 
+          ? 'bg-gradient-to-r from-indigo-400 to-blue-500 shadow-xs' 
+          : 'bg-gradient-to-r from-indigo-200 to-indigo-300 dark:from-indigo-900/70 dark:to-indigo-700/70',
+        text: isFullBar ? 'text-indigo-950 dark:text-white' : 'text-indigo-900 dark:text-indigo-200',
+        sub: 'text-indigo-600 dark:text-indigo-400'
+      },
+      purple: {
+        bar: isFullBar 
+          ? 'bg-gradient-to-r from-purple-400 to-fuchsia-500 shadow-xs' 
+          : 'bg-gradient-to-r from-purple-200 to-purple-300 dark:from-purple-900/70 dark:to-purple-700/70',
+        text: isFullBar ? 'text-purple-950 dark:text-white' : 'text-purple-900 dark:text-purple-200',
+        sub: 'text-purple-600 dark:text-purple-400'
+      },
+      rose: {
+        bar: isFullBar 
+          ? 'bg-gradient-to-r from-rose-400 to-red-500 shadow-xs' 
+          : 'bg-gradient-to-r from-rose-200 to-rose-300 dark:from-rose-900/70 dark:to-rose-700/70',
+        text: isFullBar ? 'text-rose-950 dark:text-white' : 'text-rose-900 dark:text-rose-200',
+        sub: 'text-rose-600 dark:text-rose-400'
+      }
+    };
+
+    const currentTheme = variantStyles[colorVariant] || variantStyles.slate;
+
+    return (
+      <div className="relative w-full h-8 sm:h-9 rounded-xl overflow-hidden bg-slate-100/90 dark:bg-slate-800/80 border border-slate-200/70 dark:border-slate-700/70 flex items-center shadow-inner group">
+        {/* Background Volume Fill Bar */}
+        <div 
+          style={{ width: `${Math.max(0, pct)}%` }} 
+          className={`absolute top-0 bottom-0 left-0 transition-all duration-500 rounded-lg ${currentTheme.bar}`}
+        />
+
+        {/* Numerical & Label Overlay */}
+        <div className="relative z-10 flex items-center justify-between w-full px-2.5 sm:px-3 text-xs">
+          <div className="flex items-center gap-1.5 font-mono">
+            <span className={`font-black text-xs sm:text-sm ${currentTheme.text} drop-shadow-xs`}>
+              {prefix}{formatNumber(value)}
+            </span>
+            {unit && <span className="text-[10px] text-slate-500 dark:text-slate-400 font-sans font-medium">{unit}</span>}
+          </div>
+
+          <div className="flex items-center gap-1 font-mono">
+            {isFullBar && isHighlightPeak ? (
+              <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-400 text-amber-950 shadow-xs flex items-center gap-0.5 ring-1 ring-amber-300">
+                Rekor Bulan Ini
+              </span>
+            ) : (
+              <span className={`text-[10px] font-bold ${currentTheme.sub}`}>
+                {pct}% bln
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const steps = [
     { num: 1, title: 'Manpower & SDM', desc: 'Kehadiran Staff & Crew', icon: Users },
     { num: 2, title: 'Sample Received', desc: 'GC, Prod, Exp, Smelter', icon: Layers },
-    { num: 3, title: 'Productivity Preparasi', desc: 'Press, Weighing, Fusion, LOI', icon: Flame },
+    { num: 3, title: 'Productivity', desc: 'Metode Press Pellet, Fusion, LOI', icon: Flame },
     { num: 4, title: 'Instrumen ED & WD', desc: '6 EDXRF + 2 WDXRF Zetium', icon: Cpu },
     { num: 5, title: 'QC & Pelaporan', desc: 'Kontrol Mutu & Rilis CoA', icon: FileCheck },
   ];
@@ -1356,34 +2115,23 @@ export const DailyPerformanceStructuredPresentation: React.FC<DailyPerformanceSt
       {/* SECTION 1: MANPOWER & KESIAPAN SDM */}
       {/* ========================================================================= */}
       {(showAllSections || currentStep === 1) && (
-        <div className="space-y-5">
-          {/* Top Bar Header */}
+        <div className="space-y-4">
+          {/* Header Ringkas */}
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h3 className="text-sm sm:text-base font-bold text-slate-800 dark:text-white flex items-center gap-2">
-                <span className="w-6 h-6 rounded-lg bg-teal-500 text-white flex items-center justify-center text-xs font-bold">1</span>
-                <span>Kesiapan Manpower (Kategori Utama: Staff & Crew Laboratorium)</span>
-                <span className="text-[10px] px-2.5 py-0.5 rounded-full font-bold bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800 uppercase tracking-wider">
-                  Universe {userPt || 'TBP'}
-                </span>
+              <h3 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <span className="w-6 h-6 rounded-lg bg-teal-500 text-white flex items-center justify-center text-xs font-bold shadow-xs">1</span>
+                <span>Kesiapan Manpower Laboratorium</span>
               </h3>
-              <span className="text-xs text-slate-500">
-                Total Personil: <strong>{parsedLabPersonnel.length} Terdaftar</strong> • 
-                <span className="text-indigo-600 dark:text-indigo-400 font-semibold ml-1">👔 {staffList.length} Staff</span> ({staffHadirTotal} Hadir) • 
-                <span className="text-emerald-600 dark:text-emerald-400 font-semibold ml-1">👷 {crewList.length} Crew</span> ({crewHadirTotal} Hadir) • 
-                <span className="text-amber-600 dark:text-amber-400 font-semibold ml-1">📋 {tidakBertugasList.length} Tidak Bertugas</span>
-              </span>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Total Hadir Hari Ini: <strong className="text-teal-600 dark:text-teal-400 font-mono text-sm">{staffPagi.length + crewPagi.length + staffMalam.length + crewMalam.length + totalAssistanceCount}</strong> Personil
+                {' '}(Shift D: <strong className="text-amber-600 font-mono">{staffPagi.length + crewPagi.length + assistancePagiCount}</strong> • Shift N: <strong className="text-indigo-600 font-mono">{staffMalam.length + crewMalam.length + assistanceMalamCount}</strong>)
+              </p>
             </div>
 
             <div className="flex items-center gap-2">
               <button
-                onClick={() => setShowRosterModal(true)}
-                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-teal-50 dark:bg-teal-950/60 hover:bg-teal-100 dark:hover:bg-teal-900/60 text-teal-700 dark:text-teal-300 border border-teal-300 dark:border-teal-700 text-xs font-bold cursor-pointer transition-all shadow-xs"
-              >
-                <Users className="w-3.5 h-3.5" />
-                <span>Seluruh Roster Portal</span>
-              </button>
-              <button
+                type="button"
                 onClick={() => setShowChart1(!showChart1)}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
                   showChart1 
@@ -1392,7 +2140,7 @@ export const DailyPerformanceStructuredPresentation: React.FC<DailyPerformanceSt
                 }`}
               >
                 <BarChart2 className="w-3.5 h-3.5" />
-                <span>{showChart1 ? 'Tutup Grafik' : 'Grafik Tren Manpower'}</span>
+                <span>{showChart1 ? 'Tutup Tren Periodik' : 'Tren Periodik (Week/Month)'}</span>
               </button>
             </div>
           </div>
@@ -1400,898 +2148,577 @@ export const DailyPerformanceStructuredPresentation: React.FC<DailyPerformanceSt
           {showChart1 && <ManpowerTrendChart records={records} />}
 
           {/* ========================================================================= */}
-          {/* REALITA HARI INI & MINI TREND CHART: BABAK 1 MANPOWER */}
+          {/* 1. KOMPARASI SHIFT: JUMLAH STAFF & CREW PER SHIFT (PAGI VS MALAM) */}
           {/* ========================================================================= */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-            
-            {/* SISI KIRI: REALITA MANPOWER OPERASIONAL HARI INI */}
-            <div className="lg:col-span-8 p-5 rounded-3xl bg-white border border-slate-200 shadow-xs space-y-4">
-              
-              {/* Header Status & Shift Distribution */}
-              <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-100">
-                <div>
-                  <span className="text-[10px] font-bold text-teal-600 uppercase tracking-wider block">
-                    Kondisi Operasional Hari Ini • {selectedDate}
-                  </span>
-                  <div className="flex items-baseline gap-2 mt-0.5">
-                    <span className="text-2xl font-black font-mono text-slate-900">
-                      {staffHadirTotal + crewHadirTotal + totalAssistanceCount}
-                    </span>
-                    <span className="text-xs text-slate-500 font-medium">
-                      Personil Bertugas di Lab ({userPt || 'TBP'})
-                    </span>
-                    <TrendDeltaBadge current={totalHadirToday} prev={prevTotalHadir} unit="org" />
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <span className="px-2.5 py-1 rounded-xl bg-amber-50 text-amber-800 border border-amber-200 text-xs font-bold font-mono flex items-center gap-1">
-                    <Sun className="w-3.5 h-3.5 text-amber-500" />
-                    Pagi: {staffPagi.length + crewPagi.length + assistancePagiCount}
-                  </span>
-                  <span className="px-2.5 py-1 rounded-xl bg-indigo-50 text-indigo-800 border border-indigo-200 text-xs font-bold font-mono flex items-center gap-1">
-                    <Moon className="w-3.5 h-3.5 text-indigo-500" />
-                    Malam: {staffMalam.length + crewMalam.length + assistanceMalamCount}
-                  </span>
-                </div>
-              </div>
-
-              {/* 1. KLASIFIKASI JABATAN STAFF HADIR (HANYA MUNCULKAN JIKA > 0, JIKA 0 SEMBUNYIKAN) */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                    <Briefcase className="w-3.5 h-3.5 text-indigo-600" />
-                    <span>Klasifikasi Jabatan Staff Hadir ({staffHadirTotal} Org)</span>
-                  </span>
-                  <span className="text-[10px] text-slate-400">
-                    *Jabatan tidak hadir otomatis disembunyikan
-                  </span>
-                </div>
-
-                {activeStaffJabatanList.length === 0 ? (
-                  <div className="p-3 rounded-2xl bg-slate-50 border border-slate-100 text-xs text-slate-400 italic">
-                    Tidak ada personil staff yang hadir hari ini.
-                  </div>
-                ) : (
-                  <div className="flex flex-wrap gap-2">
-                    {activeStaffJabatanList.map(j => {
-                      const style = getJabatanBadgeStyle(j.jabatan);
-                      return (
-                        <div 
-                          key={j.jabatan}
-                          className="px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center gap-2 shadow-2xs"
-                        >
-                          <span className={`w-2 h-2 rounded-full ${style.bg.replace('bg-', 'bg-')}`} />
-                          <span className="text-xs font-semibold text-slate-700">{j.jabatan}:</span>
-                          <span className="text-xs font-black font-mono text-slate-900 bg-white px-1.5 py-0.5 rounded border border-slate-200">
-                            {j.count}
-                          </span>
-                          <span className="text-[10px] font-mono text-slate-400">
-                            ({j.pagi}P / {j.malam}M)
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-
-              {/* 2. CREW SEKSI LABORATORY (SEMUA CREW JABATAN SAMA, SECTION=LABORATORY) */}
-              <div className="p-3.5 rounded-2xl bg-emerald-50/60 border border-emerald-200/80 flex flex-wrap items-center justify-between gap-3">
+          {isLongShift ? (
+            /* ========================================================================= */
+            /* SINGLE CARD HARI LONG SHIFT (MINGGU) - DILAKUKAN OLEH SHIFT PAGI */
+            /* ========================================================================= */
+            <div className="p-6 rounded-3xl bg-white dark:bg-slate-900 border-2 border-amber-300 dark:border-amber-800 shadow-sm space-y-4">
+              <div className="flex flex-wrap items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800 gap-3">
                 <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-xl bg-emerald-100 text-emerald-700 border border-emerald-200">
-                    <Users className="w-4 h-4" />
+                  <div className="p-2.5 rounded-2xl bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400">
+                    <Sun className="w-6 h-6" />
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
-                      <h5 className="text-xs font-bold text-emerald-950">Crew Seksi Laboratory</h5>
-                      <span className="text-[10px] px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 font-bold">
-                        Posisi Setara
+                      <h4 className="font-bold text-slate-900 dark:text-white text-base">Long Shift (LS)</h4>
+                      <span className="px-2.5 py-0.5 rounded-md text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border border-amber-300 dark:border-amber-700 uppercase">
+                        Hari Minggu
+                      </span>
+                      <span className="px-2.5 py-0.5 rounded-md text-[10px] font-bold bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-300 border border-teal-300 dark:border-teal-700">
+                        {dayShift?.regu ? `Shift ${dayShift.regu}` : 'Shift Pagi'}
                       </span>
                     </div>
-                    <p className="text-[11px] text-emerald-700/80">
-                      Seluruh crew bernaung di bawah seksi Laboratory (preparasi, furnace & analisa rutin)
-                    </p>
+                    <span className="text-xs text-slate-500 font-medium">
+                      07:00 - 24:00 WITA • Dilakukan oleh Shift Pagi ({dayShift?.regu ? `Shift ${dayShift.regu}` : 'Shift Pagi'})
+                    </span>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="text-3xl font-black font-mono text-teal-600 dark:text-teal-400">
+                    {staffPagi.length + crewPagi.length + assistancePagiCount} <span className="text-xs font-normal text-slate-400">Org</span>
+                  </div>
+                  <span className="text-[11px] text-teal-700 dark:text-teal-300 font-semibold">Total Hadir Long Shift</span>
+                </div>
+              </div>
+
+              {/* Breakdown Staff & Crew (Hadir vs Cuti) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="p-3.5 rounded-2xl bg-indigo-50/60 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/40 space-y-1">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-indigo-700 dark:text-indigo-300">
+                      <Briefcase className="w-3.5 h-3.5" />
+                      <span>Staff Long Shift</span>
+                    </div>
+                    <span className="text-[10px] font-semibold text-amber-700 dark:text-amber-300 bg-amber-100/80 dark:bg-amber-950/60 px-2 py-0.5 rounded-md">
+                      {staffCutiPagi.length} Cuti
+                    </span>
+                  </div>
+                  <div className="text-2xl font-black font-mono text-indigo-900 dark:text-indigo-200">
+                    {staffPagi.length} <span className="text-xs font-medium text-slate-500">Hadir</span>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-3">
-                  <div className="text-right">
-                    <span className="text-xl font-black font-mono text-emerald-800">
-                      {crewHadirTotal}
+                <div className="p-3.5 rounded-2xl bg-emerald-50/60 dark:bg-emerald-950/30 border border-emerald-100 dark:border-emerald-900/40 space-y-1">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-700 dark:text-emerald-300">
+                      <Users className="w-3.5 h-3.5" />
+                      <span>Crew Long Shift</span>
+                    </div>
+                    <span className="text-[10px] font-semibold text-amber-700 dark:text-amber-300 bg-amber-100/80 dark:bg-amber-950/60 px-2 py-0.5 rounded-md">
+                      {crewCutiPagi.length} Cuti
                     </span>
-                    <span className="text-xs text-emerald-700 font-medium ml-1">
-                      Hadir ({crewPagi.length} Pagi / {crewMalam.length} Malam)
-                    </span>
+                  </div>
+                  <div className="text-2xl font-black font-mono text-emerald-900 dark:text-emerald-200">
+                    {crewPagi.length} <span className="text-xs font-medium text-slate-500">Hadir</span>
                   </div>
                 </div>
               </div>
 
-              {/* 3. INPUT MANUAL PERBANTUAN DARI SECTION LAIN DENGAN AUTOFILL DATALIST */}
-              <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <UserPlus className="w-4 h-4 text-blue-600" />
-                    <span className="text-xs font-bold text-slate-800">
-                      Perbantuan dari Section Lain ({totalAssistanceCount} Personil)
+              {/* Status Rekap Tidak Hadir Long Shift */}
+              <div className="p-2.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-between gap-2 text-xs">
+                <span className="font-semibold text-slate-600 dark:text-slate-300">Rekap Tidak Hadir:</span>
+                <div className="flex items-center gap-1.5 flex-wrap font-mono font-bold text-[11px]">
+                  <span className="px-2 py-0.5 rounded-lg bg-amber-100/80 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300">
+                    {cutiPagi.length} Cuti
+                  </span>
+                  <span className="px-2 py-0.5 rounded-lg bg-rose-100/80 dark:bg-rose-950/60 text-rose-800 dark:text-rose-300">
+                    {sakitPagi.length} Sakit
+                  </span>
+                  <span className="px-2 py-0.5 rounded-lg bg-blue-100/80 dark:bg-blue-950/60 text-blue-800 dark:text-blue-300">
+                    {izinPagi.length} Izin
+                  </span>
+                  {alpaPagi.length > 0 && (
+                    <span className="px-2 py-0.5 rounded-lg bg-red-100 dark:bg-red-950/60 text-red-800 dark:text-red-300">
+                      {alpaPagi.length} Alpa
                     </span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setShowAssistanceInput(!showAssistanceInput)}
-                    className="px-2.5 py-1 rounded-xl bg-white border border-slate-300 text-blue-600 hover:bg-blue-50 text-[11px] font-bold cursor-pointer transition-all flex items-center gap-1 shadow-2xs"
-                  >
-                    <Plus className="w-3 h-3" />
-                    <span>{showAssistanceInput ? 'Tutup Form' : 'Tambah Perbantuan'}</span>
-                  </button>
+                  )}
+                </div>
+              </div>
+
+              {/* List Detail Personil Tidak Hadir (Cuti, Sakit, Izin, Alpa) Long Shift */}
+              <div className="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-2">
+                <div className="flex items-center justify-between text-xs font-bold text-slate-700 dark:text-slate-300">
+                  <span>Daftar Personil Tidak Hadir ({kendalaPagi.length} Orang):</span>
+                  {kendalaPagi.length === 0 && (
+                    <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold">Hadir Lengkap</span>
+                  )}
                 </div>
 
-                {/* Form Input Perbantuan dengan Datalist Autofill */}
-                {showAssistanceInput && (
-                  <div className="p-3 rounded-2xl bg-white border border-blue-200 space-y-2 shadow-xs">
-                    <span className="text-[11px] text-slate-500 block">
-                      Pilih nama atau ketik NIK personil non-laboratorium dari roster:
-                    </span>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <div className="flex-1 min-w-[200px]">
-                        <input
-                          list="perbantuan-candidates-list"
-                          type="text"
-                          value={assistanceSearch}
-                          onChange={e => setAssistanceSearch(e.target.value)}
-                          placeholder="Ketik NIK atau nama personil dari seksi lain..."
-                          className="w-full px-3 py-1.5 rounded-xl border border-slate-300 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500 font-sans"
-                        />
-                        <datalist id="perbantuan-candidates-list">
-                          {nonLabCandidates.map((c: any) => (
-                            <option 
-                              key={c.nik} 
-                              value={`${c.nik} - ${c.name || c.nama} (${c.section || c.department || 'Seksi Lain'})`} 
-                            />
-                          ))}
-                        </datalist>
-                      </div>
-
-                      <select
-                        value={assistanceShift}
-                        onChange={e => setAssistanceShift(e.target.value as 'pagi' | 'malam')}
-                        className="px-3 py-1.5 rounded-xl border border-slate-300 text-xs text-slate-800 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
-                      >
-                        <option value="pagi">Shift Pagi</option>
-                        <option value="malam">Shift Malam</option>
-                      </select>
-
-                      <button
-                        type="button"
-                        onClick={() => handleAddAssistance(assistanceSearch, assistanceShift)}
-                        className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold cursor-pointer transition-all shadow-xs"
-                      >
-                        Simpan
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* List Personil Perbantuan Aktif */}
-                {assistanceList.length === 0 ? (
-                  <div className="text-[11px] text-slate-400 italic">
-                    Belum ada personil perbantuan dari seksi lain hari ini.
+                {kendalaPagi.length === 0 ? (
+                  <div className="p-3 rounded-2xl bg-emerald-50/60 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/30 text-xs text-emerald-700 dark:text-emerald-400 font-medium">
+                    Seluruh staff dan crew Long Shift hadir bertugas lengkap (Nihil cuti, sakit, izin, atau alpa).
                   </div>
                 ) : (
-                  <div className="flex flex-wrap gap-2">
-                    {assistanceList.map(item => (
-                      <div
-                        key={item.nik}
-                        className="px-2.5 py-1 rounded-xl bg-white border border-blue-200 flex items-center gap-2 shadow-2xs"
-                      >
-                        <span className="text-xs font-bold text-slate-900">{item.name}</span>
-                        <span className="text-[10px] text-blue-600 bg-blue-50 px-1.5 py-0.2 rounded border border-blue-100">
-                          {item.fromSection}
-                        </span>
-                        <span className="text-[10px] font-mono text-slate-500">
-                          ({item.shift === 'pagi' ? 'Pagi' : 'Malam'})
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveAssistance(item.nik)}
-                          className="text-slate-400 hover:text-rose-600 p-0.5 rounded cursor-pointer transition-colors"
-                          title="Hapus perbantuan"
-                        >
-                          <Trash2 className="w-3 h-3" />
-                        </button>
+                  <div className="space-y-1.5 max-h-[180px] overflow-y-auto pr-1">
+                    {kendalaPagi.map(p => (
+                      <div key={p.nik} className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80 text-xs space-y-1">
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-slate-900 dark:text-white truncate">{p.name}</span>
+                          <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${p.badgeColor}`}>
+                            {p.keterangan}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between text-[10px] text-slate-400">
+                          <span>{p.jabatan} • <strong className="uppercase">{p.roleCategory}</strong></span>
+                          <span className="font-mono text-slate-600 dark:text-slate-300 font-semibold">{formatShiftName(p.regu)}</span>
+                        </div>
+                        {p.tglMasukKembali && (
+                          <div className="pt-1 border-t border-slate-200/60 dark:border-slate-700 text-[10px] text-amber-800 dark:text-amber-300 font-medium flex items-center gap-1.5">
+                            <span>Masuk kembali:</span>
+                            <strong className="font-mono font-bold text-amber-900 dark:text-amber-200">{p.tglMasukKembali}</strong>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
                 )}
               </div>
 
-              {/* 4. Ringkasan Tidak Bertugas (Cuti, Sakit, Off) */}
-              <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100 text-xs text-slate-500">
-                <div className="flex items-center gap-3">
-                  <span>Tidak Bertugas: <strong className="text-slate-800 font-mono">{tidakBertugasList.length}</strong> org</span>
-                  <span>•</span>
-                  <span>Cuti: <strong className="text-amber-600 font-mono">{staffCuti + crewCuti}</strong></span>
-                  <span>•</span>
-                  <span>Sakit/Izin: <strong className="text-rose-600 font-mono">{staffIzinSakit + crewIzinSakit}</strong></span>
-                  <span>•</span>
-                  <span>Off Roster: <strong className="text-slate-600 font-mono">{tidakBertugasList.filter(p => p.shiftSchedule === 'OFF' || p.shiftSchedule === 'X').length}</strong></span>
+              {/* Ratio Bar Staff vs Crew */}
+              <div className="space-y-1 pt-1">
+                <div className="flex justify-between text-[10px] font-semibold text-slate-500">
+                  <span className="text-indigo-600 dark:text-indigo-400 font-medium">Staff: {staffPagi.length} org ({Math.round((staffPagi.length / Math.max(1, staffPagi.length + crewPagi.length)) * 100)}%)</span>
+                  <span className="text-emerald-600 dark:text-emerald-400 font-medium">Crew: {crewPagi.length} org ({Math.round((crewPagi.length / Math.max(1, staffPagi.length + crewPagi.length)) * 100)}%)</span>
                 </div>
-              </div>
-
-            </div>
-
-            {/* SISI KANAN: MINI TREND CHART 7 HARI (KLIK UNTUK GRAFIK DETAIL) */}
-            <div className="lg:col-span-4 flex flex-col">
-              <MiniTrendChartCard
-                title="Tren Kehadiran Manpower"
-                unit="org"
-                metricToday={staffHadirTotal + crewHadirTotal + totalAssistanceCount}
-                deltaVal={(staffHadirTotal + crewHadirTotal) - prevTotalHadir}
-                unitLabel="vs D-1"
-                data={history7Days.map(h => ({ date: h.date, val: h.manpowerHadir, label: h.label }))}
-                onClick={() => setShowChart1(true)}
-              />
-            </div>
-
-          </div>
-
-          {/* ========================================================================= */}
-          {/* CARD UTAMA: STAFF & CREW (SHIFT BUKAN KATEGORI UTAMA) */}
-          {/* ========================================================================= */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            
-            {/* CARD 1: MANPOWER STAFF */}
-            <div 
-              onClick={() => {
-                setManpowerRoleTab('staff');
-                setManpowerShiftFilter('all');
-              }}
-              className={`p-5 rounded-3xl border transition-all cursor-pointer ${
-                manpowerRoleTab === 'staff'
-                  ? 'bg-gradient-to-br from-indigo-50/90 via-white to-indigo-50/40 dark:from-indigo-950/40 dark:via-slate-900 dark:to-indigo-950/20 border-indigo-500/80 shadow-md ring-2 ring-indigo-400/30'
-                  : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-indigo-300 dark:hover:border-indigo-800 shadow-sm'
-              }`}
-            >
-              {/* Header Card Staff */}
-              <div className="flex items-center justify-between pb-3 border-b border-indigo-100/70 dark:border-slate-800">
-                <div className="flex items-center gap-3">
-                  <div className="p-2.5 rounded-2xl bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200/50">
-                    <Briefcase className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h4 className="font-bold text-slate-900 dark:text-white text-base">Manpower Staff</h4>
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
-                        Kategori Utama
-                      </span>
-                    </div>
-                    <p className="text-xs text-slate-500">Superintendent, Supervisor, QA Officer, Foreman & Admin</p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <div className="text-2xl font-black font-mono text-indigo-600 dark:text-indigo-400">
-                    {staffHadirTotal} <span className="text-xs font-normal text-slate-400">/ {staffList.length} Org</span>
-                  </div>
-                  <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold">
-                    {staffHadirTotal} Hadir ({Math.round((staffHadirTotal / (staffList.length || 1)) * 100)}%)
-                  </span>
-                </div>
-              </div>
-
-              {/* Sub-Kategori Shift di dalam Staff */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
-                
-                {/* 1. Shift Pagi & Non-Shift */}
-                <div className="p-3.5 rounded-2xl bg-white/90 dark:bg-slate-800/70 border border-teal-200/80 dark:border-teal-900/50 shadow-2xs space-y-2">
-                  <div className="flex items-center justify-between pb-1.5 border-b border-teal-50 dark:border-teal-900/40">
-                    <div className="flex items-center gap-1.5 text-xs font-bold text-teal-700 dark:text-teal-300">
-                      <Sun className="w-4 h-4 text-amber-500" />
-                      <span>Shift Pagi & Non-Shift</span>
-                    </div>
-                    <span className="font-mono font-bold text-xs px-2 py-0.5 rounded-lg bg-teal-100 dark:bg-teal-900/80 text-teal-800 dark:text-teal-200">
-                      {staffPagi.length} Org
-                    </span>
-                  </div>
-                  
-                  <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                    Jabatan yang Bertugas ({staffPagi.length} Personil):
-                  </div>
-                  
-                  <div className="space-y-1.5 max-h-[160px] overflow-y-auto pr-1">
-                    {staffBreakdownPagi.length === 0 ? (
-                      <div className="text-[11px] text-slate-400 italic py-1">Tidak ada staf dinas pagi</div>
-                    ) : (
-                      staffBreakdownPagi.map(b => (
-                        <div 
-                          key={b.jabatan} 
-                          className="flex items-center justify-between text-xs px-2.5 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800/90 border border-slate-100 dark:border-slate-700/60"
-                        >
-                          <span className="text-slate-700 dark:text-slate-300 font-medium truncate max-w-[155px]" title={b.jabatan}>
-                            {b.jabatan}
-                          </span>
-                          <span className="font-mono font-black text-teal-700 dark:text-teal-300 text-[11px] bg-teal-50 dark:bg-teal-950/80 px-1.5 py-0.5 rounded border border-teal-200/50 shrink-0">
-                            {b.count} orang
-                          </span>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-
-                {/* 2. Shift Malam */}
-                <div className="p-3.5 rounded-2xl bg-white/90 dark:bg-slate-800/70 border border-indigo-200/80 dark:border-indigo-900/50 shadow-2xs space-y-2">
-                  <div className="flex items-center justify-between pb-1.5 border-b border-indigo-50 dark:border-indigo-900/40">
-                    <div className="flex items-center gap-1.5 text-xs font-bold text-indigo-700 dark:text-indigo-300">
-                      <Moon className="w-4 h-4 text-indigo-500" />
-                      <span>Shift Malam</span>
-                    </div>
-                    <span className="font-mono font-bold text-xs px-2 py-0.5 rounded-lg bg-indigo-100 dark:bg-indigo-900/80 text-indigo-800 dark:text-indigo-200">
-                      {staffMalam.length} Org
-                    </span>
-                  </div>
-                  
-                  <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                    Jabatan yang Bertugas ({staffMalam.length} Personil):
-                  </div>
-                  
-                  <div className="space-y-1.5 max-h-[160px] overflow-y-auto pr-1">
-                    {staffBreakdownMalam.length === 0 ? (
-                      <div className="text-[11px] text-slate-400 italic py-1">Tidak ada staf dinas malam</div>
-                    ) : (
-                      staffBreakdownMalam.map(b => (
-                        <div 
-                          key={b.jabatan} 
-                          className="flex items-center justify-between text-xs px-2.5 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800/90 border border-slate-100 dark:border-slate-700/60"
-                        >
-                          <span className="text-slate-700 dark:text-slate-300 font-medium truncate max-w-[155px]" title={b.jabatan}>
-                            {b.jabatan}
-                          </span>
-                          <span className="font-mono font-black text-indigo-700 dark:text-indigo-300 text-[11px] bg-indigo-50 dark:bg-indigo-950/80 px-1.5 py-0.5 rounded border border-indigo-200/50 shrink-0">
-                            {b.count} orang
-                          </span>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-
-              </div>
-
-              {/* Footer Staff */}
-              <div className="flex flex-wrap items-center justify-between gap-2 pt-3 mt-3 border-t border-indigo-100/60 dark:border-slate-800 text-xs">
-                <div className="flex items-center gap-2 text-slate-500">
-                  <Coffee className="w-3.5 h-3.5 text-amber-500" />
-                  <span>Tidak bertugas: <strong className="text-amber-600 dark:text-amber-400">{staffTidakBertugas.length} orang</strong> (Cuti / Sakit / Off)</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setManpowerRoleTab('staff');
-                    setManpowerShiftFilter('all');
-                  }}
-                  className="text-indigo-600 dark:text-indigo-400 font-bold hover:underline flex items-center gap-1 cursor-pointer"
-                >
-                  <span>Lihat daftar nama staff</span>
-                  <ChevronRight className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </div>
-
-            {/* CARD 2: MANPOWER CREW */}
-            <div 
-              onClick={() => {
-                setManpowerRoleTab('crew');
-                setManpowerShiftFilter('all');
-              }}
-              className={`p-5 rounded-3xl border transition-all cursor-pointer ${
-                manpowerRoleTab === 'crew'
-                  ? 'bg-gradient-to-br from-emerald-50/90 via-white to-emerald-50/40 dark:from-emerald-950/40 dark:via-slate-900 dark:to-emerald-950/20 border-emerald-500/80 shadow-md ring-2 ring-emerald-400/30'
-                  : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-emerald-300 dark:hover:border-emerald-800 shadow-sm'
-              }`}
-            >
-              {/* Header Card Crew */}
-              <div className="flex items-center justify-between pb-3 border-b border-emerald-100/70 dark:border-slate-800">
-                <div className="flex items-center gap-3">
-                  <div className="p-2.5 rounded-2xl bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200/50">
-                    <Users className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h4 className="font-bold text-slate-900 dark:text-white text-base">Manpower Crew</h4>
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
-                        Kategori Utama
-                      </span>
-                    </div>
-                    <p className="text-xs text-slate-500">Seluruh crew berposisi setara di Section Laboratory</p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <div className="text-2xl font-black font-mono text-emerald-600 dark:text-emerald-400">
-                    {crewHadirTotal} <span className="text-xs font-normal text-slate-400">/ {crewList.length} Org</span>
-                  </div>
-                  <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold">
-                    {crewHadirTotal} Hadir ({Math.round((crewHadirTotal / (crewList.length || 1)) * 100)}%)
-                  </span>
-                </div>
-              </div>
-
-              {/* Sub-Kategori Shift di dalam Crew */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
-                
-                {/* 1. Shift Pagi */}
-                <div className="p-3.5 rounded-2xl bg-white/90 dark:bg-slate-800/70 border border-teal-200/80 dark:border-teal-900/50 shadow-2xs space-y-2">
-                  <div className="flex items-center justify-between pb-1.5 border-b border-teal-50 dark:border-teal-900/40">
-                    <div className="flex items-center gap-1.5 text-xs font-bold text-teal-700 dark:text-teal-300">
-                      <Sun className="w-4 h-4 text-amber-500" />
-                      <span>Crew Shift Pagi</span>
-                    </div>
-                    <span className="font-mono font-bold text-xs px-2 py-0.5 rounded-lg bg-teal-100 dark:bg-teal-900/80 text-teal-800 dark:text-teal-200">
-                      {crewPagi.length} Org
-                    </span>
-                  </div>
-                  
-                  <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-100 dark:border-slate-700/60 text-xs space-y-1">
-                    <span className="font-semibold text-slate-700 dark:text-slate-300 block">
-                      Semua Crew Berposisi Setara:
-                    </span>
-                    <p className="text-[11px] text-slate-500 leading-tight">
-                      Bertugas pada preparasi sampel, penimbangan, pembakaran furnace & operasional spektrometer XRF.
-                    </p>
-                  </div>
-                </div>
-
-                {/* 2. Shift Malam */}
-                <div className="p-3.5 rounded-2xl bg-white/90 dark:bg-slate-800/70 border border-indigo-200/80 dark:border-indigo-900/50 shadow-2xs space-y-2">
-                  <div className="flex items-center justify-between pb-1.5 border-b border-indigo-50 dark:border-indigo-900/40">
-                    <div className="flex items-center gap-1.5 text-xs font-bold text-indigo-700 dark:text-indigo-300">
-                      <Moon className="w-4 h-4 text-indigo-500" />
-                      <span>Crew Shift Malam</span>
-                    </div>
-                    <span className="font-mono font-bold text-xs px-2 py-0.5 rounded-lg bg-indigo-100 dark:bg-indigo-900/80 text-indigo-800 dark:text-indigo-200">
-                      {crewMalam.length} Org
-                    </span>
-                  </div>
-                  
-                  <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-100 dark:border-slate-700/60 text-xs space-y-1">
-                    <span className="font-semibold text-slate-700 dark:text-slate-300 block">
-                      Semua Crew Berposisi Setara:
-                    </span>
-                    <p className="text-[11px] text-slate-500 leading-tight">
-                      Bertugas pada preparasi sampel, penimbangan, pembakaran furnace & operasional spektrometer XRF.
-                    </p>
-                  </div>
-                </div>
-
-              </div>
-
-              {/* Footer Crew */}
-              <div className="flex flex-wrap items-center justify-between gap-2 pt-3 mt-3 border-t border-emerald-100/60 dark:border-slate-800 text-xs">
-                <div className="flex items-center gap-3 text-slate-500">
-                  <span className="flex items-center gap-1.5">
-                    <Coffee className="w-3.5 h-3.5 text-amber-500" />
-                    Off: <strong className="text-slate-700 dark:text-slate-300">{crewTidakBertugas.length} org</strong>
-                  </span>
-                  <span>•</span>
-                  <span className="flex items-center gap-1.5">
-                    <UserPlus className="w-3.5 h-3.5 text-blue-500" />
-                    Perbantuan Masuk: <strong className="text-blue-600 dark:text-blue-400 font-mono">{totalAssistanceCount} org</strong>
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setManpowerRoleTab('crew');
-                    setManpowerShiftFilter('all');
-                  }}
-                  className="text-emerald-600 dark:text-emerald-400 font-bold hover:underline flex items-center gap-1 cursor-pointer"
-                >
-                  <span>Lihat daftar nama crew</span>
-                  <ChevronRight className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </div>
-
-          </div>
-
-          {/* SUPPORT STRIP: RINGKASAN KESIAPAN OPERASIONAL */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-700/60">
-              <span className="text-[10px] font-semibold text-slate-400 block uppercase tracking-wider">Total Hadir Lab</span>
-              <div className="text-lg font-black font-mono text-slate-900 dark:text-white mt-0.5">
-                {staffHadirTotal + crewHadirTotal} <span className="text-xs font-normal text-slate-400">/ {parsedLabPersonnel.length}</span>
-              </div>
-              <span className="text-[10px] text-emerald-600 font-semibold">
-                Staff: {staffHadirTotal} • Crew: {crewHadirTotal}
-              </span>
-            </div>
-
-            <div className="p-3 rounded-2xl bg-teal-50/50 dark:bg-teal-950/20 border border-teal-100 dark:border-teal-900/40">
-              <span className="text-[10px] font-semibold text-teal-600 dark:text-teal-400 block uppercase tracking-wider flex items-center gap-1">
-                <Sun className="w-3 h-3 text-amber-500" /> Total Dinas Pagi
-              </span>
-              <div className="text-lg font-black font-mono text-teal-700 dark:text-teal-300 mt-0.5">
-                {staffPagi.length + crewPagi.length} <span className="text-xs font-normal text-slate-400">Orang</span>
-              </div>
-              <span className="text-[10px] text-teal-600/80">
-                Staff: {staffPagi.length} • Crew: {crewPagi.length}
-              </span>
-            </div>
-
-            <div className="p-3 rounded-2xl bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-900/40">
-              <span className="text-[10px] font-semibold text-indigo-600 dark:text-indigo-400 block uppercase tracking-wider flex items-center gap-1">
-                <Moon className="w-3 h-3 text-indigo-500" /> Total Dinas Malam
-              </span>
-              <div className="text-lg font-black font-mono text-indigo-700 dark:text-indigo-300 mt-0.5">
-                {staffMalam.length + crewMalam.length} <span className="text-xs font-normal text-slate-400">Orang</span>
-              </div>
-              <span className="text-[10px] text-indigo-600/80">
-                Staff: {staffMalam.length} • Crew: {crewMalam.length}
-              </span>
-            </div>
-
-            <div className="p-3 rounded-2xl bg-amber-50/50 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-900/40">
-              <span className="text-[10px] font-semibold text-amber-600 dark:text-amber-400 block uppercase tracking-wider flex items-center gap-1">
-                <Coffee className="w-3 h-3 text-amber-500" /> Tidak Bertugas & Bantuan
-              </span>
-              <div className="text-lg font-black font-mono text-amber-700 dark:text-amber-300 mt-0.5">
-                {tidakBertugasList.length} <span className="text-xs font-normal text-slate-400">Off/Cuti</span>
-              </div>
-              <span className="text-[10px] text-blue-600 font-semibold">
-                +{crewBantuan} Kru Bantuan Prep
-              </span>
-            </div>
-          </div>
-
-          {/* ========================================================================= */}
-          {/* TABEL DETAIL PERSONIL (DIURUTKAN BERDASARKAN JABATAN) */}
-          {/* ========================================================================= */}
-          <div className="p-5 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
-            
-            {/* Filter Controls Bar */}
-            <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
-              
-              {/* Primary Role Tabs */}
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800/80 p-1 rounded-2xl">
-                  <button
-                    type="button"
-                    onClick={() => setManpowerRoleTab('staff')}
-                    className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                      manpowerRoleTab === 'staff'
-                        ? 'bg-white dark:bg-slate-900 text-indigo-700 dark:text-indigo-300 shadow-xs'
-                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
-                    }`}
-                  >
-                    <Briefcase className="w-3.5 h-3.5 text-indigo-600" />
-                    <span>Staff ({staffList.length})</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setManpowerRoleTab('crew')}
-                    className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                      manpowerRoleTab === 'crew'
-                        ? 'bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-300 shadow-xs'
-                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
-                    }`}
-                  >
-                    <Users className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>Crew ({crewList.length})</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setManpowerRoleTab('semua')}
-                    className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                      manpowerRoleTab === 'semua'
-                        ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
-                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
-                    }`}
-                  >
-                    <span>Semua Personil ({parsedLabPersonnel.length})</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setManpowerRoleTab('tidak_bertugas')}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                      manpowerRoleTab === 'tidak_bertugas'
-                        ? 'bg-white dark:bg-slate-900 text-amber-700 dark:text-amber-300 shadow-xs'
-                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
-                    }`}
-                  >
-                    <Coffee className="w-3.5 h-3.5 text-amber-500" />
-                    <span>Tidak Bertugas ({tidakBertugasList.length})</span>
-                  </button>
-                </div>
-
-                {/* Sub-Filter Shift (Pill) */}
-                {manpowerRoleTab !== 'tidak_bertugas' && (
-                  <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800/50 p-1 rounded-xl text-[11px]">
-                    <span className="text-slate-400 font-semibold px-2">Shift:</span>
-                    <button
-                      type="button"
-                      onClick={() => setManpowerShiftFilter('all')}
-                      className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${
-                        manpowerShiftFilter === 'all'
-                          ? 'bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 shadow-xs'
-                          : 'text-slate-500 hover:text-slate-800'
-                      }`}
-                    >
-                      Semua
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setManpowerShiftFilter('pagi')}
-                      className={`flex items-center gap-1 px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${
-                        manpowerShiftFilter === 'pagi'
-                          ? 'bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300 shadow-xs'
-                          : 'text-slate-500 hover:text-slate-800'
-                      }`}
-                    >
-                      <Sun className="w-3 h-3 text-amber-500" /> Pagi
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setManpowerShiftFilter('malam')}
-                      className={`flex items-center gap-1 px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${
-                        manpowerShiftFilter === 'malam'
-                          ? 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 shadow-xs'
-                          : 'text-slate-500 hover:text-slate-800'
-                      }`}
-                    >
-                      <Moon className="w-3 h-3 text-indigo-500" /> Malam
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {/* Right: Search Box & View Mode Toggle (Table vs Cards) */}
-              <div className="flex items-center gap-2 flex-1 sm:flex-initial">
-                <div className="relative min-w-[200px] flex-1 sm:flex-initial">
-                  <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                  <input
-                    type="text"
-                    value={manpowerSearch}
-                    onChange={e => setManpowerSearch(e.target.value)}
-                    placeholder="Cari personil / NIK / jabatan..."
-                    className="w-full pl-8 pr-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs text-slate-800 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                <div className="w-full h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden flex">
+                  <div 
+                    style={{ width: `${(staffPagi.length / Math.max(1, staffPagi.length + crewPagi.length)) * 100}%` }}
+                    className="h-full bg-indigo-500 transition-all"
+                  />
+                  <div 
+                    style={{ width: `${(crewPagi.length / Math.max(1, staffPagi.length + crewPagi.length)) * 100}%` }}
+                    className="h-full bg-emerald-500 transition-all"
                   />
                 </div>
+              </div>
+            </div>
+          ) : (
+            /* ========================================================================= */
+            /* KOMPARASI 2 SHIFT REGULAR: PAGI (07:00 - 19:00) VS MALAM (19:00 - 07:00) */
+            /* ========================================================================= */
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Shift Pagi */}
+              <div className="p-5 rounded-3xl bg-white dark:bg-slate-900 border border-teal-200/80 dark:border-teal-900/40 shadow-xs space-y-4">
+                <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2 rounded-xl bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400">
+                      <Sun className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-slate-900 dark:text-white text-sm">Shift Pagi (Day Shift)</h4>
+                      <span className="text-[11px] text-slate-400">07:00 - 19:00 WITA</span>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-2xl font-black font-mono text-teal-600 dark:text-teal-400">
+                      {staffPagi.length + crewPagi.length + assistancePagiCount} <span className="text-xs font-normal text-slate-400">Org</span>
+                    </div>
+                    <span className="text-[10px] text-teal-700 dark:text-teal-300 font-semibold">Total Hadir Dinas Pagi</span>
+                  </div>
+                </div>
 
-                <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
-                  <button
-                    type="button"
-                    onClick={() => setManpowerViewMode('table')}
-                    className={`p-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                      manpowerViewMode === 'table'
-                        ? 'bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-300 shadow-xs'
-                        : 'text-slate-500 hover:text-slate-800'
-                    }`}
-                    title="Tampilan Tabel (Urut Berdasarkan Jabatan)"
-                  >
-                    <TableIcon className="w-3.5 h-3.5" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setManpowerViewMode('cards')}
-                    className={`p-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                      manpowerViewMode === 'cards'
-                        ? 'bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-300 shadow-xs'
-                        : 'text-slate-500 hover:text-slate-800'
-                    }`}
-                    title="Tampilan Grid Kartu Personil"
-                  >
-                    <LayoutGrid className="w-3.5 h-3.5" />
-                  </button>
+                {/* Breakdown Staff & Crew (Hadir vs Cuti) */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="p-3.5 rounded-2xl bg-indigo-50/60 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/40 space-y-1">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 text-xs font-bold text-indigo-700 dark:text-indigo-300">
+                        <Briefcase className="w-3.5 h-3.5" />
+                        <span>Staff Pagi</span>
+                      </div>
+                      <span className="text-[10px] font-semibold text-amber-700 dark:text-amber-300 bg-amber-100/80 dark:bg-amber-950/60 px-2 py-0.5 rounded-md">
+                        {staffCutiPagi.length} Cuti
+                      </span>
+                    </div>
+                    <div className="text-2xl font-black font-mono text-indigo-900 dark:text-indigo-200">
+                      {staffPagi.length} <span className="text-xs font-medium text-slate-500">Hadir</span>
+                    </div>
+                  </div>
+
+                  <div className="p-3.5 rounded-2xl bg-emerald-50/60 dark:bg-emerald-950/30 border border-emerald-100 dark:border-emerald-900/40 space-y-1">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-700 dark:text-emerald-300">
+                        <Users className="w-3.5 h-3.5" />
+                        <span>Crew Pagi</span>
+                      </div>
+                      <span className="text-[10px] font-semibold text-amber-700 dark:text-amber-300 bg-amber-100/80 dark:bg-amber-950/60 px-2 py-0.5 rounded-md">
+                        {crewCutiPagi.length} Cuti
+                      </span>
+                    </div>
+                    <div className="text-2xl font-black font-mono text-emerald-900 dark:text-emerald-200">
+                      {crewPagi.length} <span className="text-xs font-medium text-slate-500">Hadir</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Status Rekap Tidak Hadir Shift Pagi */}
+                <div className="p-2.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-between gap-2 text-xs">
+                  <span className="font-semibold text-slate-600 dark:text-slate-300">Rekap Tidak Hadir:</span>
+                  <div className="flex items-center gap-1.5 flex-wrap font-mono font-bold text-[11px]">
+                    <span className="px-2 py-0.5 rounded-lg bg-amber-100/80 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300">
+                      {cutiPagi.length} Cuti
+                    </span>
+                    <span className="px-2 py-0.5 rounded-lg bg-rose-100/80 dark:bg-rose-950/60 text-rose-800 dark:text-rose-300">
+                      {sakitPagi.length} Sakit
+                    </span>
+                    <span className="px-2 py-0.5 rounded-lg bg-blue-100/80 dark:bg-blue-950/60 text-blue-800 dark:text-blue-300">
+                      {izinPagi.length} Izin
+                    </span>
+                    {alpaPagi.length > 0 && (
+                      <span className="px-2 py-0.5 rounded-lg bg-red-100 dark:bg-red-950/60 text-red-800 dark:text-red-300">
+                        {alpaPagi.length} Alpa
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* List Detail Personil Tidak Hadir (Cuti, Sakit, Izin, Alpa) Shift Pagi */}
+                <div className="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-2">
+                  <div className="flex items-center justify-between text-xs font-bold text-slate-700 dark:text-slate-300">
+                    <span>Daftar Personil Tidak Hadir ({kendalaPagi.length} Orang):</span>
+                    {kendalaPagi.length === 0 && (
+                      <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold">Hadir Lengkap</span>
+                    )}
+                  </div>
+
+                  {kendalaPagi.length === 0 ? (
+                    <div className="p-3 rounded-2xl bg-emerald-50/60 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/30 text-xs text-emerald-700 dark:text-emerald-400 font-medium">
+                      Seluruh staff dan crew shift pagi hadir bertugas lengkap (Nihil cuti, sakit, izin, atau alpa).
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5 max-h-[180px] overflow-y-auto pr-1">
+                      {kendalaPagi.map(p => (
+                        <div key={p.nik} className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80 text-xs space-y-1">
+                          <div className="flex items-center justify-between">
+                            <span className="font-bold text-slate-900 dark:text-white truncate">{p.name}</span>
+                            <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${p.badgeColor}`}>
+                              {p.keterangan}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between text-[10px] text-slate-400">
+                            <span>{p.jabatan} • <strong className="uppercase">{p.roleCategory}</strong></span>
+                            <span className="font-mono text-slate-600 dark:text-slate-300 font-semibold">{formatShiftName(p.regu)}</span>
+                          </div>
+                          {p.tglMasukKembali && (
+                            <div className="pt-1 border-t border-slate-200/60 dark:border-slate-700 text-[10px] text-amber-800 dark:text-amber-300 font-medium flex items-center gap-1.5">
+                              <span>Masuk kembali:</span>
+                              <strong className="font-mono font-bold text-amber-900 dark:text-amber-200">{p.tglMasukKembali}</strong>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Ratio Bar Staff vs Crew */}
+                <div className="space-y-1 pt-1">
+                  <div className="flex justify-between text-[10px] font-semibold text-slate-500">
+                    <span className="text-indigo-600 dark:text-indigo-400 font-medium">Staff: {staffPagi.length} org ({Math.round((staffPagi.length / Math.max(1, staffPagi.length + crewPagi.length)) * 100)}%)</span>
+                    <span className="text-emerald-600 dark:text-emerald-400 font-medium">Crew: {crewPagi.length} org ({Math.round((crewPagi.length / Math.max(1, staffPagi.length + crewPagi.length)) * 100)}%)</span>
+                  </div>
+                  <div className="w-full h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden flex">
+                    <div 
+                      style={{ width: `${(staffPagi.length / Math.max(1, staffPagi.length + crewPagi.length)) * 100}%` }}
+                      className="h-full bg-indigo-500 transition-all"
+                    />
+                    <div 
+                      style={{ width: `${(crewPagi.length / Math.max(1, staffPagi.length + crewPagi.length)) * 100}%` }}
+                      className="h-full bg-emerald-500 transition-all"
+                    />
+                  </div>
                 </div>
               </div>
 
-            </div>
+              {/* Shift Malam */}
+              <div className="p-5 rounded-3xl bg-white dark:bg-slate-900 border border-indigo-200/80 dark:border-indigo-900/40 shadow-xs space-y-4">
+                <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2 rounded-xl bg-indigo-100 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-400">
+                      <Moon className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-slate-900 dark:text-white text-sm">Shift Malam (Night Shift)</h4>
+                      <span className="text-[11px] text-slate-400">19:00 - 07:00 WITA</span>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-2xl font-black font-mono text-indigo-600 dark:text-indigo-400">
+                      {staffMalam.length + crewMalam.length + assistanceMalamCount} <span className="text-xs font-normal text-slate-400">Org</span>
+                    </div>
+                    <span className="text-[10px] text-indigo-700 dark:text-indigo-300 font-semibold">Total Hadir Dinas Malam</span>
+                  </div>
+                </div>
 
-            {/* Info Notice: Sorting by Official Jabatan Hierarchy */}
-            <div className="flex flex-wrap items-center justify-between text-[11px] text-slate-500 px-1 py-1 bg-slate-50/80 dark:bg-slate-800/40 rounded-xl border border-slate-100 dark:border-slate-800">
-              <div className="flex items-center gap-1.5">
-                <Award className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400 shrink-0" />
-                <span>
-                  Daftar nama <strong>diurutkan berdasarkan hirarki jabatan resmi</strong> (Superintendent → Supervisor → QA Officer → Foreman → Admin → Crew)
-                </span>
-              </div>
-              <span className="font-mono text-[10px] text-slate-400">
-                Menampilkan <strong>{filteredPersonnel.length}</strong> personil
-              </span>
-            </div>
+                {/* Breakdown Staff & Crew (Hadir vs Cuti) */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="p-3.5 rounded-2xl bg-indigo-50/60 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/40 space-y-1">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 text-xs font-bold text-indigo-700 dark:text-indigo-300">
+                        <Briefcase className="w-3.5 h-3.5" />
+                        <span>Staff Malam</span>
+                      </div>
+                      <span className="text-[10px] font-semibold text-amber-700 dark:text-amber-300 bg-amber-100/80 dark:bg-amber-950/60 px-2 py-0.5 rounded-md">
+                        {staffCutiMalam.length} Cuti
+                      </span>
+                    </div>
+                    <div className="text-2xl font-black font-mono text-indigo-900 dark:text-indigo-200">
+                      {staffMalam.length} <span className="text-xs font-medium text-slate-500">Hadir</span>
+                    </div>
+                  </div>
 
-            {/* Personnel Display: Table vs Cards */}
-            {filteredPersonnel.length === 0 ? (
-              <div className="p-8 text-center text-slate-400 text-xs">
-                Tidak ada personil yang sesuai dengan filter atau pencarian "{manpowerSearch}".
-              </div>
-            ) : manpowerViewMode === 'table' ? (
-              /* TABLE VIEW: SORTED BY JABATAN HIERARCHY */
-              <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xs">
-                <table className="w-full text-left text-xs border-collapse">
-                  <thead>
-                    <tr className="bg-slate-50 dark:bg-slate-800/70 border-b border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 font-semibold uppercase tracking-wider text-[10px]">
-                      <th className="py-2.5 px-3 w-10 text-center">No</th>
-                      <th className="py-2.5 px-3">Nama Personil</th>
-                      <th className="py-2.5 px-3">Jabatan Resmi</th>
-                      <th className="py-2.5 px-3">Kategori</th>
-                      <th className="py-2.5 px-3">Shift & Roster</th>
-                      <th className="py-2.5 px-3">Regu</th>
-                      <th className="py-2.5 px-3 text-right">Status Kehadiran</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-sans">
-                    {filteredPersonnel.map((p, idx) => {
-                      const badgeStyle = getJabatanBadgeStyle(p.jabatan);
-                      return (
-                        <tr 
-                          key={`${p.nik}_${p.name}`}
-                          className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors"
-                        >
-                          <td className="py-2.5 px-3 text-center font-mono text-[11px] text-slate-400">
-                            {idx + 1}
-                          </td>
-                          <td className="py-2.5 px-3">
-                            <div className="flex items-center gap-2.5">
-                              <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-[11px] font-black shrink-0 ${
-                                p.roleCategory === 'staff'
-                                  ? 'bg-indigo-600 text-white'
-                                  : 'bg-emerald-600 text-white'
-                              }`}>
-                                {p.name.charAt(0).toUpperCase()}
-                              </div>
-                              <div className="min-w-0">
-                                <div className="font-bold text-slate-900 dark:text-white leading-tight">
-                                  {p.name}
-                                </div>
-                                <span className="font-mono text-[10px] text-slate-400">{p.nik}</span>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="py-2.5 px-3">
-                            <span className={`inline-block px-2.5 py-0.5 rounded-md text-[11px] font-bold border ${badgeStyle.bg} ${badgeStyle.text} ${badgeStyle.border}`}>
-                              {p.jabatan}
-                            </span>
-                          </td>
-                          <td className="py-2.5 px-3">
-                            <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide border ${
-                              p.roleCategory === 'staff'
-                                ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800'
-                                : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
-                            }`}>
-                              {p.roleCategory}
-                            </span>
-                          </td>
-                          <td className="py-2.5 px-3">
-                            <div className="flex items-center gap-1.5">
-                              {p.category === 'pagi' && <Sun className="w-3.5 h-3.5 text-amber-500" />}
-                              {p.category === 'malam' && <Moon className="w-3.5 h-3.5 text-indigo-500" />}
-                              {p.category === 'tidak_bertugas' && <Coffee className="w-3.5 h-3.5 text-amber-500" />}
-                              <span className="font-medium text-slate-700 dark:text-slate-300 text-xs">
-                                {p.category === 'pagi' ? 'Pagi' : p.category === 'malam' ? 'Malam' : 'Off/Cuti'}
-                              </span>
-                              <span className="font-mono text-[10px] text-slate-400">({p.shiftSchedule})</span>
-                            </div>
-                          </td>
-                          <td className="py-2.5 px-3 text-slate-600 dark:text-slate-400 font-medium">
-                            {p.regu}
-                          </td>
-                          <td className="py-2.5 px-3 text-right">
-                            <span className={`inline-block px-2.5 py-0.5 rounded-md text-[11px] font-bold border ${p.badgeColor}`}>
+                  <div className="p-3.5 rounded-2xl bg-emerald-50/60 dark:bg-emerald-950/30 border border-emerald-100 dark:border-emerald-900/40 space-y-1">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-700 dark:text-emerald-300">
+                        <Users className="w-3.5 h-3.5" />
+                        <span>Crew Malam</span>
+                      </div>
+                      <span className="text-[10px] font-semibold text-amber-700 dark:text-amber-300 bg-amber-100/80 dark:bg-amber-950/60 px-2 py-0.5 rounded-md">
+                        {crewCutiMalam.length} Cuti
+                      </span>
+                    </div>
+                    <div className="text-2xl font-black font-mono text-emerald-900 dark:text-emerald-200">
+                      {crewMalam.length} <span className="text-xs font-medium text-slate-500">Hadir</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Status Rekap Tidak Hadir Shift Malam */}
+                <div className="p-2.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-between gap-2 text-xs">
+                  <span className="font-semibold text-slate-600 dark:text-slate-300">Rekap Tidak Hadir:</span>
+                  <div className="flex items-center gap-1.5 flex-wrap font-mono font-bold text-[11px]">
+                    <span className="px-2 py-0.5 rounded-lg bg-amber-100/80 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300">
+                      {cutiMalam.length} Cuti
+                    </span>
+                    <span className="px-2 py-0.5 rounded-lg bg-rose-100/80 dark:bg-rose-950/60 text-rose-800 dark:text-rose-300">
+                      {sakitMalam.length} Sakit
+                    </span>
+                    <span className="px-2 py-0.5 rounded-lg bg-blue-100/80 dark:bg-blue-950/60 text-blue-800 dark:text-blue-300">
+                      {izinMalam.length} Izin
+                    </span>
+                    {alpaMalam.length > 0 && (
+                      <span className="px-2 py-0.5 rounded-lg bg-red-100 dark:bg-red-950/60 text-red-800 dark:text-red-300">
+                        {alpaMalam.length} Alpa
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* List Detail Personil Tidak Hadir (Cuti, Sakit, Izin, Alpa) Shift Malam */}
+                <div className="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-2">
+                  <div className="flex items-center justify-between text-xs font-bold text-slate-700 dark:text-slate-300">
+                    <span>Daftar Personil Tidak Hadir ({kendalaMalam.length} Orang):</span>
+                    {kendalaMalam.length === 0 && (
+                      <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold">Hadir Lengkap</span>
+                    )}
+                  </div>
+
+                  {kendalaMalam.length === 0 ? (
+                    <div className="p-3 rounded-2xl bg-emerald-50/60 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/30 text-xs text-emerald-700 dark:text-emerald-400 font-medium">
+                      Seluruh staff dan crew shift malam hadir bertugas lengkap (Nihil cuti, sakit, izin, atau alpa).
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5 max-h-[180px] overflow-y-auto pr-1">
+                      {kendalaMalam.map(p => (
+                        <div key={p.nik} className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80 text-xs space-y-1">
+                          <div className="flex items-center justify-between">
+                            <span className="font-bold text-slate-900 dark:text-white truncate">{p.name}</span>
+                            <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${p.badgeColor}`}>
                               {p.keterangan}
                             </span>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                          </div>
+                          <div className="flex items-center justify-between text-[10px] text-slate-400">
+                            <span>{p.jabatan} • <strong className="uppercase">{p.roleCategory}</strong></span>
+                            <span className="font-mono text-slate-600 dark:text-slate-300 font-semibold">{formatShiftName(p.regu)}</span>
+                          </div>
+                          {p.tglMasukKembali && (
+                            <div className="pt-1 border-t border-slate-200/60 dark:border-slate-700 text-[10px] text-amber-800 dark:text-amber-300 font-medium flex items-center gap-1.5">
+                              <span>Masuk kembali:</span>
+                              <strong className="font-mono font-bold text-amber-900 dark:text-amber-200">{p.tglMasukKembali}</strong>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Ratio Bar Staff vs Crew */}
+                <div className="space-y-1 pt-1">
+                  <div className="flex justify-between text-[10px] font-semibold text-slate-500">
+                    <span className="text-indigo-600 dark:text-indigo-400 font-medium">Staff: {staffMalam.length} org ({Math.round((staffMalam.length / Math.max(1, staffMalam.length + crewMalam.length)) * 100)}%)</span>
+                    <span className="text-emerald-600 dark:text-emerald-400 font-medium">Crew: {crewMalam.length} org ({Math.round((crewMalam.length / Math.max(1, staffMalam.length + crewMalam.length)) * 100)}%)</span>
+                  </div>
+                  <div className="w-full h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden flex">
+                    <div 
+                      style={{ width: `${(staffMalam.length / Math.max(1, staffMalam.length + crewMalam.length)) * 100}%` }}
+                      className="h-full bg-indigo-500 transition-all"
+                    />
+                    <div 
+                      style={{ width: `${(crewMalam.length / Math.max(1, staffMalam.length + crewMalam.length)) * 100}%` }}
+                      className="h-full bg-emerald-500 transition-all"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+
+
+          {/* ========================================================================= */}
+          {/* 3. STATUS PERBANTUAN DARI SECTION LAIN */}
+          {/* ========================================================================= */}
+          <div className="p-5 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400">
+                  <UserPlus className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-slate-900 dark:text-white text-xs sm:text-sm">
+                    Perbantuan dari Section Lain ({totalAssistanceCount} Personil)
+                  </h4>
+                  <span className="text-[11px] text-slate-400">
+                    Kru perbantuan lintas divisi (misal: Section Preparation / Sample House)
+                  </span>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowAssistanceInput(!showAssistanceInput)}
+                className="px-3 py-1.5 rounded-xl bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-100 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 text-xs font-bold cursor-pointer transition-all flex items-center gap-1 shadow-2xs"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>{showAssistanceInput ? 'Tutup Form' : 'Tambah Perbantuan'}</span>
+              </button>
+            </div>
+
+            {/* Form Input Perbantuan dengan Datalist Autofill */}
+            {showAssistanceInput && (
+              <div className="p-3.5 rounded-2xl bg-blue-50/50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800/60 space-y-2">
+                <span className="text-xs text-slate-600 dark:text-slate-300 block font-medium">
+                  Pilih nama atau ketik NIK personil non-laboratorium dari roster:
+                </span>
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex-1 min-w-[200px]">
+                    <input
+                      list="perbantuan-candidates-list"
+                      type="text"
+                      value={assistanceSearch}
+                      onChange={e => setAssistanceSearch(e.target.value)}
+                      placeholder="Ketik NIK atau nama personil dari seksi lain..."
+                      className="w-full px-3 py-1.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500 font-sans"
+                    />
+                    <datalist id="perbantuan-candidates-list">
+                      {nonLabCandidates.map((c: any) => (
+                        <option 
+                          key={c.nik} 
+                          value={`${c.nik} - ${c.name || c.nama} (${c.section || c.department || 'Seksi Lain'})`} 
+                        />
+                      ))}
+                    </datalist>
+                  </div>
+
+                  <select
+                    value={assistanceShift}
+                    onChange={e => setAssistanceShift(e.target.value as 'pagi' | 'malam')}
+                    className="px-3 py-1.5 rounded-xl border border-slate-300 dark:border-slate-700 text-xs text-slate-800 dark:text-slate-200 bg-white dark:bg-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  >
+                    {isLongShift ? (
+                      <option value="pagi">Long Shift (07:00 - 24:00 WITA)</option>
+                    ) : (
+                      <>
+                        <option value="pagi">Shift Pagi (07:00 - 19:00 WITA)</option>
+                        <option value="malam">Shift Malam (19:00 - 07:00 WITA)</option>
+                      </>
+                    )}
+                  </select>
+
+                  <button
+                    type="button"
+                    onClick={() => handleAddAssistance(assistanceSearch, assistanceShift)}
+                    className="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold cursor-pointer transition-all shadow-xs"
+                  >
+                    Simpan
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* List Personil Perbantuan Aktif */}
+            {assistanceList.length === 0 ? (
+              <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 text-xs text-slate-400 italic">
+                Tidak ada personil perbantuan dari seksi lain hari ini (Nihil).
               </div>
             ) : (
-              /* GRID CARDS VIEW */
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {filteredPersonnel.map((p, idx) => {
-                  const badgeStyle = getJabatanBadgeStyle(p.jabatan);
-                  return (
-                    <div
-                      key={`${p.nik}_${p.name}`}
-                      className="p-3.5 rounded-2xl bg-slate-50/70 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 transition-all flex items-start justify-between gap-3"
+              <div className="flex flex-wrap gap-2">
+                {assistanceList.map(item => (
+                  <div
+                    key={item.nik}
+                    className="px-3 py-1.5 rounded-xl bg-white dark:bg-slate-800 border border-blue-200 dark:border-blue-800 flex items-center gap-2 shadow-2xs"
+                  >
+                    <span className="text-xs font-bold text-slate-900 dark:text-white">{item.name}</span>
+                    <span className="text-[10px] text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/80 px-1.5 py-0.5 rounded border border-blue-100 dark:border-blue-900">
+                      {item.fromSection}
+                    </span>
+                    <span className="text-[10px] font-mono text-slate-500">
+                      ({item.shift === 'pagi' ? 'Pagi' : 'Malam'})
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveAssistance(item.nik)}
+                      className="text-slate-400 hover:text-rose-600 p-0.5 rounded cursor-pointer transition-colors"
+                      title="Hapus perbantuan"
                     >
-                      <div className="flex items-start gap-2.5 min-w-0">
-                        <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-black shrink-0 ${
-                          p.roleCategory === 'staff'
-                            ? 'bg-indigo-600 text-white'
-                            : 'bg-emerald-600 text-white'
-                        }`}>
-                          {p.name.charAt(0).toUpperCase()}
-                        </div>
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-[10px] font-mono text-slate-400">#{idx + 1}</span>
-                            <div className="font-bold text-xs text-slate-900 dark:text-white truncate" title={p.name}>
-                              {p.name}
-                            </div>
-                          </div>
-                          <div className="mt-0.5">
-                            <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold border ${badgeStyle.bg} ${badgeStyle.text} ${badgeStyle.border}`}>
-                              {p.jabatan}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-1.5 mt-1 text-[10px] text-slate-400 font-mono">
-                            <span>{p.nik}</span>
-                            <span>•</span>
-                            <span className="font-sans font-medium text-slate-500">{p.regu}</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="shrink-0 text-right">
-                        <span className={`inline-block px-2 py-0.5 rounded-md text-[10px] font-bold border ${p.badgeColor}`}>
-                          {p.keterangan}
-                        </span>
-                        <span className="block text-[9px] font-mono text-slate-400 mt-1">
-                          Roster: {p.shiftSchedule}
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })}
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
               </div>
             )}
           </div>
 
-          {/* Catatan Tambahan Manpower & Perbantuan Section Prep */}
+          {/* ========================================================================= */}
+          {/* 4. CATATAN OPERASIONAL MANPOWER */}
+          {/* ========================================================================= */}
           <div className="p-5 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2">
-                <div className="p-1.5 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400">
+                <div className="p-1.5 rounded-lg bg-teal-50 dark:bg-teal-950/60 text-teal-600 dark:text-teal-400">
                   <FileText className="w-4 h-4" />
                 </div>
                 <div>
                   <h4 className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white">
-                    Catatan Tambahan Manpower & Perbantuan dari Prep
+                    Catatan Operasional Manpower
                   </h4>
                   <p className="text-[11px] text-slate-400">
-                    Catatan operasional kesiapan personil, rotasi khusus, atau kru perbantuan dari section Preparation pada tanggal {selectedDate}
+                    Catatan kehadiran personil, mutasi shift, atau rotasi khusus pada tanggal {selectedDate}
                   </p>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    const template = `Terdapat perbantuan dari Section Preparation: [Nama Operator] untuk stasiun [Fusion/Weighing/Prep].`;
-                    setManpowerNotes(prev => prev ? `${prev}\n${template}` : template);
-                  }}
-                  className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 text-[11px] font-medium transition-all cursor-pointer"
-                >
-                  <Plus className="w-3 h-3" />
-                  <span>+ Template Perbantuan Prep</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={handleSaveManpowerNotes}
-                  className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold cursor-pointer transition-all shadow-xs"
-                >
-                  <Save className="w-3.5 h-3.5" />
-                  <span>Simpan Catatan</span>
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={handleSaveManpowerNotes}
+                className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold cursor-pointer transition-all shadow-xs"
+              >
+                <Save className="w-3.5 h-3.5" />
+                <span>Simpan Catatan</span>
+              </button>
             </div>
 
             <textarea
-              rows={3}
+              rows={2}
               value={manpowerNotes}
               onChange={e => setManpowerNotes(e.target.value)}
-              placeholder="Tuliskan catatan kehadiran personil lab atau perbantuan dari preparation... (Contoh: '2 personil diperbantukan dari Preparation: Agus & Budi untuk stasiun Fusion Furnace shift pagi.')"
+              placeholder="Tuliskan catatan kehadiran personil lab atau perbantuan khusus..."
               className="w-full p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-xs text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-teal-500 font-sans"
             />
           </div>
+
         </div>
       )}
 
@@ -2300,32 +2727,27 @@ export const DailyPerformanceStructuredPresentation: React.FC<DailyPerformanceSt
       {/* ========================================================================= */}
       {(showAllSections || currentStep === 2) && (
         <div className="space-y-4">
+
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h3 className="text-sm sm:text-base font-bold text-slate-800 dark:text-white flex items-center gap-2">
-                <span className="w-6 h-6 rounded-lg bg-blue-500 text-white flex items-center justify-center text-xs font-bold">2</span>
+                <span className="w-6 h-6 rounded-lg bg-blue-500 text-white flex items-center justify-center text-xs font-bold shadow-xs">2</span>
                 Sample Received Per Section (Penerimaan Sampel Masuk)
               </h3>
-              <span className="text-xs text-slate-500">
-                Total Masuk Hari Ini: <strong className="text-blue-600 font-mono text-sm">{formatNumber(totalReceivedShift)}</strong> sampel • 
-                <span className="text-teal-600 dark:text-teal-400 font-mono font-bold ml-1">☀️ Pagi: {formatNumber(totalDayShift)}</span> • 
-                <span className="text-indigo-600 dark:text-indigo-400 font-mono font-bold ml-1">🌙 Malam: {formatNumber(totalNightShift)}</span>
-              </span>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Total Masuk Hari Ini: <strong className="text-blue-600 dark:text-blue-400 font-mono text-sm">{formatNumber(totalReceivedShift)}</strong> sampel • 
+                {isLongShift ? (
+                  <span className="text-amber-700 dark:text-amber-400 font-mono font-bold ml-1">Long Shift LS (07:00 - 24:00 WITA): {formatNumber(totalDayShift)} spl (Shift Pagi)</span>
+                ) : (
+                  <>
+                    <span className="text-teal-600 dark:text-teal-400 font-mono font-bold ml-1">Shift D (07:00 - 19:00): {formatNumber(totalDayShift)}</span> • 
+                    <span className="text-indigo-600 dark:text-indigo-400 font-mono font-bold ml-1">Shift N (19:00 - 07:00): {formatNumber(totalNightShift)}</span>
+                  </>
+                )}
+              </p>
             </div>
 
             <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setSampleViewMode(sampleViewMode === 'cards' ? 'shift_breakdown' : 'cards')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
-                  sampleViewMode === 'shift_breakdown'
-                    ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
-                    : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-50'
-                }`}
-              >
-                <Layers className="w-3.5 h-3.5" />
-                <span>{sampleViewMode === 'shift_breakdown' ? 'Tampilan Ringkas' : 'Komparasi Shift Pagi & Malam'}</span>
-              </button>
               <button
                 type="button"
                 onClick={() => setShowChart2(!showChart2)}
@@ -2336,7 +2758,7 @@ export const DailyPerformanceStructuredPresentation: React.FC<DailyPerformanceSt
                 }`}
               >
                 <BarChart2 className="w-3.5 h-3.5" />
-                <span>{showChart2 ? 'Tutup Grafik' : 'Grafik Tren'}</span>
+                <span>{showChart2 ? 'Tutup Tren 7 Hari' : 'Tren 7 Hari'}</span>
               </button>
             </div>
           </div>
@@ -2344,358 +2766,477 @@ export const DailyPerformanceStructuredPresentation: React.FC<DailyPerformanceSt
           {showChart2 && <SampleReceivedTrendChart records={records} />}
 
           {/* ========================================================================= */}
-          {/* REALITA HARI INI & MINI TREND CHART: BABAK 2 SAMPLE RECEIVED */}
+          {/* VISUAL BAR CHART: KOMPARASI PENERIMAAN SAMPEL SHIFT PAGI VS MALAM */}
           {/* ========================================================================= */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-            
-            {/* SISI KIRI: REALITA INTAKE HARI INI */}
-            <div className="lg:col-span-8 p-5 rounded-3xl bg-white border border-slate-200 shadow-xs space-y-4">
-              
-              {/* Header Status & Shift Distribution */}
-              <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-100">
+          <div className="p-5 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded-xl bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300">
+                  <BarChart2 className="w-4 h-4" />
+                </div>
                 <div>
-                  <span className="text-[10px] font-bold text-blue-600 uppercase tracking-wider block">
-                    Kondisi Operasional Hari Ini • {selectedDate}
-                  </span>
-                  <div className="flex items-baseline gap-2 mt-0.5">
-                    <span className="text-2xl font-black font-mono text-slate-900">
-                      {formatNumber(totalTbpGpsReceived)}
-                    </span>
-                    <span className="text-xs text-slate-500 font-medium">
-                      Sampel TBP & GPS (Internal Lab)
-                    </span>
-                    <TrendDeltaBadge current={totalTbpGpsReceived} prev={prevTotalReceived} unit="spl" />
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <span className="px-2.5 py-1 rounded-xl bg-amber-50 text-amber-800 border border-amber-200 text-xs font-bold font-mono flex items-center gap-1">
-                    <Sun className="w-3.5 h-3.5 text-amber-500" />
-                    Pagi: {formatNumber(totalDayShift)}
-                  </span>
-                  <span className="px-2.5 py-1 rounded-xl bg-indigo-50 text-indigo-800 border border-indigo-200 text-xs font-bold font-mono flex items-center gap-1">
-                    <Moon className="w-3.5 h-3.5 text-indigo-500" />
-                    Malam: {formatNumber(totalNightShift)}
+                  <h4 className="font-bold text-slate-900 dark:text-white text-xs sm:text-sm">
+                    {isLongShift 
+                      ? 'Visualisasi Sampel Masuk Tiap Kategori (Long Shift: 07:00 - 24:00 WITA)' 
+                      : 'Visualisasi Sampel Masuk Tiap Kategori (Shift Pagi vs Malam)'}
+                  </h4>
+                  <span className="text-[11px] text-slate-400">
+                    {isLongShift 
+                      ? 'Volume penerimaan sampel operasional Long Shift oleh Shift Pagi' 
+                      : 'Perbandingan langsung volume penerimaan antar shift operasional (Pagi: 07:00 - 19:00 vs Malam: 19:00 - 07:00)'}
                   </span>
                 </div>
               </div>
 
-              {/* 4 Pilar Seksi Pengirim (Tonjolkan yang aktif > 0) */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-slate-800">
-                    Pilar Seksi Pengirim Sampel
-                  </span>
-                  <span className="text-[10px] text-slate-400">
-                    *Rincian shift pagi & malam
+              {isLongShift ? (
+                <div className="flex items-center gap-3 text-xs font-medium">
+                  <span className="flex items-center gap-1.5 text-amber-700 dark:text-amber-400 font-bold">
+                    <span className="w-3 h-3 rounded-md bg-amber-500" />
+                    Long Shift (07:00 - 24:00 WITA) • {formatNumber(totalDayShift)} spl (Shift Pagi)
                   </span>
                 </div>
-
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                  {/* GC */}
-                  <div className={`p-3 rounded-2xl border ${gcShift > 0 ? 'bg-teal-50/60 border-teal-200' : 'bg-slate-50 border-slate-200 opacity-60'}`}>
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="font-bold text-teal-800">Grade Control</span>
-                      <span className="text-[10px] text-slate-500 font-mono">P:{gcDayShift}|M:{gcNightShift}</span>
-                    </div>
-                    <div className="text-xl font-black font-mono text-teal-900 mt-1">
-                      {formatNumber(gcShift)} <span className="text-xs font-normal text-slate-500">spl</span>
-                    </div>
-                    {gcShift === 0 && <span className="text-[10px] text-slate-400 italic">Nihil / 0 sampel</span>}
-                  </div>
-
-                  {/* Production */}
-                  <div className={`p-3 rounded-2xl border ${prodShift > 0 ? 'bg-blue-50/60 border-blue-200' : 'bg-slate-50 border-slate-200 opacity-60'}`}>
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="font-bold text-blue-800">Production</span>
-                      <span className="text-[10px] text-slate-500 font-mono">P:{prodDayShift}|M:{prodNightShift}</span>
-                    </div>
-                    <div className="text-xl font-black font-mono text-blue-900 mt-1">
-                      {formatNumber(prodShift)} <span className="text-xs font-normal text-slate-500">spl</span>
-                    </div>
-                    {(prodRc > 0 || prodRaTotal > 0) && (
-                      <div className="text-[10px] text-blue-700 font-mono mt-0.5">
-                        {prodRc > 0 && `RC: ${prodRc}`} {prodRaTotal > 0 && `• RA: ${prodRaTotal}`}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Exploration */}
-                  <div className={`p-3 rounded-2xl border ${expShift > 0 ? 'bg-purple-50/60 border-purple-200' : 'bg-slate-50 border-slate-200 opacity-60'}`}>
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="font-bold text-purple-800">Exploration</span>
-                      <span className="text-[10px] text-slate-500 font-mono">P:{expDayShift}|M:{expNightShift}</span>
-                    </div>
-                    <div className="text-xl font-black font-mono text-purple-900 mt-1">
-                      {formatNumber(expShift)} <span className="text-xs font-normal text-slate-500">spl</span>
-                    </div>
-                    {expShift === 0 && <span className="text-[10px] text-slate-400 italic">Nihil / 0 sampel</span>}
-                  </div>
-
-                  {/* Smelter */}
-                  <div className={`p-3 rounded-2xl border ${smelterShift > 0 ? 'bg-amber-50/60 border-amber-200' : 'bg-slate-50 border-slate-200 opacity-60'}`}>
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="font-bold text-amber-800">Smelter</span>
-                      <span className="text-[10px] text-slate-500 font-mono">P:{smelterDayShift}|M:{smelterNightShift}</span>
-                    </div>
-                    <div className="text-xl font-black font-mono text-amber-900 mt-1">
-                      {formatNumber(smelterShift)} <span className="text-xs font-normal text-slate-500">spl</span>
-                    </div>
-                    {smelterShift === 0 && <span className="text-[10px] text-slate-400 italic">Nihil / 0 sampel</span>}
-                  </div>
-                </div>
-              </div>
-
-              {/* PT GTS Sister Site (Jika ada sampel) */}
-              {totalGtsReceived > 0 && (
-                <div className="p-3 rounded-2xl bg-purple-50 border border-purple-200 flex items-center justify-between text-xs">
-                  <div className="flex items-center gap-2">
-                    <Building2 className="w-4 h-4 text-purple-700" />
-                    <span className="font-bold text-purple-900">PT GTS (Sister Site):</span>
-                    <span className="text-purple-700">Entitas Mandiri (Dikelola Terpisah)</span>
-                  </div>
-                  <span className="font-mono font-black text-purple-900 text-sm">
-                    {formatNumber(totalGtsReceived)} sampel
+              ) : (
+                <div className="flex items-center gap-3 text-xs font-medium">
+                  <span className="flex items-center gap-1.5 text-teal-700 dark:text-teal-400">
+                    <span className="w-3 h-3 rounded-md bg-teal-500" />
+                    Shift Pagi ({formatNumber(totalDayShift)} spl)
+                  </span>
+                  <span className="flex items-center gap-1.5 text-indigo-700 dark:text-indigo-400">
+                    <span className="w-3 h-3 rounded-md bg-indigo-500" />
+                    Shift Malam ({formatNumber(totalNightShift)} spl)
                   </span>
                 </div>
               )}
-
-              {/* Shift Ratio Bar */}
-              <ShiftDistributionBar 
-                dayVal={totalDayShift} 
-                nightVal={totalNightShift} 
-                dayLabel="Pagi"
-                nightLabel="Malam"
-              />
-
             </div>
 
-            {/* SISI KANAN: MINI TREND CHART 7 HARI (KLIK UNTUK GRAFIK DETAIL) */}
-            <div className="lg:col-span-4 flex flex-col">
-              <MiniTrendChartCard
-                title="Tren Sample Intake"
-                unit="spl"
-                metricToday={formatNumber(totalTbpGpsReceived)}
-                deltaVal={totalTbpGpsReceived - prevTotalReceived}
-                unitLabel="vs D-1"
-                data={history7Days.map(h => ({ date: h.date, val: h.sampleIntake, label: h.label }))}
-                onClick={() => setShowChart2(true)}
-              />
+            {/* Recharts Grouped Bar Chart */}
+            <div className="w-full h-72 pt-2">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={[
+                    { name: 'Grade Control', pagi: gcDayShift, malam: gcNightShift, total: gcShift, rc: 0, ra: 0 },
+                    { name: 'Production', pagi: prodDayShift, malam: prodNightShift, total: prodShift, rc: prodRc, ra: prodRaTotal },
+                    { name: 'Exploration', pagi: expDayShift, malam: expNightShift, total: expShift, rc: 0, ra: 0 },
+                    { name: 'Smelter', pagi: smelterDayShift, malam: smelterNightShift, total: smelterShift, rc: 0, ra: 0 },
+                    ...(totalGtsReceived > 0 ? [{ name: 'PT GTS (Sister)', pagi: gtsDayShift, malam: gtsNightShift, total: totalGtsReceived, rc: 0, ra: 0 }] : [])
+                  ]}
+                  margin={{ top: 25, right: 10, left: -20, bottom: 20 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" opacity={0.6} />
+                  <XAxis 
+                    dataKey="name" 
+                    tick={({ x, y, payload }) => {
+                      const sampleTotalsMap: Record<string, number> = {
+                        'Grade Control': gcShift,
+                        'Production': prodShift,
+                        'Exploration': expShift,
+                        'Smelter': smelterShift,
+                        'PT GTS (Sister)': totalGtsReceived
+                      };
+                      const totalVal = sampleTotalsMap[payload.value] || 0;
+                      return (
+                        <g transform={`translate(${x},${y})`}>
+                          <text x={0} y={0} dy={12} textAnchor="middle" fill="#64748b" fontSize={11} fontWeight={600}>
+                            {payload.value}
+                          </text>
+                          <text x={0} y={0} dy={26} textAnchor="middle" fill="#0f172a" fontSize={11} fontWeight={800} fontFamily="monospace" className="dark:fill-slate-100">
+                            {formatNumber(totalVal)}
+                          </text>
+                        </g>
+                      );
+                    }}
+                    axisLine={{ stroke: '#cbd5e1' }}
+                    tickLine={false}
+                    interval={0}
+                    height={46}
+                  />
+                  <YAxis 
+                    tick={{ fontSize: 11, fill: '#64748b' }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <RechartsTooltip 
+                    content={({ active, payload, label }) => {
+                      if (!active || !payload || !payload.length) return null;
+                      const data = payload[0]?.payload;
+                      return (
+                        <div className="p-3 rounded-2xl bg-slate-900/95 text-white shadow-xl text-xs space-y-1.5 border border-slate-700 backdrop-blur-md">
+                          <div className="font-bold border-b border-slate-700 pb-1 text-slate-200">
+                            {label}
+                          </div>
+                          {isLongShift ? (
+                            <div className="flex items-center justify-between gap-4 text-amber-300">
+                              <span>Long Shift LS (07:00 - 24:00 WITA):</span>
+                              <span className="font-mono font-bold">{formatNumber(data?.pagi || 0)} spl (Shift Pagi)</span>
+                            </div>
+                          ) : (
+                            <>
+                              <div className="flex items-center justify-between gap-4 text-teal-300">
+                                <span>Shift D (07:00 - 19:00):</span>
+                                <span className="font-mono font-bold">{formatNumber(data?.pagi || 0)} spl</span>
+                              </div>
+                              <div className="flex items-center justify-between gap-4 text-indigo-300">
+                                <span>Shift N (19:00 - 07:00):</span>
+                                <span className="font-mono font-bold">{formatNumber(data?.malam || 0)} spl</span>
+                              </div>
+                            </>
+                          )}
+                          <div className="flex items-center justify-between gap-4 pt-1 border-t border-slate-700 font-bold text-white">
+                            <span>Total Masuk:</span>
+                            <span className="font-mono">{formatNumber(data?.total || 0)} spl</span>
+                          </div>
+                          {(data?.rc > 0 || data?.ra > 0) && (
+                            <div className="pt-1 border-t border-amber-500/30 text-amber-300 text-[10px]">
+                              {data.rc > 0 && <span>• RC: {data.rc} spl </span>}
+                              {data.ra > 0 && <span>• RA: {data.ra} spl</span>}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    }}
+                  />
+                  <Bar 
+                    dataKey="pagi" 
+                    name={isLongShift ? "Long Shift (07:00 - 24:00 WITA)" : "Shift Pagi (07:00 - 19:00)"} 
+                    fill={isLongShift ? "#d97706" : "#0d9488"} 
+                    radius={[6, 6, 0, 0]} 
+                    maxBarSize={isLongShift ? 55 : 45}
+                  >
+                    <LabelList 
+                      dataKey="pagi" 
+                      position="top" 
+                      formatter={(val: any) => (Number(val) > 0 ? formatNumber(Number(val)) : '')}
+                      style={{ fill: isLongShift ? '#d97706' : '#0d9488', fontSize: '11px', fontWeight: 800, fontFamily: 'monospace' }} 
+                      offset={6}
+                    />
+                  </Bar>
+                  {!isLongShift && (
+                    <Bar dataKey="malam" name="Shift Malam (19:00 - 07:00)" fill="#4f46e5" radius={[6, 6, 0, 0]} maxBarSize={45}>
+                      <LabelList 
+                        dataKey="malam" 
+                        position="top" 
+                        formatter={(val: any) => (Number(val) > 0 ? formatNumber(Number(val)) : '')}
+                        style={{ fill: '#4f46e5', fontSize: '11px', fontWeight: 800, fontFamily: 'monospace' }} 
+                        offset={6}
+                      />
+                    </Bar>
+                  )}
+                </BarChart>
+              </ResponsiveContainer>
             </div>
-
           </div>
 
-          {/* PER-SHIFT MANAGEMENT BREAKDOWN (Pagi vs Malam) */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Shift Pagi Card */}
-            <div className="p-4 rounded-3xl bg-white dark:bg-slate-900 border border-teal-200/80 dark:border-teal-900/40 shadow-xs space-y-3">
-              <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+          {/* ========================================================================= */}
+          {/* STATUS CALLOUT: ADANYA SAMPEL RE-ASSAY (RA) & RE-CHECK (RC) */}
+          {/* ========================================================================= */}
+          <div className={`p-4 rounded-3xl border flex flex-wrap items-center justify-between gap-3 ${
+            prodRc > 0 || prodRaTotal > 0
+              ? 'bg-amber-50/70 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800/60'
+              : 'bg-emerald-50/60 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800/60'
+          }`}>
+            <div className="flex items-center gap-3">
+              <div className={`p-2 rounded-2xl ${
+                prodRc > 0 || prodRaTotal > 0
+                  ? 'bg-amber-100 dark:bg-amber-900/60 text-amber-800 dark:text-amber-200'
+                  : 'bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-200'
+              }`}>
+                <FileCheck className="w-5 h-5" />
+              </div>
+              <div>
                 <div className="flex items-center gap-2">
-                  <div className="p-1.5 rounded-xl bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400">
-                    <Sun className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <h4 className="font-bold text-slate-900 dark:text-white text-xs sm:text-sm">Shift Pagi (Day Shift)</h4>
-                    <span className="text-[10px] text-slate-400">Penerimaan dinas pagi</span>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <span className="text-lg font-black font-mono text-teal-600 dark:text-teal-400">
-                    {formatNumber(totalDayShift)}
+                  <h4 className="font-bold text-slate-900 dark:text-white text-xs sm:text-sm">
+                    Status Re-Assay (RA) & Re-Check (RC)
+                  </h4>
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                    prodRc > 0 || prodRaTotal > 0
+                      ? 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200'
+                      : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200'
+                  }`}>
+                    {prodRc > 0 || prodRaTotal > 0 ? 'Ada RA / RC Aktif' : 'Nihil / Zero RA-RC'}
                   </span>
-                  <span className="text-[10px] text-slate-400 block">Total Sampel</span>
                 </div>
-              </div>
-
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-xs">
-                <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800">
-                  <span className="text-[10px] text-slate-400 block">Grade Control</span>
-                  <span className="font-mono font-bold text-slate-800 dark:text-slate-200">{formatNumber(gcDayShift)}</span>
-                </div>
-                <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800">
-                  <span className="text-[10px] text-slate-400 block">Produksi</span>
-                  <span className="font-mono font-bold text-slate-800 dark:text-slate-200">{formatNumber(prodDayShift)}</span>
-                  {(prodRcDay > 0 || prodRaDay > 0) && (
-                    <span className="text-[9px] text-blue-600 dark:text-blue-400 block font-mono">
-                      {prodRcDay > 0 && `RC:${prodRcDay} `}
-                      {prodRaDay > 0 && `RA:${prodRaDay}`}
-                    </span>
+                <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
+                  {prodRc > 0 || prodRaTotal > 0 ? (
+                    isLongShift ? (
+                      <>
+                        Terdeteksi pada kategori <strong>Production</strong>: <strong className="text-amber-700 dark:text-amber-300 font-mono">{prodRc} RC</strong> & <strong className="text-sky-700 dark:text-sky-300 font-mono">{prodRaTotal} RA</strong> pada <strong>Long Shift (07:00 - 24:00 WITA)</strong>. Kategori lain Nihil.
+                      </>
+                    ) : (
+                      <>
+                        Terdeteksi pada kategori <strong>Production</strong>: <strong className="text-amber-700 dark:text-amber-300 font-mono">{prodRc} RC</strong> (Pagi: {prodRcDay}, Malam: {prodRcNight}) & <strong className="text-sky-700 dark:text-sky-300 font-mono">{prodRaTotal} RA</strong> (Pagi: {prodRaDay}, Malam: {prodRaNight}). Kategori lain Nihil.
+                      </>
+                    )
+                  ) : (
+                    'Seluruh kategori sampel (Grade Control, Production, Exploration, Smelter) berstatus regular tanpa adanya sampel RA maupun RC.'
                   )}
-                </div>
-                <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800">
-                  <span className="text-[10px] text-slate-400 block">Eksplorasi</span>
-                  <span className="font-mono font-bold text-slate-800 dark:text-slate-200">{formatNumber(expDayShift)}</span>
-                </div>
-                <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800">
-                  <span className="text-[10px] text-slate-400 block">Smelter</span>
-                  <span className="font-mono font-bold text-slate-800 dark:text-slate-200">{formatNumber(smelterDayShift)}</span>
-                </div>
+                </p>
               </div>
             </div>
 
-            {/* Shift Malam Card */}
-            <div className="p-4 rounded-3xl bg-white dark:bg-slate-900 border border-indigo-200/80 dark:border-indigo-900/40 shadow-xs space-y-3">
-              <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
-                <div className="flex items-center gap-2">
-                  <div className="p-1.5 rounded-xl bg-indigo-100 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-400">
-                    <Moon className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <h4 className="font-bold text-slate-900 dark:text-white text-xs sm:text-sm">Shift Malam (Night Shift)</h4>
-                    <span className="text-[10px] text-slate-400">Penerimaan dinas malam</span>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <span className="text-lg font-black font-mono text-indigo-600 dark:text-indigo-400">
-                    {formatNumber(totalNightShift)}
-                  </span>
-                  <span className="text-[10px] text-slate-400 block">Total Sampel</span>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-xs">
-                <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800">
-                  <span className="text-[10px] text-slate-400 block">Grade Control</span>
-                  <span className="font-mono font-bold text-slate-800 dark:text-slate-200">{formatNumber(gcNightShift)}</span>
-                </div>
-                <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800">
-                  <span className="text-[10px] text-slate-400 block">Produksi</span>
-                  <span className="font-mono font-bold text-slate-800 dark:text-slate-200">{formatNumber(prodNightShift)}</span>
-                  {(prodRcNight > 0 || prodRaNight > 0) && (
-                    <span className="text-[9px] text-indigo-600 dark:text-indigo-400 block font-mono">
-                      {prodRcNight > 0 && `RC:${prodRcNight} `}
-                      {prodRaNight > 0 && `RA:${prodRaNight}`}
-                    </span>
-                  )}
-                </div>
-                <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800">
-                  <span className="text-[10px] text-slate-400 block">Eksplorasi</span>
-                  <span className="font-mono font-bold text-slate-800 dark:text-slate-200">{formatNumber(expNightShift)}</span>
-                </div>
-                <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800">
-                  <span className="text-[10px] text-slate-400 block">Smelter</span>
-                  <span className="font-mono font-bold text-slate-800 dark:text-slate-200">{formatNumber(smelterNightShift)}</span>
-                </div>
-              </div>
+            <div className="flex items-center gap-2 font-mono text-xs">
+              <span className="px-2.5 py-1 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-bold text-slate-800 dark:text-slate-200">
+                Total RC: <strong className={prodRc > 0 ? "text-amber-600 font-black" : "text-slate-400"}>{prodRc}</strong>
+              </span>
+              <span className="px-2.5 py-1 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-bold text-slate-800 dark:text-slate-200">
+                Total RA: <strong className={prodRaTotal > 0 ? "text-sky-600 font-black" : "text-slate-400"}>{prodRaTotal}</strong>
+              </span>
             </div>
           </div>
 
-          {/* 4 Standard Sample Received Cards (Detailed with RC + RA + Wkly) */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {/* Grade Control */}
-            <div className="p-5 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-teal-600 dark:text-teal-400 uppercase tracking-wider">
-                  Grade Control (GC)
-                </span>
-                <span className="w-2.5 h-2.5 rounded-full bg-teal-500" />
-              </div>
-              <div className="text-2xl sm:text-3xl font-black font-mono text-slate-900 dark:text-white">
-                {formatNumber(gcShift)}
-              </div>
-              <div className="grid grid-cols-2 gap-1 text-[11px] text-slate-500 py-1 bg-slate-50 dark:bg-slate-800/50 rounded-xl px-2">
-                <span>Pagi: <strong className="font-mono">{formatNumber(gcDayShift)}</strong></span>
-                <span>Malam: <strong className="font-mono">{formatNumber(gcNightShift)}</strong></span>
-              </div>
-              <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex justify-between text-xs text-slate-500">
-                <span>Akumulasi Day: <strong className="font-mono text-slate-700 dark:text-slate-300">{formatNumber(gcDay)}</strong></span>
-                <span>Wkly: <strong className="font-mono text-slate-700 dark:text-slate-300">{formatNumber(gcWkly)}</strong></span>
-              </div>
-            </div>
-
-            {/* Production (PROD with RC & RA) */}
-            <div className="p-5 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider">
-                  Production (PROD)
-                </span>
-                <span className="w-2.5 h-2.5 rounded-full bg-blue-500" />
-              </div>
-              <div className="flex flex-wrap items-baseline gap-2">
-                <span className="text-2xl sm:text-3xl font-black font-mono text-slate-900 dark:text-white">
-                  {formatNumber(prodShift)}
-                </span>
-                <div className="flex items-center gap-1">
-                  {prodRc > 0 && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 font-mono font-bold">
-                      +{prodRc} RC
-                    </span>
+          {/* ========================================================================= */}
+          {/* TABEL MATRIKS RINGKAS: JUMLAH TIAP JENIS SAMPEL, BREAKDOWN SHIFT & STATUS RA/RC */}
+          {/* HARI LONG SHIFT HANYA MEMUNCULKAN 1 TABEL RINGKAS (VOLUME LONG SHIFT PAGI) */}
+          {/* ========================================================================= */}
+          <div className="overflow-x-auto rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr className="bg-slate-50 dark:bg-slate-800/70 border-b border-slate-200 dark:border-slate-800 text-slate-500 font-semibold uppercase tracking-wider text-[10px]">
+                  <th className="py-3 px-4">Jenis Sampel</th>
+                  {isLongShift ? (
+                    <th className="py-3 px-4 text-center">Volume Long Shift (LS - 07:00 - 24:00 WITA)</th>
+                  ) : (
+                    <>
+                      <th className="py-3 px-4 text-center">Shift D (07:00 - 19:00)</th>
+                      <th className="py-3 px-4 text-center">Shift N (19:00 - 07:00)</th>
+                      <th className="py-3 px-4 text-center">Total Masuk</th>
+                    </>
                   )}
-                  {prodRaTotal > 0 && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-sky-100 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 font-mono font-bold">
-                      +{prodRaTotal} RA
-                    </span>
+                  <th className="py-3 px-4 text-center">Status RA / RC</th>
+                  <th className="py-3 px-4 text-right">Porsi (%)</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-sans">
+                {/* 1. Grade Control */}
+                <tr className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition-colors">
+                  <td className="py-3 px-4 font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-teal-500" />
+                    <span>Grade Control (GC)</span>
+                  </td>
+                  {isLongShift ? (
+                    <td className="py-3 px-4 text-center font-mono font-black text-slate-900 dark:text-white text-sm">
+                      {formatNumber(gcShift)}
+                    </td>
+                  ) : (
+                    <>
+                      <td className="py-3 px-4 text-center font-mono font-medium text-slate-700 dark:text-slate-300">
+                        {formatNumber(gcDayShift)}
+                      </td>
+                      <td className="py-3 px-4 text-center font-mono font-medium text-slate-700 dark:text-slate-300">
+                        {formatNumber(gcNightShift)}
+                      </td>
+                      <td className="py-3 px-4 text-center font-mono font-black text-slate-900 dark:text-white text-sm">
+                        {formatNumber(gcShift)}
+                      </td>
+                    </>
                   )}
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-1 text-[11px] text-slate-500 py-1 bg-slate-50 dark:bg-slate-800/50 rounded-xl px-2">
-                <span>Pagi: <strong className="font-mono">{formatNumber(prodDayShift)}</strong></span>
-                <span>Malam: <strong className="font-mono">{formatNumber(prodNightShift)}</strong></span>
-              </div>
-              <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex justify-between text-xs text-slate-500">
-                <span>Akumulasi Day: <strong className="font-mono text-slate-700 dark:text-slate-300">{formatNumber(prodDay)}</strong></span>
-                <span>Wkly: <strong className="font-mono text-slate-700 dark:text-slate-300">{formatNumber(prodWkly)}</strong></span>
-              </div>
-            </div>
+                  <td className="py-3 px-4 text-center">
+                    <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-500 border border-slate-200 dark:border-slate-700">
+                      Regular (0 RA / 0 RC)
+                    </span>
+                  </td>
+                  <td className="py-3 px-4 text-right font-mono text-slate-500 font-medium">
+                    {totalReceivedShift > 0 ? `${Math.round((gcShift / totalReceivedShift) * 100)}%` : '0%'}
+                  </td>
+                </tr>
 
-            {/* Exploration */}
-            <div className="p-5 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-purple-600 dark:text-purple-400 uppercase tracking-wider">
-                  Exploration (EXP)
-                </span>
-                <span className="w-2.5 h-2.5 rounded-full bg-purple-500" />
-              </div>
-              <div className="text-2xl sm:text-3xl font-black font-mono text-slate-900 dark:text-white">
-                {formatNumber(expShift)}
-              </div>
-              <div className="grid grid-cols-2 gap-1 text-[11px] text-slate-500 py-1 bg-slate-50 dark:bg-slate-800/50 rounded-xl px-2">
-                <span>Pagi: <strong className="font-mono">{formatNumber(expDayShift)}</strong></span>
-                <span>Malam: <strong className="font-mono">{formatNumber(expNightShift)}</strong></span>
-              </div>
-              <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex justify-between text-xs text-slate-500">
-                <span>Akumulasi Day: <strong className="font-mono text-slate-700 dark:text-slate-300">{formatNumber(expDay)}</strong></span>
-                <span>Wkly: <strong className="font-mono text-slate-700 dark:text-slate-300">{formatNumber(expWkly)}</strong></span>
-              </div>
-            </div>
+                {/* 2. Production */}
+                <tr className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition-colors">
+                  <td className="py-3 px-4 font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-blue-500" />
+                    <span>Production (PROD)</span>
+                  </td>
+                  {isLongShift ? (
+                    <td className="py-3 px-4 text-center font-mono font-black text-slate-900 dark:text-white text-sm">
+                      {formatNumber(prodShift)}
+                    </td>
+                  ) : (
+                    <>
+                      <td className="py-3 px-4 text-center font-mono font-medium text-slate-700 dark:text-slate-300">
+                        {formatNumber(prodDayShift)}
+                      </td>
+                      <td className="py-3 px-4 text-center font-mono font-medium text-slate-700 dark:text-slate-300">
+                        {formatNumber(prodNightShift)}
+                      </td>
+                      <td className="py-3 px-4 text-center font-mono font-black text-slate-900 dark:text-white text-sm">
+                        {formatNumber(prodShift)}
+                      </td>
+                    </>
+                  )}
+                  <td className="py-3 px-4 text-center">
+                    {prodRc > 0 || prodRaTotal > 0 ? (
+                      <div className="flex items-center justify-center gap-1">
+                        {prodRc > 0 && (
+                          <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 font-mono">
+                            {prodRc} RC
+                          </span>
+                        )}
+                        {prodRaTotal > 0 && (
+                          <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-sky-100 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-800 font-mono">
+                            {prodRaTotal} RA
+                          </span>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-500 border border-slate-200 dark:border-slate-700">
+                        Regular (0 RA / 0 RC)
+                      </span>
+                    )}
+                  </td>
+                  <td className="py-3 px-4 text-right font-mono text-slate-500 font-medium">
+                    {totalReceivedShift > 0 ? `${Math.round((prodShift / totalReceivedShift) * 100)}%` : '0%'}
+                  </td>
+                </tr>
 
-            {/* Smelter */}
-            <div className="p-5 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-orange-600 dark:text-orange-400 uppercase tracking-wider">
-                  Smelter
-                </span>
-                <span className="w-2.5 h-2.5 rounded-full bg-orange-500" />
-              </div>
-              <div className="text-2xl sm:text-3xl font-black font-mono text-slate-900 dark:text-white">
-                {formatNumber(smelterShift)}
-              </div>
-              <div className="grid grid-cols-2 gap-1 text-[11px] text-slate-500 py-1 bg-slate-50 dark:bg-slate-800/50 rounded-xl px-2">
-                <span>Pagi: <strong className="font-mono">{formatNumber(smelterDayShift)}</strong></span>
-                <span>Malam: <strong className="font-mono">{formatNumber(smelterNightShift)}</strong></span>
-              </div>
-              <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex justify-between text-xs text-slate-500">
-                <span>Akumulasi Day: <strong className="font-mono text-slate-700 dark:text-slate-300">{formatNumber(smelterDay)}</strong></span>
-                <span>Wkly: <strong className="font-mono text-slate-700 dark:text-slate-300">{formatNumber(smelterWkly)}</strong></span>
-              </div>
-            </div>
+                {/* 3. Exploration */}
+                <tr className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition-colors">
+                  <td className="py-3 px-4 font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-purple-500" />
+                    <span>Exploration (EXP)</span>
+                  </td>
+                  {isLongShift ? (
+                    <td className="py-3 px-4 text-center font-mono font-black text-slate-900 dark:text-white text-sm">
+                      {formatNumber(expShift)}
+                    </td>
+                  ) : (
+                    <>
+                      <td className="py-3 px-4 text-center font-mono font-medium text-slate-700 dark:text-slate-300">
+                        {formatNumber(expDayShift)}
+                      </td>
+                      <td className="py-3 px-4 text-center font-mono font-medium text-slate-700 dark:text-slate-300">
+                        {formatNumber(expNightShift)}
+                      </td>
+                      <td className="py-3 px-4 text-center font-mono font-black text-slate-900 dark:text-white text-sm">
+                        {formatNumber(expShift)}
+                      </td>
+                    </>
+                  )}
+                  <td className="py-3 px-4 text-center">
+                    <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-500 border border-slate-200 dark:border-slate-700">
+                      Regular (0 RA / 0 RC)
+                    </span>
+                  </td>
+                  <td className="py-3 px-4 text-right font-mono text-slate-500 font-medium">
+                    {totalReceivedShift > 0 ? `${Math.round((expShift / totalReceivedShift) * 100)}%` : '0%'}
+                  </td>
+                </tr>
+
+                {/* 4. Smelter */}
+                <tr className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition-colors">
+                  <td className="py-3 px-4 font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
+                    <span>Smelter</span>
+                  </td>
+                  {isLongShift ? (
+                    <td className="py-3 px-4 text-center font-mono font-black text-slate-900 dark:text-white text-sm">
+                      {formatNumber(smelterShift)}
+                    </td>
+                  ) : (
+                    <>
+                      <td className="py-3 px-4 text-center font-mono font-medium text-slate-700 dark:text-slate-300">
+                        {formatNumber(smelterDayShift)}
+                      </td>
+                      <td className="py-3 px-4 text-center font-mono font-medium text-slate-700 dark:text-slate-300">
+                        {formatNumber(smelterNightShift)}
+                      </td>
+                      <td className="py-3 px-4 text-center font-mono font-black text-slate-900 dark:text-white text-sm">
+                        {formatNumber(smelterShift)}
+                      </td>
+                    </>
+                  )}
+                  <td className="py-3 px-4 text-center">
+                    <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-500 border border-slate-200 dark:border-slate-700">
+                      Regular (0 RA / 0 RC)
+                    </span>
+                  </td>
+                  <td className="py-3 px-4 text-right font-mono text-slate-500 font-medium">
+                    {totalReceivedShift > 0 ? `${Math.round((smelterShift / totalReceivedShift) * 100)}%` : '0%'}
+                  </td>
+                </tr>
+
+                {/* 5. PT GTS Sister Site (Jika ada sampel) */}
+                {totalGtsReceived > 0 && (
+                  <tr className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition-colors bg-purple-50/30 dark:bg-purple-950/10">
+                    <td className="py-3 px-4 font-bold text-purple-900 dark:text-purple-300 flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-purple-600" />
+                      <span>PT GTS (Sister Site)</span>
+                    </td>
+                    {isLongShift ? (
+                      <td className="py-3 px-4 text-center font-mono font-black text-purple-900 dark:text-purple-200 text-sm">
+                        {formatNumber(totalGtsReceived)}
+                      </td>
+                    ) : (
+                      <>
+                        <td className="py-3 px-4 text-center font-mono font-medium text-slate-700 dark:text-slate-300">
+                          {formatNumber(gtsDayShift)}
+                        </td>
+                        <td className="py-3 px-4 text-center font-mono font-medium text-slate-700 dark:text-slate-300">
+                          {formatNumber(gtsNightShift)}
+                        </td>
+                        <td className="py-3 px-4 text-center font-mono font-black text-purple-900 dark:text-purple-200 text-sm">
+                          {formatNumber(totalGtsReceived)}
+                        </td>
+                      </>
+                    )}
+                    <td className="py-3 px-4 text-center">
+                      <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
+                        Entitas Terpisah
+                      </span>
+                    </td>
+                    <td className="py-3 px-4 text-right font-mono text-slate-500 font-medium">
+                      Mandiri
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+              <tfoot>
+                <tr className="bg-slate-50/90 dark:bg-slate-800/90 border-t-2 border-slate-200 dark:border-slate-700 font-bold">
+                  <td className="py-3 px-4 text-slate-900 dark:text-white uppercase tracking-wider text-[11px]">
+                    {isLongShift ? 'Total Penerimaan Long Shift (TBP/GPS)' : 'Total Penerimaan (TBP/GPS)'}
+                  </td>
+                  {isLongShift ? (
+                    <td className="py-3 px-4 text-center font-mono text-teal-700 dark:text-teal-400 text-base font-black">
+                      {formatNumber(totalReceivedShift)}
+                    </td>
+                  ) : (
+                    <>
+                      <td className="py-3 px-4 text-center font-mono text-teal-700 dark:text-teal-400 font-black">
+                        {formatNumber(totalDayShift)}
+                      </td>
+                      <td className="py-3 px-4 text-center font-mono text-indigo-700 dark:text-indigo-400 font-black">
+                        {formatNumber(totalNightShift)}
+                      </td>
+                      <td className="py-3 px-4 text-center font-mono text-blue-700 dark:text-blue-300 text-base font-black">
+                        {formatNumber(totalReceivedShift)}
+                      </td>
+                    </>
+                  )}
+                  <td className="py-3 px-4 text-center text-[10px] text-slate-500">
+                    {prodRc > 0 || prodRaTotal > 0 ? `${prodRc} RC • ${prodRaTotal} RA` : '100% Regular'}
+                  </td>
+                  <td className="py-3 px-4 text-right font-mono text-slate-900 dark:text-white">
+                    100%
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
           </div>
+
         </div>
       )}
 
       {/* ========================================================================= */}
-      {/* SECTION 3: PRODUCTIVITY PREPARASI (Standardized 4 Pillars) */}
+      {/* SECTION 3: PRODUCTIVITY (3 GARIS BESAR OPERASIONAL) */}
       {/* ========================================================================= */}
       {(showAllSections || currentStep === 3) && (
-        <div className="space-y-4">
+        <div className="space-y-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h3 className="text-sm sm:text-base font-bold text-slate-800 dark:text-white flex items-center gap-2">
                 <span className="w-6 h-6 rounded-lg bg-amber-500 text-white flex items-center justify-center text-xs font-bold">3</span>
-                Productivity Section Preparasi (Press Powder, Weighing, Fusion, LOI)
+                Productivity
               </h3>
-              <span className="text-xs text-slate-500 font-mono">
-                Skema: Balance ➔ Received ➔ Finished ➔ Outstanding
+              <span className="text-xs text-slate-500 font-medium">
+                3 Garis Besar: Metode Press Pellet (Sample GC) • Fusion (Exploration, Production, Smelter) • LOI (Exploration)
               </span>
             </div>
 
@@ -2708,213 +3249,1252 @@ export const DailyPerformanceStructuredPresentation: React.FC<DailyPerformanceSt
               }`}
             >
               <BarChart2 className="w-3.5 h-3.5" />
-              <span>{showChart3 ? 'Tutup Grafik' : 'Grafik Tren Preparasi & Backlog'}</span>
+              <span>{showChart3 ? 'Tutup Grafik' : 'Grafik Tren Productivity'}</span>
             </button>
           </div>
 
           {showChart3 && <ProductivityPrepTrendChart records={records} />}
 
           {/* ========================================================================= */}
-          {/* REALITA HARI INI & MINI TREND CHART: BABAK 3 PRODUCTIVITY PREPARASI */}
+          {/* 1. METODE PRESS PELLET (SAMPLE GC) */}
           {/* ========================================================================= */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-            
-            {/* SISI KIRI: REALITA PREPARASI HARI INI */}
-            <div className="lg:col-span-8 p-5 rounded-3xl bg-white border border-slate-200 shadow-xs space-y-4">
-              
-              {/* Header Status & Shift Distribution */}
-              <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-100">
+          <div className="p-5 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-2xl bg-sky-50 dark:bg-sky-950/60 text-sky-600 dark:text-sky-400 border border-sky-100 dark:border-sky-900/40">
+                  <Flame className="w-5 h-5" />
+                </div>
                 <div>
-                  <span className="text-[10px] font-bold text-amber-600 uppercase tracking-wider block">
-                    Kondisi Operasional Hari Ini • {selectedDate}
-                  </span>
-                  <div className="flex items-baseline gap-2 mt-0.5">
-                    <span className="text-2xl font-black font-mono text-slate-900">
-                      {formatNumber(totalPrepFin)}
+                  <div className="flex items-center gap-2">
+                    <span className="px-2.5 py-0.5 rounded-md text-[10px] font-bold bg-sky-100 dark:bg-sky-950/60 text-sky-800 dark:text-sky-300 border border-sky-200 dark:border-sky-800 uppercase tracking-wider">
+                      Metode Press Pellet (Sample GC)
                     </span>
-                    <span className="text-xs text-slate-500 font-medium">
-                      Unit Diproses di 4 Stasiun Preparasi
+                    <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
+                      {pressBal === 0 ? 'Lancar (0 Outstanding)' : `${pressBal} Outstanding`}
                     </span>
-                    <TrendDeltaBadge current={totalPrepFin} prev={prevTotalPrepFin} unit="unit" />
                   </div>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <span className="px-2.5 py-1 rounded-xl bg-amber-50 text-amber-800 border border-amber-200 text-xs font-bold font-mono flex items-center gap-1">
-                    <Sun className="w-3.5 h-3.5 text-amber-500" />
-                    Pagi: {formatNumber(totalPrepFinDay)}
-                  </span>
-                  <span className="px-2.5 py-1 rounded-xl bg-indigo-50 text-indigo-800 border border-indigo-200 text-xs font-bold font-mono flex items-center gap-1">
-                    <Moon className="w-3.5 h-3.5 text-indigo-500" />
-                    Malam: {formatNumber(totalPrepFinNight)}
-                  </span>
+                  <h4 className="font-bold text-slate-900 dark:text-white text-sm sm:text-base mt-0.5">
+                    1. Metode Press Pellet (Sample GC) — Press Stasiun
+                  </h4>
+                  <p className="text-[11px] text-slate-500">
+                    Pencetakan pelet serbuk terkompresi khusus sampel Grade Control (GC) untuk analisis cepat instrumen EDXRF.
+                  </p>
                 </div>
               </div>
 
-              {/* Status 4 Stasiun Preparasi */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                {/* 1. Press Powder */}
-                <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 space-y-1">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="font-bold text-slate-800">Press Powder</span>
-                    <span className="text-[10px] font-mono text-emerald-700 bg-emerald-50 px-1 py-0.2 rounded border border-emerald-200">
-                      {pressBal === 0 ? 'Clear' : `${pressBal} O/S`}
-                    </span>
-                  </div>
-                  <div className="text-xl font-black font-mono text-slate-900">
-                    {formatNumber(pressFin)} <span className="text-xs font-normal text-slate-400">pelet</span>
-                  </div>
-                  <span className="text-[10px] text-slate-500 block">Selesai dicetak</span>
-                </div>
-
-                {/* 2. Weighing */}
-                <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 space-y-1">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="font-bold text-slate-800">Weighing</span>
-                    <span className="text-[10px] font-mono text-emerald-700 bg-emerald-50 px-1 py-0.2 rounded border border-emerald-200">
-                      {weighBal === 0 ? 'Clear' : `${weighBal} O/S`}
-                    </span>
-                  </div>
-                  <div className="text-xl font-black font-mono text-slate-900">
-                    {formatNumber(weighFin)} <span className="text-xs font-normal text-slate-400">cawan</span>
-                  </div>
-                  <span className="text-[10px] text-slate-500 block">Ditimbang teliti</span>
-                </div>
-
-                {/* 3. Fusion */}
-                <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 space-y-1">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="font-bold text-slate-800">Fusion Furnace</span>
-                    <span className="text-[10px] font-mono text-amber-700 bg-amber-50 px-1 py-0.2 rounded border border-amber-200">
-                      {fusionBalAkhir === 0 ? 'Clear' : `${fusionBalAkhir} O/S`}
-                    </span>
-                  </div>
-                  <div className="text-xl font-black font-mono text-slate-900">
-                    {formatNumber(fusionFin)} <span className="text-xs font-normal text-slate-400">bead</span>
-                  </div>
-                  <span className="text-[10px] text-slate-500 block">Glass bead siap XRF</span>
-                </div>
-
-                {/* 4. LOI */}
-                <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 space-y-1">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="font-bold text-slate-800">LOI (Loss Ign.)</span>
-                    <span className="text-[10px] font-mono text-emerald-700 bg-emerald-50 px-1 py-0.2 rounded border border-emerald-200">
-                      {loiBal === 0 ? 'Clear' : `${loiBal} O/S`}
-                    </span>
-                  </div>
-                  <div className="text-xl font-black font-mono text-slate-900">
-                    {formatNumber(loiFin)} <span className="text-xs font-normal text-slate-400">cawan</span>
-                  </div>
-                  <span className="text-[10px] text-slate-500 block">Furnace gravimetri</span>
-                </div>
+              <div className="text-xs font-mono text-right bg-sky-50/60 dark:bg-sky-950/30 px-3 py-1.5 rounded-xl border border-sky-200/60 dark:border-sky-900/50">
+                <span className="text-[10px] text-slate-400 block font-sans">Total Output Pelet Hari Ini</span>
+                <strong className="text-base sm:text-lg font-black text-sky-900 dark:text-sky-300">{formatNumber(pressFin)} pelet</strong>
+                <span className="text-[9px] text-slate-400 block mt-0.5">
+                  {isLongShift ? `LS: ${pressFinDay}` : `D: ${pressFinDay} • N: ${pressFinNight}`}
+                </span>
               </div>
-
-              {/* Backlog Alert & Shift Bar */}
-              <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100 text-xs">
-                <div className="flex items-center gap-2">
-                  <span className="text-slate-500">Sisa Antrean (Backlog):</span>
-                  <span className={`font-mono font-bold px-2 py-0.5 rounded-lg border ${
-                    totalPrepBal > 400 
-                      ? 'bg-rose-50 text-rose-700 border-rose-200' 
-                      : 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                  }`}>
-                    {formatNumber(totalPrepBal)} sampel
-                  </span>
-                  <TrendDeltaBadge current={totalPrepBal} prev={prevTotalPrepBal} isInverse={true} unit="spl" />
-                </div>
-              </div>
-
-              <ShiftDistributionBar 
-                dayVal={totalPrepFinDay} 
-                nightVal={totalPrepFinNight} 
-                dayLabel="Pagi"
-                nightLabel="Malam"
-              />
-
             </div>
 
-            {/* SISI KANAN: MINI TREND CHART 7 HARI (KLIK UNTUK GRAFIK DETAIL) */}
-            <div className="lg:col-span-4 flex flex-col">
-              <MiniTrendChartCard
-                title="Tren Throughput Preparasi"
-                unit="unit"
-                metricToday={formatNumber(totalPrepFin)}
-                deltaVal={totalPrepFin - prevTotalPrepFin}
-                unitLabel="vs D-1"
-                data={history7Days.map(h => ({ date: h.date, val: h.prepFinished, label: h.label }))}
-                onClick={() => setShowChart3(true)}
-              />
+            {/* TABEL 1: METODE PRESS PELLET (SAMPLE GC) */}
+            <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="bg-slate-50/90 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 font-bold border-b border-slate-200 dark:border-slate-700">
+                    <th className="py-2.5 px-3.5 w-44">Pilar Operasional</th>
+                    <th className="py-2.5 px-3 w-28 text-center">Shift</th>
+                    <th className="py-2.5 px-4 min-w-[240px]">
+                      Volume Shift (D & N) • In-Bar Rekor Bulan
+                    </th>
+                    <th className="py-2.5 px-4 min-w-[260px]">
+                      Daily Total (24 Jam) • In-Bar Rekor Bulan
+                    </th>
+                    <th className="py-2.5 px-3 w-36 text-center text-[10px] text-slate-500 font-semibold">
+                      Rekor Bln Ini (D/N • Daily)
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800/70 bg-white dark:bg-slate-900">
+                  {/* 1. BALANCE */}
+                  <tr className="hover:bg-slate-50/60 dark:hover:bg-slate-800/30 transition-colors">
+                    <td rowSpan={isLongShift ? 1 : 2} className="py-3 px-3.5 align-middle border-r border-slate-100 dark:border-slate-800">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-full bg-slate-400" />
+                        <div>
+                          <span className="font-bold text-slate-800 dark:text-slate-200 block text-xs">Balance</span>
+                          <span className="text-[10px] text-slate-400 block">Saldo Awal Pelet</span>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="py-2.5 px-3 text-center">
+                      <span className="px-2 py-0.5 rounded font-mono font-bold text-[10px] bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+                        {isLongShift ? 'LS (Day)' : 'Shift D'}
+                      </span>
+                    </td>
+                    <td className="py-2.5 px-4">
+                      <InBarMetricCell 
+                        value={pressBalAwalDay} 
+                        maxValue={monthlyBenchmarks.press.maxShift.bal} 
+                        colorVariant="slate" 
+                        unit="pelet" 
+                      />
+                    </td>
+                    <td rowSpan={isLongShift ? 1 : 2} className="py-3 px-4 align-middle border-l border-slate-100 dark:border-slate-800">
+                      <InBarMetricCell 
+                        value={pressBalAwal} 
+                        maxValue={monthlyBenchmarks.press.maxDaily.bal} 
+                        colorVariant="slate" 
+                        unit="pelet" 
+                      />
+                    </td>
+                    <td rowSpan={isLongShift ? 1 : 2} className="py-3 px-3 align-middle text-center font-mono text-[10px] text-slate-400 border-l border-slate-100 dark:border-slate-800">
+                      <div>Shift: <strong className="text-slate-600 dark:text-slate-300">{formatNumber(monthlyBenchmarks.press.maxShift.bal)}</strong></div>
+                      <div className="mt-0.5">Daily: <strong className="text-slate-600 dark:text-slate-300">{formatNumber(monthlyBenchmarks.press.maxDaily.bal)}</strong></div>
+                    </td>
+                  </tr>
+                  {!isLongShift && (
+                    <tr className="hover:bg-slate-50/60 dark:hover:bg-slate-800/30 transition-colors">
+                      <td className="py-2.5 px-3 text-center">
+                        <span className="px-2 py-0.5 rounded font-mono font-bold text-[10px] bg-indigo-100 dark:bg-indigo-950/60 text-indigo-800 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                          Shift N
+                        </span>
+                      </td>
+                      <td className="py-2.5 px-4">
+                        <InBarMetricCell 
+                          value={pressBalAwalNight} 
+                          maxValue={monthlyBenchmarks.press.maxShift.bal} 
+                          colorVariant="slate" 
+                          unit="pelet" 
+                        />
+                      </td>
+                    </tr>
+                  )}
+
+                  {/* 2. RECEIVED */}
+                  <tr className="hover:bg-slate-50/60 dark:hover:bg-slate-800/30 transition-colors bg-sky-50/20 dark:bg-sky-950/10">
+                    <td rowSpan={isLongShift ? 1 : 2} className="py-3 px-3.5 align-middle border-r border-slate-100 dark:border-slate-800">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-full bg-sky-500" />
+                        <div>
+                          <span className="font-bold text-sky-800 dark:text-sky-300 block text-xs">Received</span>
+                          <span className="text-[10px] text-sky-600/70 dark:text-sky-400/70 block">Sampel GC Masuk</span>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="py-2.5 px-3 text-center">
+                      <span className="px-2 py-0.5 rounded font-mono font-bold text-[10px] bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+                        {isLongShift ? 'LS (Day)' : 'Shift D'}
+                      </span>
+                    </td>
+                    <td className="py-2.5 px-4">
+                      <InBarMetricCell 
+                        value={pressRecvDay} 
+                        maxValue={monthlyBenchmarks.press.maxShift.recv} 
+                        prefix="+" 
+                        colorVariant="sky" 
+                        unit="spl" 
+                      />
+                    </td>
+                    <td rowSpan={isLongShift ? 1 : 2} className="py-3 px-4 align-middle border-l border-slate-100 dark:border-slate-800">
+                      <InBarMetricCell 
+                        value={pressRecv} 
+                        maxValue={monthlyBenchmarks.press.maxDaily.recv} 
+                        prefix="+" 
+                        colorVariant="sky" 
+                        unit="spl" 
+                      />
+                    </td>
+                    <td rowSpan={isLongShift ? 1 : 2} className="py-3 px-3 align-middle text-center font-mono text-[10px] text-slate-400 border-l border-slate-100 dark:border-slate-800">
+                      <div>Shift: <strong className="text-sky-700 dark:text-sky-300">+{formatNumber(monthlyBenchmarks.press.maxShift.recv)}</strong></div>
+                      <div className="mt-0.5">Daily: <strong className="text-sky-700 dark:text-sky-300">+{formatNumber(monthlyBenchmarks.press.maxDaily.recv)}</strong></div>
+                    </td>
+                  </tr>
+                  {!isLongShift && (
+                    <tr className="hover:bg-slate-50/60 dark:hover:bg-slate-800/30 transition-colors bg-sky-50/20 dark:bg-sky-950/10">
+                      <td className="py-2.5 px-3 text-center">
+                        <span className="px-2 py-0.5 rounded font-mono font-bold text-[10px] bg-indigo-100 dark:bg-indigo-950/60 text-indigo-800 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                          Shift N
+                        </span>
+                      </td>
+                      <td className="py-2.5 px-4">
+                        <InBarMetricCell 
+                          value={pressRecvNight} 
+                          maxValue={monthlyBenchmarks.press.maxShift.recv} 
+                          prefix="+" 
+                          colorVariant="sky" 
+                          unit="spl" 
+                        />
+                      </td>
+                    </tr>
+                  )}
+
+                  {/* 3. FINISHED */}
+                  <tr className="hover:bg-slate-50/60 dark:hover:bg-slate-800/30 transition-colors bg-emerald-50/20 dark:bg-emerald-950/10">
+                    <td rowSpan={isLongShift ? 1 : 2} className="py-3 px-3.5 align-middle border-r border-slate-100 dark:border-slate-800">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                        <div>
+                          <span className="font-bold text-emerald-800 dark:text-emerald-300 block text-xs">Finished</span>
+                          <span className="text-[10px] text-emerald-600/70 dark:text-emerald-400/70 block">Output Selesai</span>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="py-2.5 px-3 text-center">
+                      <span className="px-2 py-0.5 rounded font-mono font-bold text-[10px] bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+                        {isLongShift ? 'LS (Day)' : 'Shift D'}
+                      </span>
+                    </td>
+                    <td className="py-2.5 px-4">
+                      <InBarMetricCell 
+                        value={pressFinDay} 
+                        maxValue={monthlyBenchmarks.press.maxShift.fin} 
+                        colorVariant="emerald" 
+                        unit="pelet" 
+                      />
+                    </td>
+                    <td rowSpan={isLongShift ? 1 : 2} className="py-3 px-4 align-middle border-l border-slate-100 dark:border-slate-800">
+                      <InBarMetricCell 
+                        value={pressFin} 
+                        maxValue={monthlyBenchmarks.press.maxDaily.fin} 
+                        colorVariant="emerald" 
+                        unit="pelet" 
+                      />
+                    </td>
+                    <td rowSpan={isLongShift ? 1 : 2} className="py-3 px-3 align-middle text-center font-mono text-[10px] text-slate-400 border-l border-slate-100 dark:border-slate-800">
+                      <div>Shift: <strong className="text-emerald-700 dark:text-emerald-300">{formatNumber(monthlyBenchmarks.press.maxShift.fin)}</strong></div>
+                      <div className="mt-0.5">Daily: <strong className="text-emerald-700 dark:text-emerald-300">{formatNumber(monthlyBenchmarks.press.maxDaily.fin)}</strong></div>
+                    </td>
+                  </tr>
+                  {!isLongShift && (
+                    <tr className="hover:bg-slate-50/60 dark:hover:bg-slate-800/30 transition-colors bg-emerald-50/20 dark:bg-emerald-950/10">
+                      <td className="py-2.5 px-3 text-center">
+                        <span className="px-2 py-0.5 rounded font-mono font-bold text-[10px] bg-indigo-100 dark:bg-indigo-950/60 text-indigo-800 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                          Shift N
+                        </span>
+                      </td>
+                      <td className="py-2.5 px-4">
+                        <InBarMetricCell 
+                          value={pressFinNight} 
+                          maxValue={monthlyBenchmarks.press.maxShift.fin} 
+                          colorVariant="emerald" 
+                          unit="pelet" 
+                        />
+                      </td>
+                    </tr>
+                  )}
+
+                  {/* 4. OUTSTANDING */}
+                  <tr className={`hover:bg-slate-50/60 dark:hover:bg-slate-800/30 transition-colors ${pressBal > 0 ? 'bg-rose-50/20 dark:bg-rose-950/10' : ''}`}>
+                    <td rowSpan={isLongShift ? 1 : 2} className="py-3 px-3.5 align-middle border-r border-slate-100 dark:border-slate-800">
+                      <div className="flex items-center gap-2">
+                        <div className={`w-2 h-2 rounded-full ${pressBal > 0 ? 'bg-rose-500' : 'bg-teal-500'}`} />
+                        <div>
+                          <span className={`font-bold block text-xs ${pressBal > 0 ? 'text-rose-700 dark:text-rose-400' : 'text-teal-700 dark:text-teal-400'}`}>
+                            Outstanding
+                          </span>
+                          <span className="text-[10px] text-slate-400 block">Sisa Saldo Pelet</span>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="py-2.5 px-3 text-center">
+                      <span className="px-2 py-0.5 rounded font-mono font-bold text-[10px] bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+                        {isLongShift ? 'LS (Day)' : 'Shift D'}
+                      </span>
+                    </td>
+                    <td className="py-2.5 px-4">
+                      <InBarMetricCell 
+                        value={pressBalDay} 
+                        maxValue={monthlyBenchmarks.press.maxShift.bal} 
+                        colorVariant={pressBalDay > 0 ? 'rose' : 'slate'} 
+                        unit="pelet" 
+                      />
+                    </td>
+                    <td rowSpan={isLongShift ? 1 : 2} className="py-3 px-4 align-middle border-l border-slate-100 dark:border-slate-800">
+                      <InBarMetricCell 
+                        value={pressBal} 
+                        maxValue={monthlyBenchmarks.press.maxDaily.bal} 
+                        colorVariant={pressBal > 0 ? 'rose' : 'slate'} 
+                        unit="pelet" 
+                      />
+                    </td>
+                    <td rowSpan={isLongShift ? 1 : 2} className="py-3 px-3 align-middle text-center font-mono text-[10px] text-slate-400 border-l border-slate-100 dark:border-slate-800">
+                      <div>Shift: <strong className="text-slate-600 dark:text-slate-300">{formatNumber(monthlyBenchmarks.press.maxShift.bal)}</strong></div>
+                      <div className="mt-0.5">Daily: <strong className="text-slate-600 dark:text-slate-300">{formatNumber(monthlyBenchmarks.press.maxDaily.bal)}</strong></div>
+                    </td>
+                  </tr>
+                  {!isLongShift && (
+                    <tr className={`hover:bg-slate-50/60 dark:hover:bg-slate-800/30 transition-colors ${pressBal > 0 ? 'bg-rose-50/20 dark:bg-rose-950/10' : ''}`}>
+                      <td className="py-2.5 px-3 text-center">
+                        <span className="px-2 py-0.5 rounded font-mono font-bold text-[10px] bg-indigo-100 dark:bg-indigo-950/60 text-indigo-800 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                          Shift N
+                        </span>
+                      </td>
+                      <td className="py-2.5 px-4">
+                        <InBarMetricCell 
+                          value={pressBalNight} 
+                          maxValue={monthlyBenchmarks.press.maxShift.bal} 
+                          colorVariant={pressBalNight > 0 ? 'rose' : 'slate'} 
+                          unit="pelet" 
+                        />
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Shift Ratio Bar D vs N */}
+            <div className="space-y-1.5 pt-1">
+              <div className="flex justify-between text-xs font-semibold">
+                {isLongShift ? (
+                  <span className="text-amber-600 dark:text-amber-400 flex items-center gap-1 font-mono">
+                    <Sun className="w-3.5 h-3.5" /> Long Shift LS (07:00 - 24:00 WITA): {formatNumber(pressDayShift)} pelet (100% Day Shift)
+                  </span>
+                ) : (
+                  <>
+                    <span className="text-amber-600 dark:text-amber-400 flex items-center gap-1 font-mono">
+                      <Sun className="w-3.5 h-3.5" /> Day Shift (D): {formatNumber(pressDayShift)} pelet ({pressFin > 0 ? Math.round((pressDayShift / pressFin) * 100) : 0}%)
+                    </span>
+                    <span className="text-indigo-600 dark:text-indigo-400 flex items-center gap-1 font-mono">
+                      <Moon className="w-3.5 h-3.5" /> Night Shift (N): {formatNumber(pressNightShift)} pelet ({pressFin > 0 ? Math.round((pressNightShift / pressFin) * 100) : 0}%)
+                    </span>
+                  </>
+                )}
+              </div>
+              <div className="w-full h-2.5 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden flex shadow-inner">
+                <div 
+                  style={{ width: `${isLongShift ? 100 : (pressFin > 0 ? (pressDayShift / pressFin) * 100 : 50)}%` }}
+                  className="h-full bg-amber-400 transition-all"
+                  title={isLongShift ? `Long Shift LS: ${pressDayShift} pelet` : `Day Shift D: ${pressDayShift} pelet`}
+                />
+                {!isLongShift && (
+                  <div 
+                    style={{ width: `${pressFin > 0 ? (pressNightShift / pressFin) * 100 : 50}%` }}
+                    className="h-full bg-indigo-600 transition-all"
+                    title={`Night Shift N: ${pressNightShift} pelet`}
+                  />
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* ========================================================================= */}
+          {/* 2. FUSION (EXPLORATION, PRODUCTION, SMELTER) */}
+          {/* ========================================================================= */}
+          <div className="p-5 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs space-y-5">
+            <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-2xl bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 border border-amber-100 dark:border-amber-900/40">
+                  <Layers className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="px-2.5 py-0.5 rounded-md text-[10px] font-bold bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800 uppercase tracking-wider">
+                      Fusion (Exploration, Production, Smelter)
+                    </span>
+                    <span className="px-2.5 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-300">
+                      Antrean WIP: {weighBal} Sampel
+                    </span>
+                  </div>
+                  <h4 className="font-bold text-slate-900 dark:text-white text-sm sm:text-base mt-0.5">
+                    2. Fusion — Dua Sub-Unit: Weighing & Fusion Peleburan
+                  </h4>
+                  <p className="text-[11px] text-slate-500">
+                    Peleburan manik kaca borat presisi untuk sampel Eksplorasi, Produksi (akurat), dan Smelter sebelum uji WDXRF.
+                  </p>
+                </div>
+              </div>
+
+              <div className="text-xs font-mono text-right bg-amber-50/60 dark:bg-amber-950/30 px-3 py-1.5 rounded-xl border border-amber-200/60 dark:border-amber-900/50">
+                <span className="text-[10px] text-slate-400 block font-sans">Sampel Masuk Jalur Fusion</span>
+                <strong className="text-base font-bold text-amber-900 dark:text-amber-300">+{formatNumber(weighRecv)} sampel</strong>
+                <span className="text-[9px] text-slate-400 block mt-0.5">
+                  {isLongShift ? `LS: +${weighRecvDay}` : `D: +${weighRecvDay} • N: +${weighRecvNight}`}
+                </span>
+              </div>
+            </div>
+
+            {/* DUA SUB-TABEL: SUB-TABEL 2A (WEIGHING) & SUB-TABEL 2B (FUSION) */}
+            <div className="space-y-5">
+              
+              {/* SUB-TABEL 2A: WEIGHING */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Gauge className="w-4 h-4 text-amber-600" />
+                    <h5 className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-tight">
+                      Sub-Tabel 2A: Weighing (Penimbangan Cawan & Fluks)
+                    </h5>
+                  </div>
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 font-semibold">
+                    Cawan & Fluks
+                  </span>
+                </div>
+
+                <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-slate-50/90 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 font-bold border-b border-slate-200 dark:border-slate-700">
+                        <th className="py-2 px-3 w-40">Pilar Weighing</th>
+                        <th className="py-2 px-3 w-28 text-center">Shift</th>
+                        <th className="py-2 px-3.5 min-w-[220px]">Volume Shift (D & N) • In-Bar Rekor</th>
+                        <th className="py-2 px-3.5 min-w-[240px]">Daily Total • In-Bar Rekor</th>
+                        <th className="py-2 px-3 w-32 text-center text-[10px] text-slate-500 font-semibold">Rekor Bln</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800/70 bg-white dark:bg-slate-900">
+                      {/* Balance */}
+                      <tr className="hover:bg-slate-50/60 dark:hover:bg-slate-800/30">
+                        <td rowSpan={isLongShift ? 1 : 2} className="py-2.5 px-3 align-middle font-semibold text-slate-800 dark:text-slate-200 border-r border-slate-100 dark:border-slate-800">
+                          Balance (Saldo Awal)
+                        </td>
+                        <td className="py-2 px-3 text-center">
+                          <span className="px-1.5 py-0.5 rounded font-mono font-bold text-[10px] bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300">
+                            {isLongShift ? 'LS' : 'D'}
+                          </span>
+                        </td>
+                        <td className="py-2 px-3.5">
+                          <InBarMetricCell value={weighOsDay} maxValue={monthlyBenchmarks.weigh.maxShift.bal} colorVariant="slate" unit="cwn" />
+                        </td>
+                        <td rowSpan={isLongShift ? 1 : 2} className="py-2.5 px-3.5 align-middle border-l border-slate-100 dark:border-slate-800">
+                          <InBarMetricCell value={weighOs} maxValue={monthlyBenchmarks.weigh.maxDaily.bal} colorVariant="slate" unit="cwn" />
+                        </td>
+                        <td rowSpan={isLongShift ? 1 : 2} className="py-2.5 px-3 align-middle text-center font-mono text-[10px] text-slate-400 border-l border-slate-100 dark:border-slate-800">
+                          <div>Shift: {formatNumber(monthlyBenchmarks.weigh.maxShift.bal)}</div>
+                          <div>Daily: {formatNumber(monthlyBenchmarks.weigh.maxDaily.bal)}</div>
+                        </td>
+                      </tr>
+                      {!isLongShift && (
+                        <tr className="hover:bg-slate-50/60 dark:hover:bg-slate-800/30">
+                          <td className="py-2 px-3 text-center">
+                            <span className="px-1.5 py-0.5 rounded font-mono font-bold text-[10px] bg-indigo-100 dark:bg-indigo-950/60 text-indigo-800 dark:text-indigo-300">
+                              N
+                            </span>
+                          </td>
+                          <td className="py-2 px-3.5">
+                            <InBarMetricCell value={weighOsNight} maxValue={monthlyBenchmarks.weigh.maxShift.bal} colorVariant="slate" unit="cwn" />
+                          </td>
+                        </tr>
+                      )}
+
+                      {/* Received */}
+                      <tr className="hover:bg-slate-50/60 dark:hover:bg-slate-800/30 bg-sky-50/20 dark:bg-sky-950/10">
+                        <td rowSpan={isLongShift ? 1 : 2} className="py-2.5 px-3 align-middle font-semibold text-sky-800 dark:text-sky-300 border-r border-slate-100 dark:border-slate-800">
+                          Received (Masuk Timbang)
+                        </td>
+                        <td className="py-2 px-3 text-center">
+                          <span className="px-1.5 py-0.5 rounded font-mono font-bold text-[10px] bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300">
+                            {isLongShift ? 'LS' : 'D'}
+                          </span>
+                        </td>
+                        <td className="py-2 px-3.5">
+                          <InBarMetricCell value={weighRecvDay} maxValue={monthlyBenchmarks.weigh.maxShift.recv} prefix="+" colorVariant="sky" unit="spl" />
+                        </td>
+                        <td rowSpan={isLongShift ? 1 : 2} className="py-2.5 px-3.5 align-middle border-l border-slate-100 dark:border-slate-800">
+                          <InBarMetricCell value={weighRecv} maxValue={monthlyBenchmarks.weigh.maxDaily.recv} prefix="+" colorVariant="sky" unit="spl" />
+                        </td>
+                        <td rowSpan={isLongShift ? 1 : 2} className="py-2.5 px-3 align-middle text-center font-mono text-[10px] text-slate-400 border-l border-slate-100 dark:border-slate-800">
+                          <div>Shift: +{formatNumber(monthlyBenchmarks.weigh.maxShift.recv)}</div>
+                          <div>Daily: +{formatNumber(monthlyBenchmarks.weigh.maxDaily.recv)}</div>
+                        </td>
+                      </tr>
+                      {!isLongShift && (
+                        <tr className="hover:bg-slate-50/60 dark:hover:bg-slate-800/30 bg-sky-50/20 dark:bg-sky-950/10">
+                          <td className="py-2 px-3 text-center">
+                            <span className="px-1.5 py-0.5 rounded font-mono font-bold text-[10px] bg-indigo-100 dark:bg-indigo-950/60 text-indigo-800 dark:text-indigo-300">
+                              N
+                            </span>
+                          </td>
+                          <td className="py-2 px-3.5">
+                            <InBarMetricCell value={weighRecvNight} maxValue={monthlyBenchmarks.weigh.maxShift.recv} prefix="+" colorVariant="sky" unit="spl" />
+                          </td>
+                        </tr>
+                      )}
+
+                      {/* Finished */}
+                      <tr className="hover:bg-slate-50/60 dark:hover:bg-slate-800/30 bg-emerald-50/20 dark:bg-emerald-950/10">
+                        <td rowSpan={isLongShift ? 1 : 2} className="py-2.5 px-3 align-middle font-semibold text-emerald-800 dark:text-emerald-300 border-r border-slate-100 dark:border-slate-800">
+                          Finished (Ditimbang)
+                        </td>
+                        <td className="py-2 px-3 text-center">
+                          <span className="px-1.5 py-0.5 rounded font-mono font-bold text-[10px] bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300">
+                            {isLongShift ? 'LS' : 'D'}
+                          </span>
+                        </td>
+                        <td className="py-2 px-3.5">
+                          <InBarMetricCell value={weighFinDay} maxValue={monthlyBenchmarks.weigh.maxShift.fin} colorVariant="emerald" unit="cwn" />
+                        </td>
+                        <td rowSpan={isLongShift ? 1 : 2} className="py-2.5 px-3.5 align-middle border-l border-slate-100 dark:border-slate-800">
+                          <InBarMetricCell value={weighFin} maxValue={monthlyBenchmarks.weigh.maxDaily.fin} colorVariant="emerald" unit="cwn" />
+                        </td>
+                        <td rowSpan={isLongShift ? 1 : 2} className="py-2.5 px-3 align-middle text-center font-mono text-[10px] text-slate-400 border-l border-slate-100 dark:border-slate-800">
+                          <div>Shift: {formatNumber(monthlyBenchmarks.weigh.maxShift.fin)}</div>
+                          <div>Daily: {formatNumber(monthlyBenchmarks.weigh.maxDaily.fin)}</div>
+                        </td>
+                      </tr>
+                      {!isLongShift && (
+                        <tr className="hover:bg-slate-50/60 dark:hover:bg-slate-800/30 bg-emerald-50/20 dark:bg-emerald-950/10">
+                          <td className="py-2 px-3 text-center">
+                            <span className="px-1.5 py-0.5 rounded font-mono font-bold text-[10px] bg-indigo-100 dark:bg-indigo-950/60 text-indigo-800 dark:text-indigo-300">
+                              N
+                            </span>
+                          </td>
+                          <td className="py-2 px-3.5">
+                            <InBarMetricCell value={weighFinNight} maxValue={monthlyBenchmarks.weigh.maxShift.fin} colorVariant="emerald" unit="cwn" />
+                          </td>
+                        </tr>
+                      )}
+
+                      {/* Outstanding */}
+                      <tr className={`hover:bg-slate-50/60 dark:hover:bg-slate-800/30 ${weighBal > 0 ? 'bg-amber-50/20 dark:bg-amber-950/10' : ''}`}>
+                        <td rowSpan={isLongShift ? 1 : 2} className="py-2.5 px-3 align-middle font-semibold text-amber-800 dark:text-amber-300 border-r border-slate-100 dark:border-slate-800">
+                          Outstanding (Sisa Timbang)
+                        </td>
+                        <td className="py-2 px-3 text-center">
+                          <span className="px-1.5 py-0.5 rounded font-mono font-bold text-[10px] bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300">
+                            {isLongShift ? 'LS' : 'D'}
+                          </span>
+                        </td>
+                        <td className="py-2 px-3.5">
+                          <InBarMetricCell value={weighBalDay} maxValue={monthlyBenchmarks.weigh.maxShift.bal} colorVariant="amber" unit="cwn" />
+                        </td>
+                        <td rowSpan={isLongShift ? 1 : 2} className="py-2.5 px-3.5 align-middle border-l border-slate-100 dark:border-slate-800">
+                          <InBarMetricCell value={weighBal} maxValue={monthlyBenchmarks.weigh.maxDaily.bal} colorVariant="amber" unit="cwn" />
+                        </td>
+                        <td rowSpan={isLongShift ? 1 : 2} className="py-2.5 px-3 align-middle text-center font-mono text-[10px] text-slate-400 border-l border-slate-100 dark:border-slate-800">
+                          <div>Shift: {formatNumber(monthlyBenchmarks.weigh.maxShift.bal)}</div>
+                          <div>Daily: {formatNumber(monthlyBenchmarks.weigh.maxDaily.bal)}</div>
+                        </td>
+                      </tr>
+                      {!isLongShift && (
+                        <tr className={`hover:bg-slate-50/60 dark:hover:bg-slate-800/30 ${weighBal > 0 ? 'bg-amber-50/20 dark:bg-amber-950/10' : ''}`}>
+                          <td className="py-2 px-3 text-center">
+                            <span className="px-1.5 py-0.5 rounded font-mono font-bold text-[10px] bg-indigo-100 dark:bg-indigo-950/60 text-indigo-800 dark:text-indigo-300">
+                              N
+                            </span>
+                          </td>
+                          <td className="py-2 px-3.5">
+                            <InBarMetricCell value={weighBalNight} maxValue={monthlyBenchmarks.weigh.maxShift.bal} colorVariant="amber" unit="cwn" />
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* SUB-TABEL 2B: FUSION */}
+              <div className="space-y-2 pt-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Flame className="w-4 h-4 text-orange-600" />
+                    <h5 className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-tight">
+                      Sub-Tabel 2B: Fusion (Peleburan Manik Kaca Borat / Glass Bead)
+                    </h5>
+                  </div>
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 font-semibold">
+                    Glass Bead
+                  </span>
+                </div>
+
+                <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-slate-50/90 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 font-bold border-b border-slate-200 dark:border-slate-700">
+                        <th className="py-2 px-3 w-40">Pilar Fusion</th>
+                        <th className="py-2 px-3 w-28 text-center">Shift</th>
+                        <th className="py-2 px-3.5 min-w-[220px]">Volume Shift (D & N) • In-Bar Rekor</th>
+                        <th className="py-2 px-3.5 min-w-[240px]">Daily Total • In-Bar Rekor</th>
+                        <th className="py-2 px-3 w-32 text-center text-[10px] text-slate-500 font-semibold">Rekor Bln</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800/70 bg-white dark:bg-slate-900">
+                      {/* Balance */}
+                      <tr className="hover:bg-slate-50/60 dark:hover:bg-slate-800/30">
+                        <td rowSpan={isLongShift ? 1 : 2} className="py-2.5 px-3 align-middle font-semibold text-slate-800 dark:text-slate-200 border-r border-slate-100 dark:border-slate-800">
+                          Balance (Saldo Awal)
+                        </td>
+                        <td className="py-2 px-3 text-center">
+                          <span className="px-1.5 py-0.5 rounded font-mono font-bold text-[10px] bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300">
+                            {isLongShift ? 'LS' : 'D'}
+                          </span>
+                        </td>
+                        <td className="py-2 px-3.5">
+                          <InBarMetricCell value={fusionBalAwalDay} maxValue={monthlyBenchmarks.fusion.maxShift.bal} colorVariant="slate" unit="bead" />
+                        </td>
+                        <td rowSpan={isLongShift ? 1 : 2} className="py-2.5 px-3.5 align-middle border-l border-slate-100 dark:border-slate-800">
+                          <InBarMetricCell value={fusionBalAwal} maxValue={monthlyBenchmarks.fusion.maxDaily.bal} colorVariant="slate" unit="bead" />
+                        </td>
+                        <td rowSpan={isLongShift ? 1 : 2} className="py-2.5 px-3 align-middle text-center font-mono text-[10px] text-slate-400 border-l border-slate-100 dark:border-slate-800">
+                          <div>Shift: {formatNumber(monthlyBenchmarks.fusion.maxShift.bal)}</div>
+                          <div>Daily: {formatNumber(monthlyBenchmarks.fusion.maxDaily.bal)}</div>
+                        </td>
+                      </tr>
+                      {!isLongShift && (
+                        <tr className="hover:bg-slate-50/60 dark:hover:bg-slate-800/30">
+                          <td className="py-2 px-3 text-center">
+                            <span className="px-1.5 py-0.5 rounded font-mono font-bold text-[10px] bg-indigo-100 dark:bg-indigo-950/60 text-indigo-800 dark:text-indigo-300">
+                              N
+                            </span>
+                          </td>
+                          <td className="py-2 px-3.5">
+                            <InBarMetricCell value={fusionBalAwalNight} maxValue={monthlyBenchmarks.fusion.maxShift.bal} colorVariant="slate" unit="bead" />
+                          </td>
+                        </tr>
+                      )}
+
+                      {/* Received */}
+                      <tr className="hover:bg-slate-50/60 dark:hover:bg-slate-800/30 bg-sky-50/20 dark:bg-sky-950/10">
+                        <td rowSpan={isLongShift ? 1 : 2} className="py-2.5 px-3 align-middle font-semibold text-sky-800 dark:text-sky-300 border-r border-slate-100 dark:border-slate-800">
+                          Received (Dari Timbang)
+                        </td>
+                        <td className="py-2 px-3 text-center">
+                          <span className="px-1.5 py-0.5 rounded font-mono font-bold text-[10px] bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300">
+                            {isLongShift ? 'LS' : 'D'}
+                          </span>
+                        </td>
+                        <td className="py-2 px-3.5">
+                          <InBarMetricCell value={fusionRecvDay} maxValue={monthlyBenchmarks.fusion.maxShift.recv} prefix="+" colorVariant="sky" unit="bead" />
+                        </td>
+                        <td rowSpan={isLongShift ? 1 : 2} className="py-2.5 px-3.5 align-middle border-l border-slate-100 dark:border-slate-800">
+                          <InBarMetricCell value={fusionRecv} maxValue={monthlyBenchmarks.fusion.maxDaily.recv} prefix="+" colorVariant="sky" unit="bead" />
+                        </td>
+                        <td rowSpan={isLongShift ? 1 : 2} className="py-2.5 px-3 align-middle text-center font-mono text-[10px] text-slate-400 border-l border-slate-100 dark:border-slate-800">
+                          <div>Shift: +{formatNumber(monthlyBenchmarks.fusion.maxShift.recv)}</div>
+                          <div>Daily: +{formatNumber(monthlyBenchmarks.fusion.maxDaily.recv)}</div>
+                        </td>
+                      </tr>
+                      {!isLongShift && (
+                        <tr className="hover:bg-slate-50/60 dark:hover:bg-slate-800/30 bg-sky-50/20 dark:bg-sky-950/10">
+                          <td className="py-2 px-3 text-center">
+                            <span className="px-1.5 py-0.5 rounded font-mono font-bold text-[10px] bg-indigo-100 dark:bg-indigo-950/60 text-indigo-800 dark:text-indigo-300">
+                              N
+                            </span>
+                          </td>
+                          <td className="py-2 px-3.5">
+                            <InBarMetricCell value={fusionRecvNight} maxValue={monthlyBenchmarks.fusion.maxShift.recv} prefix="+" colorVariant="sky" unit="bead" />
+                          </td>
+                        </tr>
+                      )}
+
+                      {/* Finished */}
+                      <tr className="hover:bg-slate-50/60 dark:hover:bg-slate-800/30 bg-emerald-50/20 dark:bg-emerald-950/10">
+                        <td rowSpan={isLongShift ? 1 : 2} className="py-2.5 px-3 align-middle font-semibold text-emerald-800 dark:text-emerald-300 border-r border-slate-100 dark:border-slate-800">
+                          Finished (Manik Selesai)
+                        </td>
+                        <td className="py-2 px-3 text-center">
+                          <span className="px-1.5 py-0.5 rounded font-mono font-bold text-[10px] bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300">
+                            {isLongShift ? 'LS' : 'D'}
+                          </span>
+                        </td>
+                        <td className="py-2 px-3.5">
+                          <InBarMetricCell value={fusionFinDay} maxValue={monthlyBenchmarks.fusion.maxShift.fin} colorVariant="emerald" unit="bead" />
+                        </td>
+                        <td rowSpan={isLongShift ? 1 : 2} className="py-2.5 px-3.5 align-middle border-l border-slate-100 dark:border-slate-800">
+                          <InBarMetricCell value={fusionFin} maxValue={monthlyBenchmarks.fusion.maxDaily.fin} colorVariant="emerald" unit="bead" />
+                        </td>
+                        <td rowSpan={isLongShift ? 1 : 2} className="py-2.5 px-3 align-middle text-center font-mono text-[10px] text-slate-400 border-l border-slate-100 dark:border-slate-800">
+                          <div>Shift: {formatNumber(monthlyBenchmarks.fusion.maxShift.fin)}</div>
+                          <div>Daily: {formatNumber(monthlyBenchmarks.fusion.maxDaily.fin)}</div>
+                        </td>
+                      </tr>
+                      {!isLongShift && (
+                        <tr className="hover:bg-slate-50/60 dark:hover:bg-slate-800/30 bg-emerald-50/20 dark:bg-emerald-950/10">
+                          <td className="py-2 px-3 text-center">
+                            <span className="px-1.5 py-0.5 rounded font-mono font-bold text-[10px] bg-indigo-100 dark:bg-indigo-950/60 text-indigo-800 dark:text-indigo-300">
+                              N
+                            </span>
+                          </td>
+                          <td className="py-2 px-3.5">
+                            <InBarMetricCell value={fusionFinNight} maxValue={monthlyBenchmarks.fusion.maxShift.fin} colorVariant="emerald" unit="bead" />
+                          </td>
+                        </tr>
+                      )}
+
+                      {/* Outstanding */}
+                      <tr className={`hover:bg-slate-50/60 dark:hover:bg-slate-800/30 ${fusionBalAkhir > 0 ? 'bg-amber-50/20 dark:bg-amber-950/10' : ''}`}>
+                        <td rowSpan={isLongShift ? 1 : 2} className="py-2.5 px-3 align-middle font-semibold text-amber-800 dark:text-amber-300 border-r border-slate-100 dark:border-slate-800">
+                          Outstanding (Sisa Lebur)
+                        </td>
+                        <td className="py-2 px-3 text-center">
+                          <span className="px-1.5 py-0.5 rounded font-mono font-bold text-[10px] bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300">
+                            {isLongShift ? 'LS' : 'D'}
+                          </span>
+                        </td>
+                        <td className="py-2 px-3.5">
+                          <InBarMetricCell value={fusionBalDay} maxValue={monthlyBenchmarks.fusion.maxShift.bal} colorVariant="amber" unit="bead" />
+                        </td>
+                        <td rowSpan={isLongShift ? 1 : 2} className="py-2.5 px-3.5 align-middle border-l border-slate-100 dark:border-slate-800">
+                          <InBarMetricCell value={fusionBalAkhir} maxValue={monthlyBenchmarks.fusion.maxDaily.bal} colorVariant="amber" unit="bead" />
+                        </td>
+                        <td rowSpan={isLongShift ? 1 : 2} className="py-2.5 px-3 align-middle text-center font-mono text-[10px] text-slate-400 border-l border-slate-100 dark:border-slate-800">
+                          <div>Shift: {formatNumber(monthlyBenchmarks.fusion.maxShift.bal)}</div>
+                          <div>Daily: {formatNumber(monthlyBenchmarks.fusion.maxDaily.bal)}</div>
+                        </td>
+                      </tr>
+                      {!isLongShift && (
+                        <tr className={`hover:bg-slate-50/60 dark:hover:bg-slate-800/30 ${fusionBalAkhir > 0 ? 'bg-amber-50/20 dark:bg-amber-950/10' : ''}`}>
+                          <td className="py-2 px-3 text-center">
+                            <span className="px-1.5 py-0.5 rounded font-mono font-bold text-[10px] bg-indigo-100 dark:bg-indigo-950/60 text-indigo-800 dark:text-indigo-300">
+                              N
+                            </span>
+                          </td>
+                          <td className="py-2 px-3.5">
+                            <InBarMetricCell value={fusionBalNight} maxValue={monthlyBenchmarks.fusion.maxShift.bal} colorVariant="amber" unit="bead" />
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+          {/* ========================================================================= */}
+          {/* 3. LOI (EXPLORATION) */}
+          {/* ========================================================================= */}
+          <div className="p-5 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs space-y-5">
+            <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-2xl bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 border border-purple-100 dark:border-purple-900/40">
+                  <Flame className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="px-2.5 py-0.5 rounded-md text-[10px] font-bold bg-purple-100 dark:bg-purple-950/60 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-800 uppercase tracking-wider">
+                      LOI (Exploration)
+                    </span>
+                    <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${
+                      loiFin < fusionFin 
+                        ? 'bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-400 border-rose-200 dark:border-rose-800'
+                        : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-200'
+                    }`}>
+                      {loiFin < fusionFin ? 'Titik Kendala Furnace' : 'Kapasitas Normal'}
+                    </span>
+                  </div>
+                  <h4 className="font-bold text-slate-900 dark:text-white text-sm sm:text-base mt-0.5">
+                    3. LOI (Loss on Ignition) — Gravimetri Eksplorasi
+                  </h4>
+                  <p className="text-[11px] text-slate-500">
+                    Siklus pembakaran suhu tinggi bertahap: Balance → Received → Weighing → W1 → W2 → W3 → W4 → Outstanding.
+                  </p>
+                </div>
+              </div>
+
+              <div className="text-xs font-mono text-right bg-purple-50/60 dark:bg-purple-950/30 px-3 py-1.5 rounded-xl border border-purple-200/60 dark:border-purple-900/50">
+                <span className="text-[10px] text-slate-400 block font-sans">Total Selesai LOI Hari Ini</span>
+                <strong className="text-base font-bold text-purple-900 dark:text-purple-300">{formatNumber(loiFin)} cawan</strong>
+                <span className="text-[9px] text-slate-400 block mt-0.5">
+                  {isLongShift ? `LS: ${loiDayShift}` : `D: ${loiDayShift} • N: ${loiNightShift}`}
+                </span>
+              </div>
+            </div>
+
+            {/* TABEL 3A: NERACA UTAMA SIKLUS LOI GRAVIMETRI */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <h5 className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-tight flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-purple-500" />
+                  Tabel 3A: Neraca Utama LOI Gravimetri (Balance, Received, Weighing, Finished, Outstanding)
+                </h5>
+                <span className="text-[10px] text-slate-400 font-mono">5 Pilar Siklus LOI</span>
+              </div>
+
+              <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-slate-50/90 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 font-bold border-b border-slate-200 dark:border-slate-700">
+                      <th className="py-2 px-3 w-40">Pilar Neraca</th>
+                      <th className="py-2 px-3 w-28 text-center">Shift</th>
+                      <th className="py-2 px-3.5 min-w-[220px]">Volume Shift (D & N) • In-Bar Rekor</th>
+                      <th className="py-2 px-3.5 min-w-[240px]">Daily Total • In-Bar Rekor</th>
+                      <th className="py-2 px-3 w-32 text-center text-[10px] text-slate-500 font-semibold">Rekor Bln</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800/70 bg-white dark:bg-slate-900">
+                    {/* 1. Balance */}
+                    <tr className="hover:bg-slate-50/60 dark:hover:bg-slate-800/30">
+                      <td rowSpan={isLongShift ? 1 : 2} className="py-2.5 px-3 align-middle font-semibold text-slate-800 dark:text-slate-200 border-r border-slate-100 dark:border-slate-800">
+                        Balance (Saldo Awal LOI)
+                      </td>
+                      <td className="py-2 px-3 text-center">
+                        <span className="px-1.5 py-0.5 rounded font-mono font-bold text-[10px] bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300">
+                          {isLongShift ? 'LS' : 'D'}
+                        </span>
+                      </td>
+                      <td className="py-2 px-3.5">
+                        <InBarMetricCell value={loiOsDay} maxValue={monthlyBenchmarks.loi.maxShift.bal} colorVariant="slate" unit="cwn" />
+                      </td>
+                      <td rowSpan={isLongShift ? 1 : 2} className="py-2.5 px-3.5 align-middle border-l border-slate-100 dark:border-slate-800">
+                        <InBarMetricCell value={loiOs} maxValue={monthlyBenchmarks.loi.maxDaily.bal} colorVariant="slate" unit="cwn" />
+                      </td>
+                      <td rowSpan={isLongShift ? 1 : 2} className="py-2.5 px-3 align-middle text-center font-mono text-[10px] text-slate-400 border-l border-slate-100 dark:border-slate-800">
+                        <div>Shift: {formatNumber(monthlyBenchmarks.loi.maxShift.bal)}</div>
+                        <div>Daily: {formatNumber(monthlyBenchmarks.loi.maxDaily.bal)}</div>
+                      </td>
+                    </tr>
+                    {!isLongShift && (
+                      <tr className="hover:bg-slate-50/60 dark:hover:bg-slate-800/30">
+                        <td className="py-2 px-3 text-center">
+                          <span className="px-1.5 py-0.5 rounded font-mono font-bold text-[10px] bg-indigo-100 dark:bg-indigo-950/60 text-indigo-800 dark:text-indigo-300">
+                            N
+                          </span>
+                        </td>
+                        <td className="py-2 px-3.5">
+                          <InBarMetricCell value={loiOsNight} maxValue={monthlyBenchmarks.loi.maxShift.bal} colorVariant="slate" unit="cwn" />
+                        </td>
+                      </tr>
+                    )}
+
+                    {/* 2. Received */}
+                    <tr className="hover:bg-slate-50/60 dark:hover:bg-slate-800/30 bg-sky-50/20 dark:bg-sky-950/10">
+                      <td rowSpan={isLongShift ? 1 : 2} className="py-2.5 px-3 align-middle font-semibold text-sky-800 dark:text-sky-300 border-r border-slate-100 dark:border-slate-800">
+                        Received (Sampel EXP Masuk)
+                      </td>
+                      <td className="py-2 px-3 text-center">
+                        <span className="px-1.5 py-0.5 rounded font-mono font-bold text-[10px] bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300">
+                          {isLongShift ? 'LS' : 'D'}
+                        </span>
+                      </td>
+                      <td className="py-2 px-3.5">
+                        <InBarMetricCell value={loiRecvDay} maxValue={monthlyBenchmarks.loi.maxShift.recv} prefix="+" colorVariant="sky" unit="spl" />
+                      </td>
+                      <td rowSpan={isLongShift ? 1 : 2} className="py-2.5 px-3.5 align-middle border-l border-slate-100 dark:border-slate-800">
+                        <InBarMetricCell value={loiRecv} maxValue={monthlyBenchmarks.loi.maxDaily.recv} prefix="+" colorVariant="sky" unit="spl" />
+                      </td>
+                      <td rowSpan={isLongShift ? 1 : 2} className="py-2.5 px-3 align-middle text-center font-mono text-[10px] text-slate-400 border-l border-slate-100 dark:border-slate-800">
+                        <div>Shift: +{formatNumber(monthlyBenchmarks.loi.maxShift.recv)}</div>
+                        <div>Daily: +{formatNumber(monthlyBenchmarks.loi.maxDaily.recv)}</div>
+                      </td>
+                    </tr>
+                    {!isLongShift && (
+                      <tr className="hover:bg-slate-50/60 dark:hover:bg-slate-800/30 bg-sky-50/20 dark:bg-sky-950/10">
+                        <td className="py-2 px-3 text-center">
+                          <span className="px-1.5 py-0.5 rounded font-mono font-bold text-[10px] bg-indigo-100 dark:bg-indigo-950/60 text-indigo-800 dark:text-indigo-300">
+                            N
+                          </span>
+                        </td>
+                        <td className="py-2 px-3.5">
+                          <InBarMetricCell value={loiRecvNight} maxValue={monthlyBenchmarks.loi.maxShift.recv} prefix="+" colorVariant="sky" unit="spl" />
+                        </td>
+                      </tr>
+                    )}
+
+                    {/* 3. Weighing */}
+                    <tr className="hover:bg-slate-50/60 dark:hover:bg-slate-800/30 bg-indigo-50/20 dark:bg-indigo-950/10">
+                      <td rowSpan={isLongShift ? 1 : 2} className="py-2.5 px-3 align-middle font-semibold text-indigo-800 dark:text-indigo-300 border-r border-slate-100 dark:border-slate-800">
+                        Weighing (Penimbangan Cawan)
+                      </td>
+                      <td className="py-2 px-3 text-center">
+                        <span className="px-1.5 py-0.5 rounded font-mono font-bold text-[10px] bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300">
+                          {isLongShift ? 'LS' : 'D'}
+                        </span>
+                      </td>
+                      <td className="py-2 px-3.5">
+                        <InBarMetricCell value={loiWeighingDay} maxValue={monthlyBenchmarks.loi.maxShift.weigh} colorVariant="indigo" unit="cwn" />
+                      </td>
+                      <td rowSpan={isLongShift ? 1 : 2} className="py-2.5 px-3.5 align-middle border-l border-slate-100 dark:border-slate-800">
+                        <InBarMetricCell value={loiWeighing} maxValue={monthlyBenchmarks.loi.maxDaily.weigh} colorVariant="indigo" unit="cwn" />
+                      </td>
+                      <td rowSpan={isLongShift ? 1 : 2} className="py-2.5 px-3 align-middle text-center font-mono text-[10px] text-slate-400 border-l border-slate-100 dark:border-slate-800">
+                        <div>Shift: {formatNumber(monthlyBenchmarks.loi.maxShift.weigh)}</div>
+                        <div>Daily: {formatNumber(monthlyBenchmarks.loi.maxDaily.weigh)}</div>
+                      </td>
+                    </tr>
+                    {!isLongShift && (
+                      <tr className="hover:bg-slate-50/60 dark:hover:bg-slate-800/30 bg-indigo-50/20 dark:bg-indigo-950/10">
+                        <td className="py-2 px-3 text-center">
+                          <span className="px-1.5 py-0.5 rounded font-mono font-bold text-[10px] bg-indigo-100 dark:bg-indigo-950/60 text-indigo-800 dark:text-indigo-300">
+                            N
+                          </span>
+                        </td>
+                        <td className="py-2 px-3.5">
+                          <InBarMetricCell value={loiWeighingNight} maxValue={monthlyBenchmarks.loi.maxShift.weigh} colorVariant="indigo" unit="cwn" />
+                        </td>
+                      </tr>
+                    )}
+
+                    {/* 4. Finished */}
+                    <tr className="hover:bg-slate-50/60 dark:hover:bg-slate-800/30 bg-emerald-50/20 dark:bg-emerald-950/10">
+                      <td rowSpan={isLongShift ? 1 : 2} className="py-2.5 px-3 align-middle font-semibold text-emerald-800 dark:text-emerald-300 border-r border-slate-100 dark:border-slate-800">
+                        Finished (Selesai Pembakaran)
+                      </td>
+                      <td className="py-2 px-3 text-center">
+                        <span className="px-1.5 py-0.5 rounded font-mono font-bold text-[10px] bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300">
+                          {isLongShift ? 'LS' : 'D'}
+                        </span>
+                      </td>
+                      <td className="py-2 px-3.5">
+                        <InBarMetricCell value={loiFinDay} maxValue={monthlyBenchmarks.loi.maxShift.fin} colorVariant="emerald" unit="cwn" />
+                      </td>
+                      <td rowSpan={isLongShift ? 1 : 2} className="py-2.5 px-3.5 align-middle border-l border-slate-100 dark:border-slate-800">
+                        <InBarMetricCell value={loiFin} maxValue={monthlyBenchmarks.loi.maxDaily.fin} colorVariant="emerald" unit="cwn" />
+                      </td>
+                      <td rowSpan={isLongShift ? 1 : 2} className="py-2.5 px-3 align-middle text-center font-mono text-[10px] text-slate-400 border-l border-slate-100 dark:border-slate-800">
+                        <div>Shift: {formatNumber(monthlyBenchmarks.loi.maxShift.fin)}</div>
+                        <div>Daily: {formatNumber(monthlyBenchmarks.loi.maxDaily.fin)}</div>
+                      </td>
+                    </tr>
+                    {!isLongShift && (
+                      <tr className="hover:bg-slate-50/60 dark:hover:bg-slate-800/30 bg-emerald-50/20 dark:bg-emerald-950/10">
+                        <td className="py-2 px-3 text-center">
+                          <span className="px-1.5 py-0.5 rounded font-mono font-bold text-[10px] bg-indigo-100 dark:bg-indigo-950/60 text-indigo-800 dark:text-indigo-300">
+                            N
+                          </span>
+                        </td>
+                        <td className="py-2 px-3.5">
+                          <InBarMetricCell value={loiFinNight} maxValue={monthlyBenchmarks.loi.maxShift.fin} colorVariant="emerald" unit="cwn" />
+                        </td>
+                      </tr>
+                    )}
+
+                    {/* 5. Outstanding */}
+                    <tr className={`hover:bg-slate-50/60 dark:hover:bg-slate-800/30 ${loiBal > 0 ? 'bg-rose-50/20 dark:bg-rose-950/10' : ''}`}>
+                      <td rowSpan={isLongShift ? 1 : 2} className="py-2.5 px-3 align-middle font-semibold text-rose-700 dark:text-rose-400 border-r border-slate-100 dark:border-slate-800">
+                        Outstanding (Total Antrean LOI)
+                      </td>
+                      <td className="py-2 px-3 text-center">
+                        <span className="px-1.5 py-0.5 rounded font-mono font-bold text-[10px] bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300">
+                          {isLongShift ? 'LS' : 'D'}
+                        </span>
+                      </td>
+                      <td className="py-2 px-3.5">
+                        <InBarMetricCell value={loiBalDay} maxValue={monthlyBenchmarks.loi.maxShift.bal} colorVariant="rose" unit="cwn" />
+                      </td>
+                      <td rowSpan={isLongShift ? 1 : 2} className="py-2.5 px-3.5 align-middle border-l border-slate-100 dark:border-slate-800">
+                        <InBarMetricCell value={loiBal} maxValue={monthlyBenchmarks.loi.maxDaily.bal} colorVariant="rose" unit="cwn" />
+                      </td>
+                      <td rowSpan={isLongShift ? 1 : 2} className="py-2.5 px-3 align-middle text-center font-mono text-[10px] text-slate-400 border-l border-slate-100 dark:border-slate-800">
+                        <div>Shift: {formatNumber(monthlyBenchmarks.loi.maxShift.bal)}</div>
+                        <div>Daily: {formatNumber(monthlyBenchmarks.loi.maxDaily.bal)}</div>
+                      </td>
+                    </tr>
+                    {!isLongShift && (
+                      <tr className={`hover:bg-slate-50/60 dark:hover:bg-slate-800/30 ${loiBal > 0 ? 'bg-rose-50/20 dark:bg-rose-950/10' : ''}`}>
+                        <td className="py-2 px-3 text-center">
+                          <span className="px-1.5 py-0.5 rounded font-mono font-bold text-[10px] bg-indigo-100 dark:bg-indigo-950/60 text-indigo-800 dark:text-indigo-300">
+                            N
+                          </span>
+                        </td>
+                        <td className="py-2 px-3.5">
+                          <InBarMetricCell value={loiBalNight} maxValue={monthlyBenchmarks.loi.maxShift.bal} colorVariant="rose" unit="cwn" />
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* TABEL 3B: ALUR PROSES WORKSTATION FURNACE (W1 - W4) & ANTREAN PER TAHAP (OS W1 - OS W4) */}
+            <div className="space-y-2 pt-2">
+              <div className="flex items-center justify-between">
+                <h5 className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-tight flex items-center gap-2">
+                  <Flame className="w-3.5 h-3.5 text-purple-600" />
+                  Tabel 3B: Alur Proses Furnace (Weight 1 → Weight 4) & Outstanding Per Tahap (OS W1 - OS W4)
+                </h5>
+                <span className="text-[10px] font-mono text-slate-400">
+                  (w1 - w4 proses bertahap dengan antrean OS tersendiri)
+                </span>
+              </div>
+
+              <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-slate-50/90 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 font-bold border-b border-slate-200 dark:border-slate-700">
+                      <th className="py-2 px-3 w-44">Tahapan Furnace / OS</th>
+                      <th className="py-2 px-3 w-28 text-center">Shift</th>
+                      <th className="py-2 px-3.5 min-w-[220px]">Volume Shift (D & N) • In-Bar Rekor</th>
+                      <th className="py-2 px-3.5 min-w-[240px]">Daily Total • In-Bar Rekor</th>
+                      <th className="py-2 px-3 w-32 text-center text-[10px] text-slate-500 font-semibold">Rekor Bln</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800/70 bg-white dark:bg-slate-900">
+                    {/* W1 */}
+                    <tr className="hover:bg-slate-50/60 dark:hover:bg-slate-800/30">
+                      <td rowSpan={isLongShift ? 1 : 2} className="py-2 px-3 align-middle font-bold text-purple-900 dark:text-purple-200 border-r border-slate-100 dark:border-slate-800">
+                        Weight 1 (W1) - Tahap 1
+                      </td>
+                      <td className="py-1.5 px-3 text-center">
+                        <span className="px-1.5 py-0.5 rounded font-mono font-bold text-[10px] bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300">
+                          {isLongShift ? 'LS' : 'D'}
+                        </span>
+                      </td>
+                      <td className="py-1.5 px-3.5">
+                        <InBarMetricCell value={loiW1Day} maxValue={monthlyBenchmarks.loiFurnace.maxShift.w1} colorVariant="purple" unit="cwn" />
+                      </td>
+                      <td rowSpan={isLongShift ? 1 : 2} className="py-2 px-3.5 align-middle border-l border-slate-100 dark:border-slate-800">
+                        <InBarMetricCell value={loiW1} maxValue={monthlyBenchmarks.loiFurnace.maxDaily.w1} colorVariant="purple" unit="cwn" />
+                      </td>
+                      <td rowSpan={isLongShift ? 1 : 2} className="py-2 px-3 align-middle text-center font-mono text-[10px] text-slate-400 border-l border-slate-100 dark:border-slate-800">
+                        <div>Shift: {formatNumber(monthlyBenchmarks.loiFurnace.maxShift.w1)}</div>
+                        <div>Daily: {formatNumber(monthlyBenchmarks.loiFurnace.maxDaily.w1)}</div>
+                      </td>
+                    </tr>
+                    {!isLongShift && (
+                      <tr className="hover:bg-slate-50/60 dark:hover:bg-slate-800/30">
+                        <td className="py-1.5 px-3 text-center">
+                          <span className="px-1.5 py-0.5 rounded font-mono font-bold text-[10px] bg-indigo-100 dark:bg-indigo-950/60 text-indigo-800 dark:text-indigo-300">
+                            N
+                          </span>
+                        </td>
+                        <td className="py-1.5 px-3.5">
+                          <InBarMetricCell value={loiW1Night} maxValue={monthlyBenchmarks.loiFurnace.maxShift.w1} colorVariant="purple" unit="cwn" />
+                        </td>
+                      </tr>
+                    )}
+
+                    {/* OS W1 */}
+                    <tr className="hover:bg-slate-50/60 dark:hover:bg-slate-800/30 bg-purple-50/15 dark:bg-purple-950/10">
+                      <td rowSpan={isLongShift ? 1 : 2} className="py-2 px-3 align-middle text-purple-700 dark:text-purple-400 font-medium border-r border-slate-100 dark:border-slate-800">
+                        ↳ Antrean OS W1
+                      </td>
+                      <td className="py-1.5 px-3 text-center">
+                        <span className="px-1.5 py-0.5 rounded font-mono font-bold text-[10px] bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300">
+                          {isLongShift ? 'LS' : 'D'}
+                        </span>
+                      </td>
+                      <td className="py-1.5 px-3.5">
+                        <InBarMetricCell value={osW1Day} maxValue={monthlyBenchmarks.loiFurnace.maxShift.os1} colorVariant="slate" unit="cwn" />
+                      </td>
+                      <td rowSpan={isLongShift ? 1 : 2} className="py-2 px-3.5 align-middle border-l border-slate-100 dark:border-slate-800">
+                        <InBarMetricCell value={osW1} maxValue={monthlyBenchmarks.loiFurnace.maxDaily.os1} colorVariant="slate" unit="cwn" />
+                      </td>
+                      <td rowSpan={isLongShift ? 1 : 2} className="py-2 px-3 align-middle text-center font-mono text-[10px] text-slate-400 border-l border-slate-100 dark:border-slate-800">
+                        <div>Shift: {formatNumber(monthlyBenchmarks.loiFurnace.maxShift.os1)}</div>
+                        <div>Daily: {formatNumber(monthlyBenchmarks.loiFurnace.maxDaily.os1)}</div>
+                      </td>
+                    </tr>
+                    {!isLongShift && (
+                      <tr className="hover:bg-slate-50/60 dark:hover:bg-slate-800/30 bg-purple-50/15 dark:bg-purple-950/10">
+                        <td className="py-1.5 px-3 text-center">
+                          <span className="px-1.5 py-0.5 rounded font-mono font-bold text-[10px] bg-indigo-100 dark:bg-indigo-950/60 text-indigo-800 dark:text-indigo-300">
+                            N
+                          </span>
+                        </td>
+                        <td className="py-1.5 px-3.5">
+                          <InBarMetricCell value={osW1Night} maxValue={monthlyBenchmarks.loiFurnace.maxShift.os1} colorVariant="slate" unit="cwn" />
+                        </td>
+                      </tr>
+                    )}
+
+                    {/* W2 */}
+                    <tr className="hover:bg-slate-50/60 dark:hover:bg-slate-800/30">
+                      <td rowSpan={isLongShift ? 1 : 2} className="py-2 px-3 align-middle font-bold text-purple-900 dark:text-purple-200 border-r border-slate-100 dark:border-slate-800">
+                        Weight 2 (W2) - Tahap 2
+                      </td>
+                      <td className="py-1.5 px-3 text-center">
+                        <span className="px-1.5 py-0.5 rounded font-mono font-bold text-[10px] bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300">
+                          {isLongShift ? 'LS' : 'D'}
+                        </span>
+                      </td>
+                      <td className="py-1.5 px-3.5">
+                        <InBarMetricCell value={loiW2Day} maxValue={monthlyBenchmarks.loiFurnace.maxShift.w2} colorVariant="purple" unit="cwn" />
+                      </td>
+                      <td rowSpan={isLongShift ? 1 : 2} className="py-2 px-3.5 align-middle border-l border-slate-100 dark:border-slate-800">
+                        <InBarMetricCell value={loiW2} maxValue={monthlyBenchmarks.loiFurnace.maxDaily.w2} colorVariant="purple" unit="cwn" />
+                      </td>
+                      <td rowSpan={isLongShift ? 1 : 2} className="py-2 px-3 align-middle text-center font-mono text-[10px] text-slate-400 border-l border-slate-100 dark:border-slate-800">
+                        <div>Shift: {formatNumber(monthlyBenchmarks.loiFurnace.maxShift.w2)}</div>
+                        <div>Daily: {formatNumber(monthlyBenchmarks.loiFurnace.maxDaily.w2)}</div>
+                      </td>
+                    </tr>
+                    {!isLongShift && (
+                      <tr className="hover:bg-slate-50/60 dark:hover:bg-slate-800/30">
+                        <td className="py-1.5 px-3 text-center">
+                          <span className="px-1.5 py-0.5 rounded font-mono font-bold text-[10px] bg-indigo-100 dark:bg-indigo-950/60 text-indigo-800 dark:text-indigo-300">
+                            N
+                          </span>
+                        </td>
+                        <td className="py-1.5 px-3.5">
+                          <InBarMetricCell value={loiW2Night} maxValue={monthlyBenchmarks.loiFurnace.maxShift.w2} colorVariant="purple" unit="cwn" />
+                        </td>
+                      </tr>
+                    )}
+
+                    {/* OS W2 */}
+                    <tr className="hover:bg-slate-50/60 dark:hover:bg-slate-800/30 bg-purple-50/15 dark:bg-purple-950/10">
+                      <td rowSpan={isLongShift ? 1 : 2} className="py-2 px-3 align-middle text-purple-700 dark:text-purple-400 font-medium border-r border-slate-100 dark:border-slate-800">
+                        ↳ Antrean OS W2
+                      </td>
+                      <td className="py-1.5 px-3 text-center">
+                        <span className="px-1.5 py-0.5 rounded font-mono font-bold text-[10px] bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300">
+                          {isLongShift ? 'LS' : 'D'}
+                        </span>
+                      </td>
+                      <td className="py-1.5 px-3.5">
+                        <InBarMetricCell value={osW2Day} maxValue={monthlyBenchmarks.loiFurnace.maxShift.os2} colorVariant="slate" unit="cwn" />
+                      </td>
+                      <td rowSpan={isLongShift ? 1 : 2} className="py-2 px-3.5 align-middle border-l border-slate-100 dark:border-slate-800">
+                        <InBarMetricCell value={osW2} maxValue={monthlyBenchmarks.loiFurnace.maxDaily.os2} colorVariant="slate" unit="cwn" />
+                      </td>
+                      <td rowSpan={isLongShift ? 1 : 2} className="py-2 px-3 align-middle text-center font-mono text-[10px] text-slate-400 border-l border-slate-100 dark:border-slate-800">
+                        <div>Shift: {formatNumber(monthlyBenchmarks.loiFurnace.maxShift.os2)}</div>
+                        <div>Daily: {formatNumber(monthlyBenchmarks.loiFurnace.maxDaily.os2)}</div>
+                      </td>
+                    </tr>
+                    {!isLongShift && (
+                      <tr className="hover:bg-slate-50/60 dark:hover:bg-slate-800/30 bg-purple-50/15 dark:bg-purple-950/10">
+                        <td className="py-1.5 px-3 text-center">
+                          <span className="px-1.5 py-0.5 rounded font-mono font-bold text-[10px] bg-indigo-100 dark:bg-indigo-950/60 text-indigo-800 dark:text-indigo-300">
+                            N
+                          </span>
+                        </td>
+                        <td className="py-1.5 px-3.5">
+                          <InBarMetricCell value={osW2Night} maxValue={monthlyBenchmarks.loiFurnace.maxShift.os2} colorVariant="slate" unit="cwn" />
+                        </td>
+                      </tr>
+                    )}
+
+                    {/* W3 */}
+                    <tr className="hover:bg-slate-50/60 dark:hover:bg-slate-800/30">
+                      <td rowSpan={isLongShift ? 1 : 2} className="py-2 px-3 align-middle font-bold text-purple-900 dark:text-purple-200 border-r border-slate-100 dark:border-slate-800">
+                        Weight 3 (W3) - Tahap 3
+                      </td>
+                      <td className="py-1.5 px-3 text-center">
+                        <span className="px-1.5 py-0.5 rounded font-mono font-bold text-[10px] bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300">
+                          {isLongShift ? 'LS' : 'D'}
+                        </span>
+                      </td>
+                      <td className="py-1.5 px-3.5">
+                        <InBarMetricCell value={loiW3Day} maxValue={monthlyBenchmarks.loiFurnace.maxShift.w3} colorVariant="purple" unit="cwn" />
+                      </td>
+                      <td rowSpan={isLongShift ? 1 : 2} className="py-2 px-3.5 align-middle border-l border-slate-100 dark:border-slate-800">
+                        <InBarMetricCell value={loiW3} maxValue={monthlyBenchmarks.loiFurnace.maxDaily.w3} colorVariant="purple" unit="cwn" />
+                      </td>
+                      <td rowSpan={isLongShift ? 1 : 2} className="py-2 px-3 align-middle text-center font-mono text-[10px] text-slate-400 border-l border-slate-100 dark:border-slate-800">
+                        <div>Shift: {formatNumber(monthlyBenchmarks.loiFurnace.maxShift.w3)}</div>
+                        <div>Daily: {formatNumber(monthlyBenchmarks.loiFurnace.maxDaily.w3)}</div>
+                      </td>
+                    </tr>
+                    {!isLongShift && (
+                      <tr className="hover:bg-slate-50/60 dark:hover:bg-slate-800/30">
+                        <td className="py-1.5 px-3 text-center">
+                          <span className="px-1.5 py-0.5 rounded font-mono font-bold text-[10px] bg-indigo-100 dark:bg-indigo-950/60 text-indigo-800 dark:text-indigo-300">
+                            N
+                          </span>
+                        </td>
+                        <td className="py-1.5 px-3.5">
+                          <InBarMetricCell value={loiW3Night} maxValue={monthlyBenchmarks.loiFurnace.maxShift.w3} colorVariant="purple" unit="cwn" />
+                        </td>
+                      </tr>
+                    )}
+
+                    {/* OS W3 */}
+                    <tr className="hover:bg-slate-50/60 dark:hover:bg-slate-800/30 bg-purple-50/15 dark:bg-purple-950/10">
+                      <td rowSpan={isLongShift ? 1 : 2} className="py-2 px-3 align-middle text-purple-700 dark:text-purple-400 font-medium border-r border-slate-100 dark:border-slate-800">
+                        ↳ Antrean OS W3
+                      </td>
+                      <td className="py-1.5 px-3 text-center">
+                        <span className="px-1.5 py-0.5 rounded font-mono font-bold text-[10px] bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300">
+                          {isLongShift ? 'LS' : 'D'}
+                        </span>
+                      </td>
+                      <td className="py-1.5 px-3.5">
+                        <InBarMetricCell value={osW3Day} maxValue={monthlyBenchmarks.loiFurnace.maxShift.os3} colorVariant="slate" unit="cwn" />
+                      </td>
+                      <td rowSpan={isLongShift ? 1 : 2} className="py-2 px-3.5 align-middle border-l border-slate-100 dark:border-slate-800">
+                        <InBarMetricCell value={osW3} maxValue={monthlyBenchmarks.loiFurnace.maxDaily.os3} colorVariant="slate" unit="cwn" />
+                      </td>
+                      <td rowSpan={isLongShift ? 1 : 2} className="py-2 px-3 align-middle text-center font-mono text-[10px] text-slate-400 border-l border-slate-100 dark:border-slate-800">
+                        <div>Shift: {formatNumber(monthlyBenchmarks.loiFurnace.maxShift.os3)}</div>
+                        <div>Daily: {formatNumber(monthlyBenchmarks.loiFurnace.maxDaily.os3)}</div>
+                      </td>
+                    </tr>
+                    {!isLongShift && (
+                      <tr className="hover:bg-slate-50/60 dark:hover:bg-slate-800/30 bg-purple-50/15 dark:bg-purple-950/10">
+                        <td className="py-1.5 px-3 text-center">
+                          <span className="px-1.5 py-0.5 rounded font-mono font-bold text-[10px] bg-indigo-100 dark:bg-indigo-950/60 text-indigo-800 dark:text-indigo-300">
+                            N
+                          </span>
+                        </td>
+                        <td className="py-1.5 px-3.5">
+                          <InBarMetricCell value={osW3Night} maxValue={monthlyBenchmarks.loiFurnace.maxShift.os3} colorVariant="slate" unit="cwn" />
+                        </td>
+                      </tr>
+                    )}
+
+                    {/* W4 */}
+                    <tr className="hover:bg-slate-50/60 dark:hover:bg-slate-800/30">
+                      <td rowSpan={isLongShift ? 1 : 2} className="py-2 px-3 align-middle font-bold text-purple-900 dark:text-purple-200 border-r border-slate-100 dark:border-slate-800">
+                        Weight 4 (W4) - Tahap 4 Konstan
+                      </td>
+                      <td className="py-1.5 px-3 text-center">
+                        <span className="px-1.5 py-0.5 rounded font-mono font-bold text-[10px] bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300">
+                          {isLongShift ? 'LS' : 'D'}
+                        </span>
+                      </td>
+                      <td className="py-1.5 px-3.5">
+                        <InBarMetricCell value={loiW4Day} maxValue={monthlyBenchmarks.loiFurnace.maxShift.w4} colorVariant="purple" unit="cwn" />
+                      </td>
+                      <td rowSpan={isLongShift ? 1 : 2} className="py-2 px-3.5 align-middle border-l border-slate-100 dark:border-slate-800">
+                        <InBarMetricCell value={loiW4} maxValue={monthlyBenchmarks.loiFurnace.maxDaily.w4} colorVariant="purple" unit="cwn" />
+                      </td>
+                      <td rowSpan={isLongShift ? 1 : 2} className="py-2 px-3 align-middle text-center font-mono text-[10px] text-slate-400 border-l border-slate-100 dark:border-slate-800">
+                        <div>Shift: {formatNumber(monthlyBenchmarks.loiFurnace.maxShift.w4)}</div>
+                        <div>Daily: {formatNumber(monthlyBenchmarks.loiFurnace.maxDaily.w4)}</div>
+                      </td>
+                    </tr>
+                    {!isLongShift && (
+                      <tr className="hover:bg-slate-50/60 dark:hover:bg-slate-800/30">
+                        <td className="py-1.5 px-3 text-center">
+                          <span className="px-1.5 py-0.5 rounded font-mono font-bold text-[10px] bg-indigo-100 dark:bg-indigo-950/60 text-indigo-800 dark:text-indigo-300">
+                            N
+                          </span>
+                        </td>
+                        <td className="py-1.5 px-3.5">
+                          <InBarMetricCell value={loiW4Night} maxValue={monthlyBenchmarks.loiFurnace.maxShift.w4} colorVariant="purple" unit="cwn" />
+                        </td>
+                      </tr>
+                    )}
+
+                    {/* OS W4 */}
+                    <tr className="hover:bg-slate-50/60 dark:hover:bg-slate-800/30 bg-purple-50/15 dark:bg-purple-950/10">
+                      <td rowSpan={isLongShift ? 1 : 2} className="py-2 px-3 align-middle text-purple-700 dark:text-purple-400 font-medium border-r border-slate-100 dark:border-slate-800">
+                        ↳ Antrean OS W4
+                      </td>
+                      <td className="py-1.5 px-3 text-center">
+                        <span className="px-1.5 py-0.5 rounded font-mono font-bold text-[10px] bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300">
+                          {isLongShift ? 'LS' : 'D'}
+                        </span>
+                      </td>
+                      <td className="py-1.5 px-3.5">
+                        <InBarMetricCell value={osW4Day} maxValue={monthlyBenchmarks.loiFurnace.maxShift.os4} colorVariant="slate" unit="cwn" />
+                      </td>
+                      <td rowSpan={isLongShift ? 1 : 2} className="py-2 px-3.5 align-middle border-l border-slate-100 dark:border-slate-800">
+                        <InBarMetricCell value={osW4} maxValue={monthlyBenchmarks.loiFurnace.maxDaily.os4} colorVariant="slate" unit="cwn" />
+                      </td>
+                      <td rowSpan={isLongShift ? 1 : 2} className="py-2 px-3 align-middle text-center font-mono text-[10px] text-slate-400 border-l border-slate-100 dark:border-slate-800">
+                        <div>Shift: {formatNumber(monthlyBenchmarks.loiFurnace.maxShift.os4)}</div>
+                        <div>Daily: {formatNumber(monthlyBenchmarks.loiFurnace.maxDaily.os4)}</div>
+                      </td>
+                    </tr>
+                    {!isLongShift && (
+                      <tr className="hover:bg-slate-50/60 dark:hover:bg-slate-800/30 bg-purple-50/15 dark:bg-purple-950/10">
+                        <td className="py-1.5 px-3 text-center">
+                          <span className="px-1.5 py-0.5 rounded font-mono font-bold text-[10px] bg-indigo-100 dark:bg-indigo-950/60 text-indigo-800 dark:text-indigo-300">
+                            N
+                          </span>
+                        </td>
+                        <td className="py-1.5 px-3.5">
+                          <InBarMetricCell value={osW4Night} maxValue={monthlyBenchmarks.loiFurnace.maxShift.os4} colorVariant="slate" unit="cwn" />
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Catatan Kesiapan Form Input Foreman */}
+            <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/80 text-xs text-slate-600 dark:text-slate-300 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <Info className="w-4 h-4 text-purple-600 shrink-0" />
+                <span>
+                  <strong>Struktur Input Siap:</strong> Skema W1 s/d W4 dan antrean per workstation (OS W1 - OS W4) telah terintegrasi di tampilan dashboard. Data saat ini bersumber dari logbook SQL eksisting dan otomatis sinkron saat form pengisian foreman aktif.
+                </span>
+              </div>
             </div>
 
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* 3a. Press Powder */}
-            <StandardProductivityCard
-              title="Press Powder (Pellet)"
-              subtitle="Pencetakan pelet serbuk untuk instrumen EDXRF cepat"
-              balance={0}
-              received={pressRecv}
-              finished={pressFin}
-              outstanding={pressBal}
-              icon={Flame}
-              color="sky"
-              detailSnippet={
-                <span>Rata-rata throughput pelet tercapai {pressFin} unit per shift.</span>
-              }
-            />
-
-            {/* 3b. Weighing */}
-            <StandardProductivityCard
-              title="Weighing (Penimbangan)"
-              subtitle="Penimbangan akurat sampel eksplorasi untuk peleburan"
-              balance={weighOs}
-              received={weighRecv}
-              finished={weighFin}
-              outstanding={weighBal}
-              icon={Gauge}
-              color="amber"
-              detailSnippet={
-                <span>Antrean penimbangan berkurang menjadi <strong>{weighBal}</strong> sampel eksplorasi.</span>
-              }
-            />
-
-            {/* 3c. Fusion (Fuse Bead) */}
-            <StandardProductivityCard
-              title="Fusion (Bead Peleburan)"
-              subtitle="Peleburan manik borat kaca suhu tinggi untuk WDXRF presisi"
-              balance={fusionBalAwal}
-              received={fusionRecv}
-              finished={fusionFin}
-              outstanding={fusionBalAkhir}
-              icon={Flame}
-              color="orange"
-              detailSnippet={
-                <span>Kecepatan fusion menyeimbangi output penimbangan ({fusionFin} manik selesai).</span>
-              }
-            />
-
-            {/* 3d. LOI (Loss on Ignition) */}
-            <StandardProductivityCard
-              title="LOI (Loss on Ignition)"
-              subtitle="Pengabuan suhu tinggi furnace workstation W2, W4, W5"
-              balance={loiOs}
-              received={expShift}
-              finished={loiFin}
-              outstanding={loiBal}
-              icon={Flame}
-              color="purple"
-              detailSnippet={
-                <div className="flex gap-4 pt-1 font-mono text-[11px]">
-                  <span>W2: <strong>{loiW2}</strong></span>
-                  <span>W4: <strong>{loiW4}</strong></span>
-                  <span>W5: <strong>{loiW5}</strong></span>
-                  <span className="text-slate-400">| Sisa Saldo: <strong>{loiBal}</strong></span>
-                </div>
-              }
-            />
-          </div>
         </div>
       )}
 
@@ -2930,7 +4510,7 @@ export const DailyPerformanceStructuredPresentation: React.FC<DailyPerformanceSt
                 Penjabaran Instrumen (EDXRF 6 Alat & WDXRF 2 Alat)
               </h3>
               <span className="text-xs text-slate-500 font-mono">
-                Skema: Balance ➔ Received ➔ Finished ➔ Outstanding
+                Skema: Balance → Received → Finished → Outstanding
               </span>
             </div>
 
@@ -3057,9 +4637,15 @@ export const DailyPerformanceStructuredPresentation: React.FC<DailyPerformanceSt
                   <span className="font-semibold text-slate-700">8/8 Mesin Spektrometer Siap & Terkalibrasi</span>
                 </div>
                 <div className="flex items-center gap-3 font-mono text-[11px]">
-                  <span>Pagi: {edxrfDayShift + tbpGpsDayWdxrf} run</span>
-                  <span>•</span>
-                  <span>Malam: {edxrfNightShift + tbpGpsNightWdxrf} run</span>
+                  {isLongShift ? (
+                    <span>Long Shift (07:00 - 24:00): {edxrfDayShift + tbpGpsDayWdxrf} run (Shift Pagi)</span>
+                  ) : (
+                    <>
+                      <span>Pagi: {edxrfDayShift + tbpGpsDayWdxrf} run</span>
+                      <span>•</span>
+                      <span>Malam: {edxrfNightShift + tbpGpsNightWdxrf} run</span>
+                    </>
+                  )}
                 </div>
               </div>
 
@@ -3091,6 +4677,14 @@ export const DailyPerformanceStructuredPresentation: React.FC<DailyPerformanceSt
                 received={edxrfRecv}
                 finished={edxrfTotalFin}
                 outstanding={edxrfOutstanding}
+                balanceDay={edxrfBalAwalDay}
+                balanceNight={edxrfBalAwalNight}
+                receivedDay={edxrfRecvDay}
+                receivedNight={edxrfRecvNight}
+                finishedDay={edxrfFinDay}
+                finishedNight={edxrfFinNight}
+                outstandingDay={edxrfBalDay}
+                outstandingNight={edxrfBalNight}
                 icon={Cpu}
                 color="teal"
               />
@@ -3144,6 +4738,14 @@ export const DailyPerformanceStructuredPresentation: React.FC<DailyPerformanceSt
                 received={wdxrfRecv}
                 finished={wdxrfTotalFin}
                 outstanding={wdxrfBalAkhir}
+                balanceDay={dayShift?.wdxrf.osExp || 0}
+                balanceNight={nightShift?.wdxrf.osExp || dayShift?.wdxrf.bal || 0}
+                receivedDay={fusionFinDay}
+                receivedNight={fusionFinNight}
+                finishedDay={tbpGpsDayWdxrf}
+                finishedNight={tbpGpsNightWdxrf}
+                outstandingDay={dayShift?.wdxrf.bal || 0}
+                outstandingNight={nightShift?.wdxrf.bal || 0}
                 icon={Cpu}
                 color="indigo"
               />
@@ -3246,12 +4848,22 @@ export const DailyPerformanceStructuredPresentation: React.FC<DailyPerformanceSt
 
               {/* Shift Split GTS */}
               <div className="p-3 rounded-2xl bg-white dark:bg-slate-900 border border-purple-200 dark:border-purple-900/60 shadow-xs space-y-1.5">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Beban Shift GTS</span>
-                <div className="flex justify-between items-center text-[11px] font-mono">
-                  <span className="text-amber-600 flex items-center gap-1"><Sun className="w-3 h-3" /> Pagi: <strong>{gtsDayRuns}</strong></span>
-                  <span className="text-indigo-600 flex items-center gap-1"><Moon className="w-3 h-3" /> Malam: <strong>{gtsNightRuns}</strong></span>
-                </div>
-                <ShiftDistributionBar dayVal={gtsDayRuns} nightVal={gtsNightRuns} dayLabel="Pagi" nightLabel="Malam" />
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                  {isLongShift ? 'Operasional Shift GTS' : 'Beban Shift GTS'}
+                </span>
+                {isLongShift ? (
+                  <div className="text-[11px] font-mono text-amber-600 font-bold">
+                    Long Shift (07:00 - 24:00): {gtsDayRuns} run (Shift Pagi)
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex justify-between items-center text-[11px] font-mono">
+                      <span className="text-amber-600 flex items-center gap-1"><Sun className="w-3 h-3" /> Pagi: <strong>{gtsDayRuns}</strong></span>
+                      <span className="text-indigo-600 flex items-center gap-1"><Moon className="w-3 h-3" /> Malam: <strong>{gtsNightRuns}</strong></span>
+                    </div>
+                    <ShiftDistributionBar dayVal={gtsDayRuns} nightVal={gtsNightRuns} dayLabel="Pagi" nightLabel="Malam" />
+                  </>
+                )}
               </div>
             </div>
 
@@ -3277,7 +4889,7 @@ export const DailyPerformanceStructuredPresentation: React.FC<DailyPerformanceSt
                 QC Data & Reporting (Kontrol Mutu & Rilis CoA Eksplorasi)
               </h3>
               <span className="text-xs text-slate-500 font-mono">
-                Skema: Balance ➔ Received ➔ Finished ➔ Outstanding
+                Skema: Balance → Received → Finished → Outstanding
               </span>
             </div>
 
@@ -3322,14 +4934,23 @@ export const DailyPerformanceStructuredPresentation: React.FC<DailyPerformanceSt
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <span className="px-2.5 py-1 rounded-xl bg-amber-50 text-amber-800 border border-amber-200 text-xs font-bold font-mono flex items-center gap-1">
-                    <Sun className="w-3.5 h-3.5 text-amber-500" />
-                    Pagi: {formatNumber(reportDayShift)}
-                  </span>
-                  <span className="px-2.5 py-1 rounded-xl bg-indigo-50 text-indigo-800 border border-indigo-200 text-xs font-bold font-mono flex items-center gap-1">
-                    <Moon className="w-3.5 h-3.5 text-indigo-500" />
-                    Malam: {formatNumber(reportNightShift)}
-                  </span>
+                  {isLongShift ? (
+                    <span className="px-2.5 py-1 rounded-xl bg-amber-50 text-amber-800 border border-amber-200 text-xs font-bold font-mono flex items-center gap-1">
+                      <Sun className="w-3.5 h-3.5 text-amber-500" />
+                      Long Shift (07:00 - 24:00): {formatNumber(reportDayShift)} (Shift Pagi)
+                    </span>
+                  ) : (
+                    <>
+                      <span className="px-2.5 py-1 rounded-xl bg-amber-50 text-amber-800 border border-amber-200 text-xs font-bold font-mono flex items-center gap-1">
+                        <Sun className="w-3.5 h-3.5 text-amber-500" />
+                        Pagi: {formatNumber(reportDayShift)}
+                      </span>
+                      <span className="px-2.5 py-1 rounded-xl bg-indigo-50 text-indigo-800 border border-indigo-200 text-xs font-bold font-mono flex items-center gap-1">
+                        <Moon className="w-3.5 h-3.5 text-indigo-500" />
+                        Malam: {formatNumber(reportNightShift)}
+                      </span>
+                    </>
+                  )}
                 </div>
               </div>
 
@@ -3387,12 +5008,14 @@ export const DailyPerformanceStructuredPresentation: React.FC<DailyPerformanceSt
                 </div>
               </div>
 
-              <ShiftDistributionBar 
-                dayVal={reportDayShift} 
-                nightVal={reportNightShift} 
-                dayLabel="Pagi"
-                nightLabel="Malam"
-              />
+              {!isLongShift && (
+                <ShiftDistributionBar 
+                  dayVal={reportDayShift} 
+                  nightVal={reportNightShift} 
+                  dayLabel="Pagi"
+                  nightLabel="Malam"
+                />
+              )}
 
             </div>
 
@@ -3420,6 +5043,14 @@ export const DailyPerformanceStructuredPresentation: React.FC<DailyPerformanceSt
               received={qcRecv}
               finished={qcFin}
               outstanding={qcBalAkhir}
+              balanceDay={dayShift?.qc.os || 0}
+              balanceNight={nightShift?.qc.os || dayShift?.qc.bal || 0}
+              receivedDay={tbpGpsDayWdxrf}
+              receivedNight={tbpGpsNightWdxrf}
+              finishedDay={qcDayShift}
+              finishedNight={qcNightShift}
+              outstandingDay={dayShift?.qc.bal || 0}
+              outstandingNight={nightShift?.qc.bal || 0}
               icon={ShieldCheck}
               color="teal"
               detailSnippet={
@@ -3435,6 +5066,14 @@ export const DailyPerformanceStructuredPresentation: React.FC<DailyPerformanceSt
               received={reportRecv}
               finished={reportFin}
               outstanding={reportBalAkhir}
+              balanceDay={dayShift?.report.osReport || 0}
+              balanceNight={nightShift?.report.osReport || dayShift?.report.bal || 0}
+              receivedDay={dayShift?.report.received || 0}
+              receivedNight={nightShift?.report.received || 0}
+              finishedDay={reportDayShift}
+              finishedNight={reportNightShift}
+              outstandingDay={dayShift?.report.bal || 0}
+              outstandingNight={nightShift?.report.bal || 0}
               icon={FileCheck}
               color="emerald"
               detailSnippet={

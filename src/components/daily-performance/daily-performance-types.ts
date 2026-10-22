@@ -57,13 +57,20 @@ export interface DailyWeighingFuseBead {
 
 export interface DailyLOI {
   os: number;
+  weighing?: number;
+  w1?: number;
   w2: number;
+  w3?: number;
   w4: number;
   w5: number;
   finLoiShift: number;
   finLoiDay: number;
   finLoiWkly: number;
   bal: number;
+  osW1?: number;
+  osW2?: number;
+  osW3?: number;
+  osW4?: number;
 }
 
 export interface DailyZetiumRuns {

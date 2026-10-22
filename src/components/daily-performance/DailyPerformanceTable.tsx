@@ -12,6 +12,7 @@ interface DailyPerformanceTableProps {
 
 export const DailyPerformanceTable: React.FC<DailyPerformanceTableProps> = ({ records }) => {
   const [search, setSearch] = useState('');
+  const [selectedMonth, setSelectedMonth] = useState<string>('all');
   const [selectedWeek, setSelectedWeek] = useState<string>('all');
   const [selectedRegu, setSelectedRegu] = useState<string>('all');
   const [selectedShift, setSelectedShift] = useState<string>('all');
@@ -19,6 +20,16 @@ export const DailyPerformanceTable: React.FC<DailyPerformanceTableProps> = ({ re
   // Collapsible column group toggles
   const [showEdxrfDetails, setShowEdxrfDetails] = useState(false);
   const [showZetiumDetails, setShowZetiumDetails] = useState(false);
+
+  // Distinct months
+  const availableMonths = useMemo(() => {
+    const set = new Set<string>();
+    records.forEach(r => {
+      const parts = r.date.split('/');
+      if (parts.length === 3) set.add(`${parts[1]}/${parts[2]}`);
+    });
+    return Array.from(set).sort();
+  }, [records]);
 
   // Distinct weeks
   const availableWeeks = useMemo(() => {
@@ -31,17 +42,21 @@ export const DailyPerformanceTable: React.FC<DailyPerformanceTableProps> = ({ re
   const filteredRecords = useMemo(() => {
     return records.filter(r => {
       if (search && !r.date.includes(search) && !r.isoDate.includes(search)) return false;
+      if (selectedMonth !== 'all') {
+        const parts = r.date.split('/');
+        if (`${parts[1]}/${parts[2]}` !== selectedMonth) return false;
+      }
       if (selectedWeek !== 'all' && r.week !== Number(selectedWeek)) return false;
       if (selectedRegu !== 'all' && r.regu !== selectedRegu) return false;
       if (selectedShift !== 'all' && r.shiftType !== selectedShift) return false;
       return true;
     });
-  }, [records, search, selectedWeek, selectedRegu, selectedShift]);
+  }, [records, search, selectedMonth, selectedWeek, selectedRegu, selectedShift]);
 
   // Quick export CSV - PEMISAHAN KETAT TBP/GPS DAN GTS
   const handleExportCsv = () => {
     const headers = [
-      'No', 'Date', 'Week', 'Regu', 'Shift',
+      'No', 'Date', 'Week', 'Shift', 'Waktu Kerja',
       'Staff_Shift', 'Crew_Shift',
       'GC_Shift', 'Prod_Shift', 'Prod_RC', 'Prod_RA', 'Exp_Shift', 'Smelter_Shift', 'GTS_Received_Shift',
       'Press_Fin_Shift',
@@ -97,6 +112,31 @@ export const DailyPerformanceTable: React.FC<DailyPerformanceTableProps> = ({ re
             />
           </div>
 
+          {/* Month Filter */}
+          <div className="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-300">
+            <span>Bulan:</span>
+            <select
+              value={selectedMonth}
+              onChange={e => setSelectedMonth(e.target.value)}
+              className="px-2.5 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs cursor-pointer focus:outline-none"
+            >
+              <option value="all">Semua Bulan</option>
+              {availableMonths.map(m => {
+                const [monthNum, yearNum] = m.split('/');
+                const monthNames: Record<string, string> = {
+                  '01': 'Januari', '02': 'Februari', '03': 'Maret', '04': 'April',
+                  '05': 'Mei', '06': 'Juni', '07': 'Juli', '08': 'Agustus',
+                  '09': 'September', '10': 'Oktober', '11': 'November', '12': 'Desember'
+                };
+                return (
+                  <option key={m} value={m}>
+                    {monthNames[monthNum] || monthNum} {yearNum}
+                  </option>
+                );
+              })}
+            </select>
+          </div>
+
           {/* Week Filter */}
           <div className="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-300">
             <span>Minggu:</span>
@@ -112,32 +152,32 @@ export const DailyPerformanceTable: React.FC<DailyPerformanceTableProps> = ({ re
             </select>
           </div>
 
-          {/* Regu Filter */}
+          {/* Shift Filter (sebelumnya Regu) */}
           <div className="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-300">
-            <span>Regu:</span>
+            <span>Shift:</span>
             <select
               value={selectedRegu}
               onChange={e => setSelectedRegu(e.target.value)}
               className="px-2.5 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs cursor-pointer focus:outline-none"
             >
-              <option value="all">Semua Regu</option>
-              <option value="A">Regu A</option>
-              <option value="B">Regu B</option>
+              <option value="all">Semua Shift</option>
+              <option value="A">Shift A</option>
+              <option value="B">Shift B</option>
             </select>
           </div>
 
-          {/* Shift Filter */}
+          {/* Waktu Kerja Filter */}
           <div className="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-300">
-            <span>Shift:</span>
+            <span>Waktu:</span>
             <select
               value={selectedShift}
               onChange={e => setSelectedShift(e.target.value)}
               className="px-2.5 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs cursor-pointer focus:outline-none"
             >
-              <option value="all">Semua Shift</option>
-              <option value="DAY">DAY (Siang)</option>
-              <option value="NIGHT">NIGHT (Malam)</option>
-              <option value="LS">LS (Long Shift)</option>
+              <option value="all">Semua Waktu</option>
+              <option value="DAY">DAY (Pagi: 07-19)</option>
+              <option value="NIGHT">NIGHT (Malam: 19-07)</option>
+              <option value="LS">LS (Long Shift: 07-24)</option>
             </select>
           </div>
         </div>
@@ -212,8 +252,8 @@ export const DailyPerformanceTable: React.FC<DailyPerformanceTableProps> = ({ re
               <tr className="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
                 <th className="p-2 border-r border-slate-200 dark:border-slate-700">Tanggal</th>
                 <th className="p-2 border-r border-slate-200 dark:border-slate-700 text-center">Wk</th>
-                <th className="p-2 border-r border-slate-200 dark:border-slate-700 text-center">Regu</th>
                 <th className="p-2 border-r border-slate-200 dark:border-slate-700 text-center">Shift</th>
+                <th className="p-2 border-r border-slate-200 dark:border-slate-700 text-center">Waktu Kerja</th>
 
                 {/* Manpower */}
                 <th className="p-2 border-r border-slate-200 dark:border-slate-700 text-center">Staff</th>
@@ -286,15 +326,15 @@ export const DailyPerformanceTable: React.FC<DailyPerformanceTableProps> = ({ re
                         ? 'bg-teal-100 text-teal-800 dark:bg-teal-900/60 dark:text-teal-300' 
                         : 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/60 dark:text-indigo-300'
                     }`}>
-                      {r.regu}
+                      Shift {r.regu}
                     </span>
                   </td>
                   <td className="p-2 text-center border-r border-slate-100 dark:border-slate-800 font-semibold text-[10px]">
                     <span className={`px-2 py-0.5 rounded-md ${
                       r.shiftType === 'DAY' ? 'text-amber-700 dark:text-amber-400' :
                       r.shiftType === 'NIGHT' ? 'text-sky-700 dark:text-sky-400' : 'text-purple-700 dark:text-purple-400'
-                    }`}>
-                      {r.shiftType}
+                    }`} title={r.shiftType === 'DAY' ? '07:00 - 19:00 WITA' : r.shiftType === 'NIGHT' ? '19:00 - 07:00 WITA' : '07:00 - 24:00 WITA'}>
+                      {r.shiftType === 'DAY' ? 'DAY (07-19)' : r.shiftType === 'NIGHT' ? 'NIGHT (19-07)' : 'LS (07-24)'}
                     </span>
                   </td>
 
