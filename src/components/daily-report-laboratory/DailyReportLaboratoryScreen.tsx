@@ -4,7 +4,8 @@ import {
   FileCheck, FileSpreadsheet, Save, Sparkles, Building2, 
   CheckSquare, Square, Plus, AlertCircle, Stethoscope, 
   Send, X, CheckCircle2, ChevronRight, BarChart3, RefreshCw,
-  Clock, Shield, Beaker, Check, HelpCircle
+  Clock, Shield, Beaker, Check, HelpCircle, Trash2, Info,
+  Tag, Compass, Factory, Mountain
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { getRosterData } from '../../sheets-api';
@@ -21,7 +22,12 @@ import {
   getStoredSampleBatches, 
   saveStoredSampleBatches 
 } from '../daily-performance-v2/daily-performance-v2-utils';
-import { SampleBatchRecord } from '../daily-performance-v2/daily-performance-v2-types';
+import { 
+  SampleBatchRecord, 
+  WEIGHING_SAMPLE_CATEGORIES, 
+  getSampleGroup, 
+  SampleGroupType 
+} from '../daily-performance-v2/daily-performance-v2-types';
 
 export type LabReportSubMenu = 'weighing_fuse_loi' | 'press_edxrf' | 'wdxrf' | 'qc_data' | 'reporting';
 
@@ -89,11 +95,6 @@ export const DailyReportLaboratoryScreen: React.FC<DailyReportLaboratoryScreenPr
   const [newBatchUniformSize, setNewBatchUniformSize] = useState<boolean>(true);
   const [newBatchSplPerBatch, setNewBatchSplPerBatch] = useState<number>(24);
   const [newBatchCustomSizes, setNewBatchCustomSizes] = useState<number[]>([24, 24, 24]);
-
-  // Intake Eksplorasi / Smelter
-  const [expShift, setExpShift] = useState(120);
-  const [prodShift, setProdShift] = useState(25);
-  const [smelterShift, setSmelterShift] = useState(0);
 
   // LOI
   const [loiOs, setLoiOs] = useState(100);
@@ -185,6 +186,59 @@ export const DailyReportLaboratoryScreen: React.FC<DailyReportLaboratoryScreenPr
     });
   }, [newBatchCount, newBatchSplPerBatch]);
 
+  // ==================== STATISTIK SAMPEL TERDAFTAR (ANTI-DUPLIKASI) ====================
+  // Mengelompokkan riwayat sampel yang sudah terdaftar berdasarkan 4 Kategori Resmi:
+  // 1. Exploration: TBP, GPS, JMP, GTS, BJM, OAM, SCANDIUM
+  // 2. Smelter: SMELTER MSP, SMELTER HPL, SMELTER HJF, SMELTER ONC, SMELTER KPS
+  // 3. Production: QC LIM, QC SAP, QC BLD, QC BOULDER
+  // 4. Khusus: KHUSUS (Sample Accidental)
+  const registeredStats = useMemo(() => {
+    const summaryByPt: Record<string, { batchCount: number; sampleCount: number; group: SampleGroupType }> = {};
+    let expBatches = 0, expSamples = 0;
+    let smelterBatches = 0, smelterSamples = 0;
+    let prodBatches = 0, prodSamples = 0;
+    let khususBatches = 0, khususSamples = 0;
+
+    batches.forEach(b => {
+      const ptKey = String(b.pt || '').trim().toUpperCase();
+      const grp = b.sampleGroup || getSampleGroup(ptKey);
+      if (!summaryByPt[ptKey]) {
+        summaryByPt[ptKey] = { batchCount: 0, sampleCount: 0, group: grp };
+      }
+      summaryByPt[ptKey].batchCount += 1;
+      summaryByPt[ptKey].sampleCount += (b.sampleCount || 24);
+
+      if (grp === 'Exploration') {
+        expBatches += 1;
+        expSamples += (b.sampleCount || 24);
+      } else if (grp === 'Smelter') {
+        smelterBatches += 1;
+        smelterSamples += (b.sampleCount || 24);
+      } else if (grp === 'Production') {
+        prodBatches += 1;
+        prodSamples += (b.sampleCount || 24);
+      } else if (grp === 'Khusus') {
+        khususBatches += 1;
+        khususSamples += (b.sampleCount || 24);
+      }
+    });
+
+    return {
+      summaryByPt,
+      expBatches, expSamples,
+      smelterBatches, smelterSamples,
+      prodBatches, prodSamples,
+      khususBatches, khususSamples,
+      totalBatches: batches.length,
+      totalSamples: batches.reduce((acc, b) => acc + (b.sampleCount || 24), 0)
+    };
+  }, [batches]);
+
+  // Sample intake values auto-sum from registered batches (dengan fallback jika ada nilai awal)
+  const expShift = registeredStats.expSamples;
+  const smelterShift = registeredStats.smelterSamples;
+  const prodShift = registeredStats.prodSamples;
+
   // ==================== CALCULATIONS & AUTO CASCADING ====================
   // 1. Press & EDXRF
   const totalPressLoad = pressOsAwal + pulpDryReceived;
@@ -231,19 +285,38 @@ export const DailyReportLaboratoryScreen: React.FC<DailyReportLaboratoryScreenPr
   }, [reportReceived]);
   const reportBal = Math.max(0, totalReportLoad - reportDone);
 
+  // Helper info untuk PT yang sedang dipilih
+  const currentSelectedPtInfo = useMemo(() => {
+    const ptKey = newBatchPt.toUpperCase().trim();
+    const existing = registeredStats.summaryByPt[ptKey];
+    const group = getSampleGroup(ptKey);
+    return {
+      ptKey,
+      group,
+      batchCount: existing?.batchCount || 0,
+      sampleCount: existing?.sampleCount || 0,
+      nextBatchNumber: (existing?.batchCount || 0) + 1
+    };
+  }, [newBatchPt, registeredStats]);
+
   // Batch actions
   const handleAddBatch = () => {
     const count = Math.max(1, Math.min(20, newBatchCount || 1));
     const nowIso = new Date().toISOString();
     const created: SampleBatchRecord[] = [];
+    const group = getSampleGroup(newBatchPt);
+
+    const existingCount = batches.filter(b => b.pt.toUpperCase() === newBatchPt.toUpperCase()).length;
 
     for (let i = 0; i < count; i++) {
       const splCount = newBatchUniformSize ? newBatchSplPerBatch : (newBatchCustomSizes[i] || newBatchSplPerBatch);
-      const batchNo = batches.filter(b => b.pt === newBatchPt).length + i + 1;
+      const batchNo = existingCount + i + 1;
       created.push({
         id: `batch_${Date.now()}_${newBatchPt}_${batchNo}_${Math.random().toString(36).substring(2, 6)}`,
         batchName: `Batch ${batchNo} - ${newBatchPt}`,
         pt: newBatchPt,
+        sampleGroup: group,
+        batchNumber: batchNo,
         sampleCount: splCount,
         receivedShift: shiftType,
         receivedDate: date,
@@ -257,7 +330,7 @@ export const DailyReportLaboratoryScreen: React.FC<DailyReportLaboratoryScreenPr
     setBatches(updated);
     saveStoredSampleBatches(updated);
     window.dispatchEvent(new CustomEvent('preplab-batches-updated'));
-    toast.success(`${count} batch untuk ${newBatchPt} (${count * newBatchSplPerBatch} spl) berhasil didaftarkan!`);
+    toast.success(`${count} batch untuk ${newBatchPt} (${count * newBatchSplPerBatch} spl) [${group}] berhasil didaftarkan!`);
   };
 
   const handleToggleBatchFinish = (id: string) => {
@@ -265,6 +338,15 @@ export const DailyReportLaboratoryScreen: React.FC<DailyReportLaboratoryScreenPr
     setBatches(updated);
     saveStoredSampleBatches(updated);
     window.dispatchEvent(new CustomEvent('preplab-batches-updated'));
+  };
+
+  const handleDeleteBatch = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const updated = batches.filter(b => b.id !== id);
+    setBatches(updated);
+    saveStoredSampleBatches(updated);
+    window.dispatchEvent(new CustomEvent('preplab-batches-updated'));
+    toast.info('Batch berhasil dihapus dari antrean.');
   };
 
   // Submit Quick Absence to ADM
@@ -735,6 +817,129 @@ export const DailyReportLaboratoryScreen: React.FC<DailyReportLaboratoryScreenPr
               </div>
             </div>
 
+            {/* PANEL INFORMASI: SAMPEL APA SAJA YANG SUDAH DIDAFTARKAN (ANTI-DUPLIKASI) */}
+            <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+                <div className="flex items-center gap-2">
+                  <Tag className="w-4 h-4 text-emerald-600" />
+                  <h4 className="font-bold text-sm text-slate-800 dark:text-white">
+                    Ringkasan Sampel Terdaftar di Weighing Shift Ini (Anti-Duplikasi)
+                  </h4>
+                </div>
+                <span className="text-xs font-semibold text-slate-500">
+                  Total: <strong className="text-emerald-600 font-mono">{registeredStats.totalBatches} Batch ({registeredStats.totalSamples} spl)</strong>
+                </span>
+              </div>
+
+              {/* 4 Kategori Cards */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                {/* 1. Exploration */}
+                <div className="p-3 rounded-2xl bg-blue-50/70 dark:bg-blue-950/30 border border-blue-200/80 dark:border-blue-800 space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-blue-900 dark:text-blue-200 flex items-center gap-1.5">
+                      <Compass className="w-3.5 h-3.5 text-blue-600" />
+                      Exploration
+                    </span>
+                    <span className="font-mono font-bold text-blue-700 dark:text-blue-300">
+                      {registeredStats.expBatches} B
+                    </span>
+                  </div>
+                  <div className="text-[11px] text-blue-700 dark:text-blue-400">
+                    Total: <strong className="font-mono">{registeredStats.expSamples} spl</strong>
+                  </div>
+                  <div className="text-[9px] text-blue-500 truncate">
+                    TBP, GPS, JMP, GTS, BJM, OAM, SCANDIUM
+                  </div>
+                </div>
+
+                {/* 2. Smelter */}
+                <div className="p-3 rounded-2xl bg-purple-50/70 dark:bg-purple-950/30 border border-purple-200/80 dark:border-purple-800 space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-purple-900 dark:text-purple-200 flex items-center gap-1.5">
+                      <Factory className="w-3.5 h-3.5 text-purple-600" />
+                      Smelter
+                    </span>
+                    <span className="font-mono font-bold text-purple-700 dark:text-purple-300">
+                      {registeredStats.smelterBatches} B
+                    </span>
+                  </div>
+                  <div className="text-[11px] text-purple-700 dark:text-purple-400">
+                    Total: <strong className="font-mono">{registeredStats.smelterSamples} spl</strong>
+                  </div>
+                  <div className="text-[9px] text-purple-500 truncate">
+                    MSP, HPL, HJF, ONC, KPS
+                  </div>
+                </div>
+
+                {/* 3. Production */}
+                <div className="p-3 rounded-2xl bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200/80 dark:border-emerald-800 space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-emerald-900 dark:text-emerald-200 flex items-center gap-1.5">
+                      <Mountain className="w-3.5 h-3.5 text-emerald-600" />
+                      Production
+                    </span>
+                    <span className="font-mono font-bold text-emerald-700 dark:text-emerald-300">
+                      {registeredStats.prodBatches} B
+                    </span>
+                  </div>
+                  <div className="text-[11px] text-emerald-700 dark:text-emerald-400">
+                    Total: <strong className="font-mono">{registeredStats.prodSamples} spl</strong>
+                  </div>
+                  <div className="text-[9px] text-emerald-500 truncate">
+                    QC LIM, SAP, BLD, BOULDER
+                  </div>
+                </div>
+
+                {/* 4. Khusus (Accidental) */}
+                <div className="p-3 rounded-2xl bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200/80 dark:border-amber-800 space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-amber-900 dark:text-amber-200 flex items-center gap-1.5">
+                      <AlertCircle className="w-3.5 h-3.5 text-amber-600" />
+                      Khusus
+                    </span>
+                    <span className="font-mono font-bold text-amber-700 dark:text-amber-300">
+                      {registeredStats.khususBatches} B
+                    </span>
+                  </div>
+                  <div className="text-[11px] text-amber-700 dark:text-amber-400">
+                    Total: <strong className="font-mono">{registeredStats.khususSamples} spl</strong>
+                  </div>
+                  <div className="text-[9px] text-amber-500 truncate">
+                    Sample Accidental / Urgent
+                  </div>
+                </div>
+              </div>
+
+              {/* Rincian per Jenis Sampel (Chips) */}
+              <div className="space-y-1.5 pt-2 border-t border-slate-100 dark:border-slate-800">
+                <span className="text-[11px] font-semibold text-slate-500 block">
+                  Daftar Sampel yang Sudah Terdaftar Sebelumnya:
+                </span>
+                {Object.keys(registeredStats.summaryByPt).length === 0 ? (
+                  <p className="text-xs text-slate-400 italic py-1">
+                    Belum ada sampel yang didaftarkan pada shift ini.
+                  </p>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {Object.entries(registeredStats.summaryByPt).map(([ptKey, stat]) => {
+                      const colorClass = 
+                        stat.group === 'Exploration' ? 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800' :
+                        stat.group === 'Smelter' ? 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800' :
+                        stat.group === 'Production' ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800' :
+                        'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800';
+
+                      return (
+                        <div key={ptKey} className={`flex items-center gap-1.5 px-3 py-1 rounded-xl border text-xs font-semibold ${colorClass}`}>
+                          <span>{ptKey}:</span>
+                          <span className="font-mono font-bold">{stat.batchCount} Batch ({stat.sampleCount} spl)</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+
             {/* Bagian A: Pendaftaran Batch Masuk Stasiun Weighing */}
             <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm space-y-4">
               <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
@@ -751,17 +956,39 @@ export const DailyReportLaboratoryScreen: React.FC<DailyReportLaboratoryScreenPr
 
               <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs">
                 <div>
-                  <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-400">Asal PT / Pengirim</label>
+                  <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-400">
+                    Pilih Kategori Sampel / Asal PT
+                  </label>
                   <select
                     value={newBatchPt}
                     onChange={e => setNewBatchPt(e.target.value)}
                     className="w-full mt-1 px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-bold cursor-pointer"
                   >
-                    <option value="TBP">PT TBP (Trimegah)</option>
-                    <option value="GPS">PT GPS (Gane Permai)</option>
-                    <option value="MMP">PT MMP (Megah Mulia)</option>
-                    <option value="KPS">PT KPS (Karya Prima)</option>
-                    <option value="EXP">Eksplorasi (EXP)</option>
+                    <optgroup label="1. Exploration (EXP)">
+                      <option value="TBP">TBP</option>
+                      <option value="GPS">GPS</option>
+                      <option value="JMP">JMP</option>
+                      <option value="GTS">GTS</option>
+                      <option value="BJM">BJM</option>
+                      <option value="OAM">OAM</option>
+                      <option value="SCANDIUM">SCANDIUM</option>
+                    </optgroup>
+                    <optgroup label="2. Smelter">
+                      <option value="SMELTER MSP">SMELTER MSP</option>
+                      <option value="SMELTER HPL">SMELTER HPL</option>
+                      <option value="SMELTER HJF">SMELTER HJF</option>
+                      <option value="SMELTER ONC">SMELTER ONC</option>
+                      <option value="SMELTER KPS">SMELTER KPS</option>
+                    </optgroup>
+                    <optgroup label="3. Production (PROD)">
+                      <option value="QC LIM">QC LIM (Limonite)</option>
+                      <option value="QC SAP">QC SAP (Saprolite)</option>
+                      <option value="QC BLD">QC BLD (Boulder)</option>
+                      <option value="QC BOULDER">QC BOULDER</option>
+                    </optgroup>
+                    <optgroup label="4. Sample Accidental">
+                      <option value="KHUSUS">KHUSUS (Accidental)</option>
+                    </optgroup>
                   </select>
                 </div>
 
@@ -787,6 +1014,24 @@ export const DailyReportLaboratoryScreen: React.FC<DailyReportLaboratoryScreenPr
                     />
                     <span>Jumlah sampel per batch seragam ({newBatchSplPerBatch} spl/batch)</span>
                   </label>
+                </div>
+              </div>
+
+              {/* LIVE HELPER INFO KETIKA MEMILIH PT (MENCEGAH INPUT 2x) */}
+              <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-xs flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Info className="w-4 h-4 text-teal-600 flex-shrink-0" />
+                  <div>
+                    {currentSelectedPtInfo.batchCount > 0 ? (
+                      <span className="text-slate-700 dark:text-slate-300">
+                        Sampel <strong className="text-teal-700 dark:text-teal-400">{currentSelectedPtInfo.ptKey}</strong> [{currentSelectedPtInfo.group}] sudah terdaftar sebanyak <strong className="font-mono text-teal-700 dark:text-teal-400">{currentSelectedPtInfo.batchCount} Batch ({currentSelectedPtInfo.sampleCount} spl)</strong>. Pendaftaran ini otomatis dicatat sebagai <strong>Batch #{currentSelectedPtInfo.nextBatchNumber} s/d #{currentSelectedPtInfo.nextBatchNumber + newBatchCount - 1}</strong>.
+                      </span>
+                    ) : (
+                      <span className="text-slate-700 dark:text-slate-300">
+                        Sampel <strong className="text-emerald-700 dark:text-emerald-400">{currentSelectedPtInfo.ptKey}</strong> [{currentSelectedPtInfo.group}] <span className="text-emerald-600 font-semibold">belum pernah didaftarkan</span> pada shift ini. Pendaftaran akan dimulai dari <strong>Batch #1</strong>.
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -823,7 +1068,7 @@ export const DailyReportLaboratoryScreen: React.FC<DailyReportLaboratoryScreenPr
                   className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold shadow-sm cursor-pointer transition-all"
                 >
                   <Plus className="w-4 h-4" />
-                  <span>Daftarkan {newBatchCount} Batch ke Stasiun Weighing</span>
+                  <span>Daftarkan {newBatchCount} Batch {newBatchPt} ke Stasiun Weighing</span>
                 </button>
               </div>
             </div>
@@ -850,36 +1095,61 @@ export const DailyReportLaboratoryScreen: React.FC<DailyReportLaboratoryScreenPr
                 </p>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                  {batches.map(b => (
-                    <div 
-                      key={b.id}
-                      onClick={() => handleToggleBatchFinish(b.id)}
-                      className={`p-3.5 rounded-2xl border cursor-pointer transition-all flex items-center justify-between text-xs ${
-                        b.isFinished 
-                          ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-300 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200 shadow-sm' 
-                          : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:border-teal-400'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2.5">
-                        {b.isFinished ? (
-                          <CheckSquare className="w-5 h-5 text-emerald-600 flex-shrink-0" />
-                        ) : (
-                          <Square className="w-5 h-5 text-slate-400 flex-shrink-0" />
-                        )}
-                        <div>
-                          <span className="font-bold block text-sm leading-tight">{b.batchName}</span>
-                          <span className="text-[11px] text-slate-500 font-medium">
-                            {b.sampleCount} sampel • Asal PT {b.pt}
+                  {batches.map(b => {
+                    const group = b.sampleGroup || getSampleGroup(b.pt);
+                    const badgeColor = 
+                      group === 'Exploration' ? 'text-blue-600 bg-blue-100 dark:bg-blue-900/40' :
+                      group === 'Smelter' ? 'text-purple-600 bg-purple-100 dark:bg-purple-900/40' :
+                      group === 'Production' ? 'text-emerald-600 bg-emerald-100 dark:bg-emerald-900/40' :
+                      'text-amber-600 bg-amber-100 dark:bg-amber-900/40';
+
+                    return (
+                      <div 
+                        key={b.id}
+                        onClick={() => handleToggleBatchFinish(b.id)}
+                        className={`p-3.5 rounded-2xl border cursor-pointer transition-all flex items-center justify-between text-xs relative group ${
+                          b.isFinished 
+                            ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-300 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200 shadow-sm' 
+                            : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:border-teal-400'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5">
+                          {b.isFinished ? (
+                            <CheckSquare className="w-5 h-5 text-emerald-600 flex-shrink-0" />
+                          ) : (
+                            <Square className="w-5 h-5 text-slate-400 flex-shrink-0" />
+                          )}
+                          <div>
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-bold text-sm leading-tight">{b.batchName}</span>
+                              <span className={`text-[9px] px-1.5 py-0.2 rounded font-bold ${badgeColor}`}>
+                                {group}
+                              </span>
+                            </div>
+                            <span className="text-[11px] text-slate-500 font-medium">
+                              {b.sampleCount} sampel • {b.pt}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <span className={`text-[10px] px-2 py-0.5 rounded font-bold ${
+                            b.isFinished ? 'bg-emerald-200 dark:bg-emerald-800 text-emerald-800 dark:text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'
+                          }`}>
+                            {b.isFinished ? 'FINISHED' : 'ANTREAN'}
                           </span>
+                          <button
+                            type="button"
+                            onClick={(e) => handleDeleteBatch(b.id, e)}
+                            className="text-slate-300 hover:text-red-500 p-1 rounded transition-colors opacity-0 group-hover:opacity-100"
+                            title="Hapus Batch"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
                         </div>
                       </div>
-                      <span className={`text-[10px] px-2 py-0.5 rounded font-bold ${
-                        b.isFinished ? 'bg-emerald-200 dark:bg-emerald-800 text-emerald-800 dark:text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'
-                      }`}>
-                        {b.isFinished ? 'FINISHED' : 'ANTREAN'}
-                      </span>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -1027,7 +1297,7 @@ export const DailyReportLaboratoryScreen: React.FC<DailyReportLaboratoryScreenPr
               {osPress > 0 && (
                 <div className="p-3 rounded-2xl bg-amber-50 dark:bg-amber-950/40 text-xs text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800 flex items-center justify-between">
                   <span>⚠️ Terdapat sisa serbuk belum dipress (Finished di bawah Received):</span>
-                  <strong className="font-mono">{totalPressLoad} total serbuk − {pressFinish} selesai = {osPress} spl OS Press</strong>
+                  <strong className="font-mono">{totalPressLoad} total serbuk − {pressFinish} pelet selesai = {osPress} spl OS Press</strong>
                 </div>
               )}
             </div>

@@ -13,7 +13,11 @@ import {
   getStoredSampleBatches, 
   saveStoredSampleBatches 
 } from '../daily-performance-v2/daily-performance-v2-utils';
-import { SampleBatchRecord } from '../daily-performance-v2/daily-performance-v2-types';
+import { 
+  SampleBatchRecord, 
+  WEIGHING_SAMPLE_CATEGORIES, 
+  getSampleGroup 
+} from '../daily-performance-v2/daily-performance-v2-types';
 
 export type ForemanRoleMode = 'all' | 'foreman_gc' | 'foreman_weighing' | 'foreman_wdxrf';
 
@@ -181,14 +185,18 @@ export const DailyPerformanceInputModal: React.FC<DailyPerformanceInputModalProp
     const count = Math.max(1, Math.min(20, newBatchCount || 1));
     const nowIso = new Date().toISOString();
     const created: SampleBatchRecord[] = [];
+    const group = getSampleGroup(newBatchPt);
+    const existingCount = batches.filter(b => b.pt.toUpperCase() === newBatchPt.toUpperCase()).length;
 
     for (let i = 0; i < count; i++) {
       const splCount = newBatchUniformSize ? newBatchSplPerBatch : (newBatchCustomSizes[i] || newBatchSplPerBatch);
-      const batchNo = batches.filter(b => b.pt === newBatchPt).length + i + 1;
+      const batchNo = existingCount + i + 1;
       created.push({
         id: `batch_${Date.now()}_${newBatchPt}_${batchNo}_${Math.random().toString(36).substring(2, 6)}`,
         batchName: `Batch ${batchNo} - ${newBatchPt}`,
         pt: newBatchPt,
+        sampleGroup: group,
+        batchNumber: batchNo,
         sampleCount: splCount,
         receivedShift: shiftType,
         receivedDate: date,
@@ -201,7 +209,8 @@ export const DailyPerformanceInputModal: React.FC<DailyPerformanceInputModalProp
     const updated = [...batches, ...created];
     setBatches(updated);
     saveStoredSampleBatches(updated);
-    toast.success(`${count} batch untuk ${newBatchPt} berhasil didaftarkan di Weighing!`);
+    window.dispatchEvent(new CustomEvent('preplab-batches-updated'));
+    toast.success(`${count} batch untuk ${newBatchPt} (${count * newBatchSplPerBatch} spl) [${group}] berhasil didaftarkan di Weighing!`);
   };
 
   const handleToggleBatchFinish = (id: string) => {
@@ -993,11 +1002,31 @@ export const DailyPerformanceInputModal: React.FC<DailyPerformanceInputModalProp
                       onChange={e => setNewBatchPt(e.target.value)}
                       className="w-full mt-1 px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-bold cursor-pointer"
                     >
-                      <option value="TBP">PT TBP (Trimegah)</option>
-                      <option value="GPS">PT GPS (Gane Permai)</option>
-                      <option value="MMP">PT MMP (Megah Mulia)</option>
-                      <option value="KPS">PT KPS (Karya Prima)</option>
-                      <option value="EXP">Eksplorasi (EXP)</option>
+                      <optgroup label="1. Exploration (EXP)">
+                        <option value="TBP">TBP</option>
+                        <option value="GPS">GPS</option>
+                        <option value="JMP">JMP</option>
+                        <option value="GTS">GTS</option>
+                        <option value="BJM">BJM</option>
+                        <option value="OAM">OAM</option>
+                        <option value="SCANDIUM">SCANDIUM</option>
+                      </optgroup>
+                      <optgroup label="2. Smelter">
+                        <option value="SMELTER MSP">SMELTER MSP</option>
+                        <option value="SMELTER HPL">SMELTER HPL</option>
+                        <option value="SMELTER HJF">SMELTER HJF</option>
+                        <option value="SMELTER ONC">SMELTER ONC</option>
+                        <option value="SMELTER KPS">SMELTER KPS</option>
+                      </optgroup>
+                      <optgroup label="3. Production (PROD)">
+                        <option value="QC LIM">QC LIM (Limonite)</option>
+                        <option value="QC SAP">QC SAP (Saprolite)</option>
+                        <option value="QC BLD">QC BLD (Boulder)</option>
+                        <option value="QC BOULDER">QC BOULDER</option>
+                      </optgroup>
+                      <optgroup label="4. Sample Accidental">
+                        <option value="KHUSUS">KHUSUS (Accidental)</option>
+                      </optgroup>
                     </select>
                   </div>
 
