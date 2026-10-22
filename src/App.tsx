@@ -121,6 +121,7 @@ const XrfCalibrationScreen = lazyWithRetry(() => import('./components/xrf-calibr
 const ScreenTestSmelterScreen = lazyWithRetry(() => import('./components/screen-test/ScreenTestSmelterScreen').then(m => ({ default: m.ScreenTestSmelterScreen })));
 const DailyPerformanceScreen = lazyWithRetry(() => import('./components/daily-performance/DailyPerformanceScreen').then(m => ({ default: m.DailyPerformanceScreen })));
 const DailyPerformanceV2Screen = lazyWithRetry(() => import('./components/daily-performance-v2/DailyPerformanceV2Screen').then(m => ({ default: m.DailyPerformanceV2Screen })));
+const DailyReportLaboratoryScreen = lazyWithRetry(() => import('./components/daily-report-laboratory/DailyReportLaboratoryScreen').then(m => ({ default: m.DailyReportLaboratoryScreen })));
 const GuestMonitoringScreen = lazyWithRetry(() => import('./components/GuestMonitoringScreen').then(m => ({ default: m.GuestMonitoringScreen })));
 import { ModulesDrawer } from './components/ModulesDrawer';
 import { LabBotWidget } from './components/LabBotWidget';
@@ -2116,6 +2117,8 @@ export default function App() {
   <Route path="/daily-performance-lab" element={<Navigate to="/daily-performance" replace />} />
   <Route path="/daily-performance-2" element={<DailyPerformanceV2Screen inspectorName={inspectorName || 'Tamu Presentasi'} inspectorNik={inspectorNik || 'guest'} userPt={effectiveUniverse} onBack={() => handleNav('home')} />} />
   <Route path="/daily-performance-lab-2" element={<Navigate to="/daily-performance-2" replace />} />
+  <Route path="/daily-report-laboratory" element={<DailyReportLaboratoryScreen inspectorName={inspectorName || 'Foreman On Duty'} inspectorNik={inspectorNik || 'guest'} userPt={effectiveUniverse} onBack={() => handleNav('home')} onNavigateToDailyPerformance={() => handleNav('daily-performance-2')} />} />
+  <Route path="/daily-report-lab" element={<Navigate to="/daily-report-laboratory" replace />} />
   <Route path="*" element={<Navigate to="/" replace />} />
 </Routes>
   </AnimatePresence>

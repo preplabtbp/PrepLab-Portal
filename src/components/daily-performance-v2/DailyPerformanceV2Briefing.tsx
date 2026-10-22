@@ -17,6 +17,7 @@ import { DailyPerformanceV2InBarCell } from './DailyPerformanceV2InBarCell';
 import { DailyPerformanceV2ShiftRelayCard } from './DailyPerformanceV2ShiftRelayCard';
 import { DailyPerformanceV2ForemanRekapTable } from './DailyPerformanceV2ForemanRekapTable';
 import { DailyPerformanceV2BatchManagerModal } from './DailyPerformanceV2BatchManagerModal';
+import { DailyPerformanceV2AbsenteeList } from './DailyPerformanceV2AbsenteeList';
 import { Table, Eye } from 'lucide-react';
 
 interface DailyPerformanceV2BriefingProps {

@@ -93,14 +93,66 @@ export interface BatchBreakdownItem {
   sampleCount?: number;
 }
 
+export type SampleGroupType = 'Exploration' | 'Smelter' | 'Production' | 'Khusus';
+
+export interface SampleCategoryDefinition {
+  code: string;
+  name: string;
+  group: SampleGroupType;
+}
+
+export const WEIGHING_SAMPLE_CATEGORIES: SampleCategoryDefinition[] = [
+  // 1. Exploration
+  { code: 'TBP', name: 'TBP', group: 'Exploration' },
+  { code: 'GPS', name: 'GPS', group: 'Exploration' },
+  { code: 'JMP', name: 'JMP', group: 'Exploration' },
+  { code: 'GTS', name: 'GTS', group: 'Exploration' },
+  { code: 'BJM', name: 'BJM', group: 'Exploration' },
+  { code: 'OAM', name: 'OAM', group: 'Exploration' },
+  { code: 'SCANDIUM', name: 'SCANDIUM', group: 'Exploration' },
+
+  // 2. Smelter
+  { code: 'SMELTER MSP', name: 'SMELTER MSP', group: 'Smelter' },
+  { code: 'SMELTER HPL', name: 'SMELTER HPL', group: 'Smelter' },
+  { code: 'SMELTER HJF', name: 'SMELTER HJF', group: 'Smelter' },
+  { code: 'SMELTER ONC', name: 'SMELTER ONC', group: 'Smelter' },
+  { code: 'SMELTER KPS', name: 'SMELTER KPS', group: 'Smelter' },
+
+  // 3. Production
+  { code: 'QC LIM', name: 'QC LIM', group: 'Production' },
+  { code: 'QC SAP', name: 'QC SAP', group: 'Production' },
+  { code: 'QC BLD', name: 'QC BLD', group: 'Production' },
+  { code: 'QC BOULDER', name: 'QC BOULDER', group: 'Production' },
+
+  // 4. Khusus (Sample Accidental)
+  { code: 'KHUSUS', name: 'KHUSUS (Accidental)', group: 'Khusus' },
+];
+
+export function getSampleGroup(code: string): SampleGroupType {
+  const c = String(code || '').trim().toUpperCase();
+  const found = WEIGHING_SAMPLE_CATEGORIES.find(cat => cat.code.toUpperCase() === c);
+  if (found) return found.group;
+  if (c.includes('SMELTER')) return 'Smelter';
+  if (c.includes('LIM') || c.includes('SAP') || c.includes('BLD') || c.includes('BOULDER') || c.includes('PROD')) return 'Production';
+  if (c.includes('KHUSUS') || c.includes('ACCIDENTAL')) return 'Khusus';
+  return 'Exploration';
+}
+
 export interface SampleBatchRecord {
   id: string;
-  date: string;
-  stationKey: 'weighing' | 'fusion' | 'loi';
+  date?: string;
+  stationKey?: 'weighing' | 'fusion' | 'loi';
   pt: string;
-  batchNumber: number;
+  sampleGroup?: SampleGroupType;
+  batchNumber?: number;
   sampleCount: number;
   isFinished: boolean;
-  shiftCreated: 'DAY' | 'NIGHT' | 'LS';
+  shiftCreated?: 'DAY' | 'NIGHT' | 'LS';
   shiftFinished?: 'DAY' | 'NIGHT' | 'LS';
+  // Additional ergonomic fields
+  batchName?: string;
+  receivedShift?: 'DAY' | 'NIGHT' | 'LS';
+  receivedDate?: string;
+  station?: string;
+  createdAt?: string;
 }
