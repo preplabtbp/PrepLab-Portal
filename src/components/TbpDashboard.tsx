@@ -1,3 +1,4 @@
+import { VerifiedBadge } from './VerifiedBadge';
 import { translateDisplayText } from './notion/logbook-section-utils';
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
@@ -1331,7 +1332,8 @@ export function TbpDashboard({
                 <h1 className="text-2xl md:text-3xl font-display font-extrabold tracking-tight" style={{ color: 'var(--text-main, #ffffff)' }}>
                   {companyTitle}
                 </h1>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold border bg-teal-500/10 text-teal-500 border-teal-500/30">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold border bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/30 shadow-2xs">
+                  <VerifiedBadge size="xs" />
                   VERIFIED SITE
                 </span>
               </div>
