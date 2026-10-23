@@ -151,6 +151,7 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
   const [showPasteModal, setShowPasteModal] = useState(false);
   const [showPrintPreviewModal, setShowPrintPreviewModal] = useState(false);
   const [rawPastedText, setRawPastedText] = useState('');
+  const [xrfApplication, setXrfApplication] = useState<string>('LIMONITE - MYLAR (2) 2026');
 
   // Info Batch Terakhir
   const [latestBatchInfo, setLatestBatchInfo] = useState<{ batchCode?: string; date?: string; count?: number } | null>(null);
@@ -442,8 +443,28 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
         return;
       }
 
-      // Check if instrument name is present in pasted text
+      // Auto-detect instrument and application name from multiline cell in pasted Excel
       const fullTextUpper = textToProcess.toUpperCase();
+      for (const r of rawRows) {
+        for (const cell of r) {
+          const s = String(cell || '').trim();
+          if (s.includes('\n') && (s.toUpperCase().includes('EPSILON') || s.toUpperCase().includes('MYLAR') || s.toUpperCase().includes('LIMONITE') || s.toUpperCase().includes('SAPROLITE') || s.toUpperCase().includes('SUPERMINI') || s.toUpperCase().includes('ZETIUM'))) {
+            const parts = s.split('\n').map(p => p.trim()).filter(Boolean);
+            if (parts.length >= 2) {
+              setXrfApplication(parts.slice(1).join(' '));
+              const instP = parts[0].toUpperCase().match(/EPSILON[\s_]+([A-H])/);
+              if (instP) {
+                const c = `EPSILON_${instP[1]}`;
+                if (instruments.some(i => i.code === c)) {
+                  setSelectedInstrument(c);
+                }
+              }
+            } else if (parts.length === 1 && !parts[0].toUpperCase().startsWith('EPSILON')) {
+              setXrfApplication(parts[0]);
+            }
+          }
+        }
+      }
       const detectedInstMatch = fullTextUpper.match(/EPSILON[\s_]+([A-H])/);
       if (detectedInstMatch) {
         const instCode = `EPSILON_${detectedInstMatch[1]}`;
@@ -491,11 +512,8 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
           continue;
         }
 
-        // Calibration blanks (skip wax blank)
+        // Calibration blanks (Included per official standard verification format)
         const rowText = cols.join(' ');
-        if (/BLANK\s*(WAX|LICOWAX)/i.test(rowText)) {
-          continue;
-        }
 
         // Find date / time column and label
         let sampleLabel = '';
@@ -868,7 +886,7 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
         </div>
 
         {/* Row 2: Metadata Fields Form */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 pt-3 border-t border-slate-100 dark:border-slate-800">
           <div>
             <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Instrumen XRF</label>
             <select
@@ -880,6 +898,17 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
                 <option key={i.code} value={i.code}>{i.name}</option>
               ))}
             </select>
+          </div>
+
+          <div>
+            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1" title="Aplikasi kalibrasi yang digunakan (Sangat Penting)">Aplikasi XRF</label>
+            <input
+              type="text"
+              value={xrfApplication}
+              onChange={e => setXrfApplication(e.target.value)}
+              placeholder="Contoh: LIMONITE - MYLAR (2) 2026"
+              className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-teal-500 outline-none"
+            />
           </div>
 
           <div>
@@ -1338,16 +1367,16 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
                         {idx + 1}
                       </td>
 
-                      {/* Column 2: Merged Vertical XRF Column */}
+                      {/* Column 2: Merged Vertical XRF Column (Solid grey background & navy text) */}
                       {isFirstRow && (
                         <td
                           rowSpan={rows.length}
                           style={{
                             border: '1px solid #000000',
-                            backgroundColor: '#ffffff',
+                            backgroundColor: '#d4d4d4',
                             textAlign: 'center',
                             verticalAlign: 'middle',
-                            padding: '2px 1px'
+                            padding: '4px 2px'
                           }}
                         >
                           <div
@@ -1356,19 +1385,20 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
                               transform: 'rotate(180deg)',
                               margin: 'auto',
                               fontWeight: 'bold',
-                              fontSize: isDense ? '6.5pt' : '7pt',
+                              fontSize: isDense ? '7pt' : '7.5pt',
                               letterSpacing: '0.4px',
                               whiteSpace: 'nowrap',
-                              lineHeight: 1.2,
-                              color: '#000000'
+                              lineHeight: 1.35,
+                              color: '#002060',
+                              textAlign: 'center'
                             }}
                           >
-                            <span style={{ display: 'inline-block', marginBottom: '2px' }}>
+                            <div style={{ color: '#002060', fontWeight: 'bold' }}>
                               {selectedInstrument ? selectedInstrument.replace('_', ' ') : 'EPSILON H'}
-                            </span>
-                            <span style={{ display: 'inline-block', fontSize: isDense ? '6pt' : '6.5pt', opacity: 0.9 }}>
-                              {selectedMatrix || 'LIMONITE - MYLAR (2) 2026'}
-                            </span>
+                            </div>
+                            <div style={{ color: '#002060', fontWeight: 'bold' }}>
+                              {xrfApplication || 'LIMONITE - MYLAR (2) 2026'}
+                            </div>
                           </div>
                         </td>
                       )}

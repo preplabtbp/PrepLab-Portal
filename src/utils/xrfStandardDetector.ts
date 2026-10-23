@@ -28,6 +28,26 @@ export function extractSmartStandardCode(rawLabel: string): SmartStandardResult 
     };
   }
 
+  // 0. BLANK WAX & BLANK LICOWAX (Kalibrasi Rutin XRF)
+  if (/BLANK[\s_-]*WAX/i.test(original)) {
+    return {
+      standardCode: 'BLANK_WAX',
+      displayName: 'BLANK WAX',
+      originalLabel: original,
+      isRecognizedCrm: true,
+      category: 'BLANK',
+    };
+  }
+  if (/BLANK[\s_-]*LICO/i.test(original)) {
+    return {
+      standardCode: 'BLANK_LICOWAX',
+      displayName: 'BLANK LICOWAX',
+      originalLabel: original,
+      isRecognizedCrm: true,
+      category: 'BLANK',
+    };
+  }
+
   // 1. BLANK A
   if (/\bBLANK[\s_]*A\b/i.test(original)) {
     return {
