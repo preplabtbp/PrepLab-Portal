@@ -1388,14 +1388,14 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
                               letterSpacing: '0.4px',
                               whiteSpace: 'nowrap',
                               lineHeight: 1.25,
-                              color: '#002060',
+                              color: '#000000',
                               textAlign: 'center'
                             }}
                           >
-                            <div style={{ color: '#002060', fontWeight: 'bold' }}>
+                            <div style={{ color: '#000000', fontWeight: 'bold' }}>
                               {selectedInstrument ? selectedInstrument.replace('_', ' ') : 'EPSILON H'}
                             </div>
-                            <div style={{ color: '#002060', fontWeight: 'bold' }}>
+                            <div style={{ color: '#000000', fontWeight: 'bold' }}>
                               {xrfApplication || 'LIMONITE - MYLAR (2) 2026'}
                             </div>
                           </div>
@@ -1492,15 +1492,29 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
                           <td style={{ border: 'none', padding: '0px' }}></td>
                           <td style={{ border: 'none', padding: '0px' }}></td>
                           <td style={{ border: 'none', padding: '0px' }}></td>
-                          <td style={{ padding: '0px 3px', textAlign: 'center', border: 'none' }}>
-                            <div style={{ backgroundColor: '#e2e8f0', borderRadius: '2px', padding: '0.5px 5px', fontStyle: 'italic', display: 'inline-block', fontSize: '6pt', color: '#1e293b' }}>
+                          <td style={{ padding: '0px 3px', textAlign: 'center', border: 'none', backgroundColor: '#e2e8f0', borderRadius: '2px 0 0 2px' }}>
+                            <div style={{ fontStyle: 'italic', display: 'inline-block', fontSize: '6pt', color: '#1e293b', fontWeight: 'bold' }}>
                               Expected Value
                             </div>
                           </td>
-                          {targetElements.map(el => {
+                          {targetElements.map((el, elIdx) => {
                             const expVal = getExpectedColValue(r.standardCode, el.key);
+                            const isLast = elIdx === targetElements.length - 1;
                             return (
-                              <td key={`exp-val-${el.key}`} style={{ textAlign: 'center', fontStyle: 'normal', fontSize: '6.5pt', padding: '0px', color: '#334155', border: 'none' }}>
+                              <td
+                                key={`exp-val-${el.key}`}
+                                style={{
+                                  textAlign: 'center',
+                                  fontStyle: 'normal',
+                                  fontSize: '6.5pt',
+                                  padding: '0px',
+                                  color: '#0f172a',
+                                  border: 'none',
+                                  backgroundColor: '#e2e8f0',
+                                  fontWeight: '500',
+                                  borderRadius: isLast ? '0 2px 2px 0' : '0'
+                                }}
+                              >
                                 {expVal > 0 ? formatIndoNum(expVal, el.is3Dec ? 3 : 2) : '-'}
                               </td>
                             );
