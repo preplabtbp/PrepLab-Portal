@@ -1607,28 +1607,26 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
                     -webkit-print-color-adjust: exact !important;
                     print-color-adjust: exact !important;
                   }
-                  /* Strictly hide EVERYTHING else on the body */
-                  body > *:not(#root):not(.xrf-print-portal) {
+                  /* Remove height & overflow restrictions on SPA root containers so content flows naturally */
+                  #root, #root > div, .min-h-screen, div {
+                    height: auto !important;
+                    min-height: auto !important;
+                    overflow: visible !important;
+                  }
+                  /* Strictly hide UI controls, sidebar, modals, headers & buttons */
+                  .no-print-area, header, aside, nav, button, input, select, .lucide, [role="dialog"], .backdrop-blur-xs {
                     display: none !important;
                   }
-                  #root > *:not(.min-h-screen) {
-                    display: none !important;
-                  }
-                  .no-print-area, header, aside, nav, button, input, select, .lucide {
-                    display: none !important;
-                  }
-                  /* Force official doc to be the only thing visible and positioned at top */
+                  /* Display the official document at 100% full width */
                   .xrf-print-only-container {
                     display: block !important;
                     visibility: visible !important;
-                    position: absolute !important;
-                    left: 0 !important;
-                    top: 0 !important;
                     width: 100% !important;
                     max-width: 100% !important;
                     margin: 0 auto !important;
+                    padding: 0 !important;
                     background: #ffffff !important;
-                    z-index: 999999 !important;
+                    page-break-inside: avoid !important;
                   }
                   .xrf-print-only-container * {
                     visibility: visible !important;
