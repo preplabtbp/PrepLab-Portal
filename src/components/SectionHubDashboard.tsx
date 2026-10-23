@@ -204,9 +204,9 @@ export function SectionHubDashboard({
     const tagColor = (post?.tags || []).find((t: string) => t.startsWith('titleColor:'))?.replace('titleColor:', '');
     if (tagColor) return tagColor;
     try {
-      let cached = localStorage.getItem(`preplab_hub_title_color_${cleanSec}`);
+      let cached = localStorage.getItem(`preplab_hub_title_color_${currentUniverse.toLowerCase()}_${cleanSec}`);
       if (!cached && translatedCleanSec !== cleanSec) {
-        cached = localStorage.getItem(`preplab_hub_title_color_${translatedCleanSec}`);
+        cached = localStorage.getItem(`preplab_hub_title_color_${currentUniverse.toLowerCase()}_${translatedCleanSec}`);
       }
       if (cached) return cached;
     } catch {}
@@ -268,9 +268,9 @@ export function SectionHubDashboard({
 
     try {
       const translatedCleanSec = (translateDisplayText(trimmed) || 'general').toLowerCase().replace(/[^a-z0-9]+/g, '_');
-      localStorage.setItem(`preplab_hub_title_color_${cleanSec}`, editingTitleColor);
+      localStorage.setItem(`preplab_hub_title_color_${currentUniverse.toLowerCase()}_${cleanSec}`, editingTitleColor);
       if (translatedCleanSec !== cleanSec) {
-        localStorage.setItem(`preplab_hub_title_color_${translatedCleanSec}`, editingTitleColor);
+        localStorage.setItem(`preplab_hub_title_color_${currentUniverse.toLowerCase()}_${translatedCleanSec}`, editingTitleColor);
       }
     } catch {}
 
@@ -420,7 +420,7 @@ export function SectionHubDashboard({
       const logbookId = `logbook-${sectionTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
       let cachedContent = '';
       try {
-        cachedContent = localStorage.getItem(`preplab_logbook_content_${logbookId}`) || '';
+        cachedContent = localStorage.getItem(`preplab_logbook_content_${currentUniverse.toLowerCase()}_${logbookId}`) || localStorage.getItem(`preplab_logbook_content_${logbookId}`) || '';
       } catch {}
       const defaultContent = `# ${logbookTitle}\n\n*Integrated Section Logbook (${sectionTitle}): Active Routine & Non-Routine tasks.*\n\n| Number | Activity Name | Description | Created Time | Completion Date | Remarks | Due Date | Status | PIC | Priority | Activity | Period | Source Page |\n| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n`;
       const target = findPost(item.searchKeywords || logbookTitle) || {

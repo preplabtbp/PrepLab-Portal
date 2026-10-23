@@ -46,8 +46,8 @@ router.get("/api/bulletin", async (req, res) => {
       
       const conditions: any[] = [];
       
-      // If pt === 'ALL' or (isSuperUser and no pt specified), return all bulletin posts
-      if (pt === 'ALL' || (isSuperUser && !pt)) {
+      // If pt === 'ALL', return all bulletin posts across both universes
+      if (pt === 'ALL') {
         // unrestricted access
       } else if (pt === 'GTS') {
         conditions.push(eq(bulletinPosts.pt, 'GTS'));
@@ -257,7 +257,7 @@ router.post("/api/bulletin", async (req, res) => {
       
       const dept = post.department || 'General';
       const postUniverse = (post.pt || 'TBP').toUpperCase().includes('GTS') ? 'GTS' : 'TBP';
-      const targets = await getSectionNotificationTargets(dept);
+      const targets = await getSectionNotificationTargets(dept, postUniverse);
       
       const notificationsData = targets
         .filter(t => t.nik !== post.authorNik && t.nik)
@@ -273,7 +273,7 @@ router.post("/api/bulletin", async (req, res) => {
         
       if (notificationsData.length > 0) {
         const insertedNotifs = await db.insert(notifications).values(notificationsData).returning();
-        sendWebPush(insertedNotifs);
+        sendWebPush(insertedNotifs, { universe: postUniverse });
       }
       
       res.json({ status: "success", data: post });
@@ -464,17 +464,20 @@ router.post("/api/bulletin/:id/comments", async (req, res) => {
           ? `${authorName || 'Personil'} mengupdate status topik ${topicLabel} ke "${statusUpdate}".`
           : `${authorName || 'Personil'} berkomentar di topik ${topicLabel}: "${displayContent}"`;
 
-        // 1. Notifikasi Broadcast Seksi (userId = null, role = postSection)
-        // Native didukung oleh GET /api/notifications & WebPush tanpa perlu menduplikasi ratusan baris di database
-        notificationsData.push({
-          userId: null,
-          role: postSection,
-          title: notifTitle,
-          message: notifMessage,
-          type: statusUpdate ? 'success' : 'info',
-          link: notifLink,
-          isRead: false,
-        });
+        // 1. Notifikasi Terarah Seksi (Khusus universe post yang bersangkutan)
+        const sectionTargets = await getSectionNotificationTargets(postSection, postUniverse);
+        const sectionNotifs = sectionTargets
+          .filter(t => t.nik && t.nik !== authorNik && t.nik !== post?.authorNik && t.nik !== picNik)
+          .map(t => ({
+            userId: t.nik,
+            role: postSection,
+            title: notifTitle,
+            message: notifMessage,
+            type: statusUpdate ? 'success' : 'info',
+            link: notifLink,
+            isRead: false,
+          }));
+        notificationsData.push(...sectionNotifs);
 
         // 2. Jika pembuat artikel bukan pengirim komentar, kirimkan notifikasi personal
         if (post?.authorNik && post.authorNik !== authorNik) {
@@ -506,7 +509,7 @@ router.post("/api/bulletin/:id/comments", async (req, res) => {
       if (notificationsData.length > 0) {
         const insertedNotifs = await db.insert(notifications).values(notificationsData).returning();
         const notifsWithSender = insertedNotifs.map((n: any) => ({ ...n, senderNik: authorNik }));
-        sendWebPush(notifsWithSender, { senderNik: authorNik });
+        sendWebPush(notifsWithSender, { senderNik: authorNik, universe: postUniverse });
       }
 
       res.json({ status: "success", data: comment });
@@ -1270,7 +1273,7 @@ router.post("/api/bulletin/recycle-bin", async (req, res) => {
 // 2. GET /api/bulletin/recycle-bin - List deleted activities for Developer
 router.get("/api/bulletin/recycle-bin", async (req, res) => {
   try {
-    const { postId, status } = req.query;
+    const { postId, status, pt } = req.query;
     const conditions = [];
     if (postId) {
       conditions.push(eq(bulletinRecycleBin.postId, parseInt(String(postId))));
@@ -1278,8 +1281,42 @@ router.get("/api/bulletin/recycle-bin", async (req, res) => {
     if (status) {
       conditions.push(eq(bulletinRecycleBin.restoreStatus, String(status)));
     }
+    if (pt) {
+      const ptUpper = String(pt).toUpperCase();
+      if (ptUpper === 'GTS') {
+        conditions.push(eq(bulletinPosts.pt, 'GTS'));
+      } else if (ptUpper === 'TBP' || ptUpper === 'GPS' || ptUpper === 'TBP_GPS') {
+        conditions.push(or(
+          eq(bulletinPosts.pt, 'TBP'),
+          eq(bulletinPosts.pt, 'GPS'),
+          eq(bulletinPosts.pt, 'TBP_GPS'),
+          isNull(bulletinPosts.pt)
+        ));
+      }
+    }
 
-    const query = db.select().from(bulletinRecycleBin);
+    const query = db
+      .select({
+        id: bulletinRecycleBin.id,
+        postId: bulletinRecycleBin.postId,
+        postTitle: bulletinRecycleBin.postTitle,
+        section: bulletinRecycleBin.section,
+        taskTitle: bulletinRecycleBin.taskTitle,
+        rowData: bulletinRecycleBin.rowData,
+        subtasksData: bulletinRecycleBin.subtasksData,
+        subtaskCount: bulletinRecycleBin.subtaskCount,
+        deletedByNik: bulletinRecycleBin.deletedByNik,
+        deletedByName: bulletinRecycleBin.deletedByName,
+        deletedByJabatan: bulletinRecycleBin.deletedByJabatan,
+        deletedAt: bulletinRecycleBin.deletedAt,
+        restoreStatus: bulletinRecycleBin.restoreStatus,
+        restoredAt: bulletinRecycleBin.restoredAt,
+        restoredByNik: bulletinRecycleBin.restoredByNik,
+        restoredByName: bulletinRecycleBin.restoredByName,
+      })
+      .from(bulletinRecycleBin)
+      .leftJoin(bulletinPosts, eq(bulletinRecycleBin.postId, bulletinPosts.id));
+
     const records = conditions.length > 0 
       ? await query.where(and(...conditions)).orderBy(desc(bulletinRecycleBin.deletedAt)).limit(100)
       : await query.orderBy(desc(bulletinRecycleBin.deletedAt)).limit(100);

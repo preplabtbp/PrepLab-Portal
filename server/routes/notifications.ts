@@ -119,10 +119,17 @@ router.get("/api/notifications", async (req, res) => {
           .orderBy(desc(notifications.createdAt));
       }
       
-      // Server-side deduplication: Menghilangkan duplikasi visual jika terdapat notifikasi ganda
-      // dengan judul, isi, dan tautan yang sama dalam jendela waktu 10 menit
+      // Server-side deduplication & universe isolation: Menghilangkan duplikasi visual
+      // dan menjamin karyawan tidak pernah melihat notifikasi buletin universe seberang
+      const requesterPt = (typeof emp !== 'undefined' && emp.length > 0) ? String(emp[0].pt || 'TBP').toUpperCase() : '';
+      const userIsGts = requesterPt.includes('GTS');
       const seenKeys = new Set<string>();
       const deduplicatedData = data.filter((item: any) => {
+        const link = String(item.link || '');
+        if (requesterPt) {
+          if (userIsGts && (link.includes('/bulletin/TBP') || link.includes('/bulletin/tbp'))) return false;
+          if (!userIsGts && (link.includes('/bulletin/GTS') || link.includes('/bulletin/gts'))) return false;
+        }
         const timeWindow = item.createdAt ? Math.floor(new Date(item.createdAt).getTime() / 600000) : 0;
         const key = `${(item.title || '').trim()}|${(item.message || '').trim()}|${(item.link || '').trim()}|${timeWindow}`;
         if (seenKeys.has(key)) return false;
