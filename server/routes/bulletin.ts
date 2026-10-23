@@ -214,7 +214,7 @@ router.get("/api/bulletin/search", async (req, res) => {
   });
 
 // GET Single Post by ID for direct navigation and real-time device sync
-router.get("/api/bulletin/:id", async (req, res) => {
+router.get("/api/bulletin/:id(\\d+)", async (req, res) => {
   try {
     const rawId = String(req.params.id || '');
     const id = parseInt(rawId, 10);
@@ -1219,6 +1219,19 @@ async function initRecycleBinTable() {
 }
 initRecycleBinTable();
 
+export function sanitizeRecycleTaskTitle(title: string): string {
+  if (!title) return "Kegiatan Tanpa Judul";
+  const cleaned = title
+    .replace(/^[↳↪\s]+/, '')
+    .replace(/^\[[ xX]\]\s*/, '')
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/<!-?[a-zA-Z0-9_\-\s]+.*?>?/g, '')
+    .replace(/<!--.*$/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return cleaned || "Kegiatan Tanpa Judul";
+}
+
 // 1. POST /api/bulletin/recycle-bin - Log deleted activities
 router.post("/api/bulletin/recycle-bin", async (req, res) => {
   try {
@@ -1234,7 +1247,7 @@ router.post("/api/bulletin/recycle-bin", async (req, res) => {
         postId: postId ? parseInt(String(postId)) : null,
         postTitle: postTitle || null,
         section: section || null,
-        taskTitle: String(taskTitle || "Kegiatan Tanpa Judul"),
+        taskTitle: sanitizeRecycleTaskTitle(String(taskTitle || "")),
         rowData: typeof rowData === "string" ? rowData : JSON.stringify(rowData || {}),
         subtasksData: subtasksData ? (typeof subtasksData === "string" ? subtasksData : JSON.stringify(subtasksData)) : null,
         subtaskCount: typeof subtaskCount === "number" ? subtaskCount : (Array.isArray(subtasksData) ? subtasksData.length : 0),
@@ -1271,7 +1284,11 @@ router.get("/api/bulletin/recycle-bin", async (req, res) => {
       ? await query.where(and(...conditions)).orderBy(desc(bulletinRecycleBin.deletedAt)).limit(100)
       : await query.orderBy(desc(bulletinRecycleBin.deletedAt)).limit(100);
 
-    res.json({ status: "success", data: records });
+    const sanitizedRecords = records.map(r => ({
+      ...r,
+      taskTitle: sanitizeRecycleTaskTitle(r.taskTitle)
+    }));
+    res.json({ status: "success", data: sanitizedRecords });
   } catch (err: any) {
     console.error("[RecycleBin] Error fetching recycle bin:", err);
     res.status(500).json({ status: "error", message: err.message });

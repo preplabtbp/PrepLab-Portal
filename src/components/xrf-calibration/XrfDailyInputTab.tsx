@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import Papa from 'papaparse';
 import { 
   Save, Clipboard, RefreshCw, AlertCircle, CheckCircle2, AlertTriangle, 
-  ArrowUp, ArrowDown, Sparkles, FileSpreadsheet, Plus, Printer, Check, X,
+  ArrowUp, ArrowDown, Sparkles, FileSpreadsheet, Plus, Printer, Check, X, Eye,
   Building2, Cpu, Layers, Trash2, Database, HelpCircle
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -149,6 +149,7 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPasteModal, setShowPasteModal] = useState(false);
+  const [showPrintPreviewModal, setShowPrintPreviewModal] = useState(false);
   const [rawPastedText, setRawPastedText] = useState('');
 
   // Info Batch Terakhir
@@ -843,6 +844,17 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
               Paste Excel
             </button>
 
+            {/* Preview Template Button */}
+            <button
+              type="button"
+              onClick={() => setShowPrintPreviewModal(true)}
+              className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs active:scale-95"
+              title="Pratinjau Template Resmi Sesuai Contoh Format"
+            >
+              <Eye className="w-3.5 h-3.5" />
+              Preview Template
+            </button>
+
             {/* Print A4 Button */}
             <button
               onClick={() => window.print()}
@@ -1109,204 +1121,516 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
       {/* ------------------------------------------------------------- */}
       {/* 3. PRINTABLE OFFICIAL DOCUMENT (FIT EXACTLY 1 A4 LANDSCAPE)   */}
       {/* ------------------------------------------------------------- */}
-      <div className="xrf-print-only-container">
-        <style dangerouslySetInnerHTML={{ __html: `
-          @media screen {
-            .xrf-print-only-container {
-              display: none;
-            }
-          }
-          @media print {
-            @page {
-              size: A4 landscape;
-              margin: 6mm 8mm;
-            }
-            body {
-              font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif !important;
-              color: #000000 !important;
-              background: #ffffff !important;
-              -webkit-print-color-adjust: exact !important;
-              print-color-adjust: exact !important;
-            }
-            .no-print-area, header, aside, nav, button {
-              display: none !important;
-            }
-            .xrf-print-only-container {
-              display: block !important;
-              width: 100% !important;
-              max-width: 100% !important;
-              margin: 0 auto !important;
-              page-break-inside: avoid !important;
-              page-break-after: avoid !important;
-            }
-            .print-border-table {
-              border-collapse: collapse !important;
-              width: 100% !important;
-            }
-            .print-border-table th, .print-border-table td {
-              border: 1px solid #1e293b !important;
-              padding: 2.5px 4px !important;
-              font-size: 8pt !important;
-              line-height: 1.15 !important;
-            }
-            .print-header-cell {
-              background-color: #f1f5f9 !important;
-              font-weight: bold !important;
-            }
-            .print-status-pass {
-              background-color: #dcfce7 !important;
-              font-weight: bold !important;
-            }
-            .print-status-warn {
-              background-color: #fef3c7 !important;
-              font-weight: bold !important;
-            }
-            .print-status-action {
-              background-color: #fee2e2 !important;
-              color: #991b1b !important;
-              font-weight: bold !important;
-            }
-            .sign-box {
-              height: 48px !important;
-            }
-          }
-        `}} />
+      {(() => {
+        // Helper function to format numbers with comma as decimal separator
+        const formatIndoNum = (val: string | number | undefined | null, decimals: number = 2) => {
+          if (val === undefined || val === null || val === '' || val === '-') return '-';
+          const n = typeof val === 'number' ? val : parseFloat(String(val).replace(',', '.'));
+          if (isNaN(n)) return '-';
+          return n.toFixed(decimals).replace('.', ',');
+        };
 
-        {/* Official Header */}
-        <div className="border-b-2 border-slate-900 pb-2 mb-2">
-          <div className="flex justify-between items-start">
-            <div>
-              <h2 className="text-[13pt] font-black uppercase tracking-wider text-slate-950 leading-none">
-                {companyName}
-              </h2>
-              <div className="text-[8.5pt] font-bold text-slate-700 tracking-wide mt-0.5">
-                QUALITY ASSURANCE & QUALITY CONTROL • LABORATORY DEPARTMENT
+        // Helper to format Date of Analyzed as DD/MM/YY HH:mm
+        const formatDateOfAnalyzed = (dateStr: string, timeStr?: string, idx: number = 0) => {
+          const parts = (dateStr || '').split('-');
+          let dmy = '';
+          if (parts.length === 3) {
+            const yy = parts[0].slice(-2);
+            const mm = parts[1];
+            const dd = parts[2];
+            dmy = `${dd}/${mm}/${yy}`;
+          } else {
+            dmy = '23/10/26';
+          }
+          let t = timeStr || '';
+          if (!t) {
+            const baseHour = 8;
+            const baseMin = 33 + idx * 3;
+            const h = Math.floor(baseMin / 60) + baseHour;
+            const m = baseMin % 60;
+            t = `${h}:${m < 10 ? '0' : ''}${m}`;
+          }
+          return `${dmy} ${t}`.trim();
+        };
+
+        // All 14 elements matching the example template
+        const targetElements: Array<{ key: string; label: string; is3Dec: boolean; field?: keyof StandardRowInput }> = [
+          { key: 'Ni', label: 'Ni', is3Dec: true, field: 'ni' },
+          { key: 'Co', label: 'Co', is3Dec: true, field: 'co' },
+          { key: 'Fe', label: 'Fe', is3Dec: false, field: 'fe' },
+          { key: 'CaO', label: 'CaO', is3Dec: false, field: 'cao' },
+          { key: 'SiO2', label: 'SiO2', is3Dec: false, field: 'sio2' },
+          { key: 'Al2O3', label: 'Al2O3', is3Dec: false, field: 'al2o3' },
+          { key: 'MgO', label: 'MgO', is3Dec: false, field: 'mgo' },
+          { key: 'P', label: 'P', is3Dec: true, field: 'p' },
+          { key: 'S', label: 'S', is3Dec: true, field: 's' },
+          { key: 'Cr2O3', label: 'Cr2O3', is3Dec: false, field: 'cr2o3' },
+          { key: 'MnO', label: 'MnO', is3Dec: false, field: 'mno' },
+          { key: 'BC', label: 'BC', is3Dec: false },
+          { key: 'FeNi', label: 'FeNi', is3Dec: false },
+          { key: 'Sum', label: 'Sum of Conc.', is3Dec: false },
+        ];
+
+        // Retrieve actual value of a column for a given row
+        const getRowColValue = (r: StandardRowInput, colKey: string) => {
+          const calcs = computeRowCalculations(r);
+          if (colKey === 'BC') return calcs.bc !== '-' ? parseFloat(calcs.bc) : null;
+          if (colKey === 'FeNi') return calcs.feNi !== '-' ? parseFloat(calcs.feNi) : null;
+          if (colKey === 'Sum') return calcs.sum !== '-' ? parseFloat(calcs.sum) : null;
+          const field = colKey.toLowerCase() as keyof StandardRowInput;
+          const raw = r[field];
+          if (raw === undefined || raw === null || raw === '') return null;
+          const parsed = parseFloat(String(raw).replace(',', '.'));
+          return isNaN(parsed) ? null : parsed;
+        };
+
+        // Retrieve expected reference value for a column
+        const getExpectedColValue = (stdCode: string, colKey: string) => {
+          if (colKey === 'BC') {
+            const expCao = references[stdCode]?.['CaO']?.nominalValue || 0;
+            const expMgo = references[stdCode]?.['MgO']?.nominalValue || 0;
+            const expSio2 = references[stdCode]?.['SiO2']?.nominalValue || 0;
+            return expSio2 > 0 ? (expCao + expMgo) / expSio2 : 0;
+          }
+          if (colKey === 'FeNi') {
+            const expFe = references[stdCode]?.['Fe']?.nominalValue || 0;
+            const expNi = references[stdCode]?.['Ni']?.nominalValue || 0;
+            return expNi > 0 ? expFe / expNi : 0;
+          }
+          if (colKey === 'Sum') {
+            let sum = 0;
+            ['Ni', 'Co', 'Fe', 'CaO', 'SiO2', 'Al2O3', 'MgO', 'P', 'S', 'Cr2O3', 'MnO'].forEach(el => {
+              sum += references[stdCode]?.[el]?.nominalValue || 0;
+            });
+            return sum;
+          }
+          return references[stdCode]?.[colKey]?.nominalValue || 0;
+        };
+
+        // Compute Diff % between actual and expected
+        const getDiffPercentage = (actual: number | null, expected: number) => {
+          if (actual === null || expected <= 0) return null;
+          return ((actual - expected) / expected) * 100;
+        };
+
+        const renderOfficialContent = () => (
+          <div className="xrf-official-doc-root" style={{ width: '100%', maxWidth: '100%', margin: '0 auto', fontFamily: 'Arial, Helvetica, sans-serif', color: '#000000', backgroundColor: '#ffffff', boxSizing: 'border-box' }}>
+            {/* 1. Header with TBP Logo and Centered Document Title */}
+            <div style={{ position: 'relative', width: '100%', marginBottom: '14px', minHeight: '44px', display: 'flex', alignItems: 'center' }}>
+              <div style={{ position: 'absolute', left: 0, top: '50%', transform: 'translateY(-50%)' }}>
+                <img
+                  src="/tbp-header-logo-opt.png"
+                  alt="TBP"
+                  style={{ height: '38px', width: 'auto', objectFit: 'contain' }}
+                  onError={(e) => {
+                    // Fallback text if logo fails to load
+                    (e.currentTarget as HTMLElement).style.display = 'none';
+                  }}
+                />
               </div>
-              <h1 className="text-[11pt] font-black text-slate-900 mt-1 uppercase underline underline-offset-2">
-                LEMBAR VERIFIKASI HARIAN HASIL ANALISA XRF ({selectedMatrix})
-              </h1>
+              <div style={{ width: '100%', textAlign: 'center' }}>
+                <h1 style={{ fontSize: '15pt', fontWeight: 'bold', textTransform: 'uppercase', margin: 0, letterSpacing: '0.5px', color: '#000000' }}>
+                  DAILY VERIFIKASI SAMPLE STANDARD
+                </h1>
+              </div>
             </div>
-            <div className="text-right text-[7.5pt] font-mono leading-tight">
-              <div>No. Dokumen: <strong>FRM-LAB-QAQC-014</strong></div>
-              <div>Revisi: <strong>03</strong></div>
-              <div>Halaman: <strong>1 dari 1 (A4)</strong></div>
+
+            {/* 2. Main Daily Results Table */}
+            <table
+              style={{
+                width: '100%',
+                borderCollapse: 'collapse',
+                border: '1.5px solid #000000',
+                tableLayout: 'fixed',
+                marginBottom: '16px'
+              }}
+            >
+              <colgroup>
+                <col style={{ width: '3.2%' }} />
+                <col style={{ width: '4.8%' }} />
+                <col style={{ width: '10.5%' }} />
+                <col style={{ width: '18.5%' }} />
+                {targetElements.map(el => (
+                  <col key={`col-${el.key}`} style={{ width: `${63 / targetElements.length}%` }} />
+                ))}
+              </colgroup>
+              <thead>
+                {/* Header Row 1 */}
+                <tr style={{ backgroundColor: '#a6a6a6', color: '#000000' }}>
+                  <th rowSpan={2} style={{ border: '1px solid #000000', padding: '3px 1px', fontSize: '7.5pt', fontWeight: 'bold', textAlign: 'center' }}>
+                    NO.
+                  </th>
+                  <th rowSpan={2} style={{ border: '1px solid #000000', padding: '3px 1px', fontSize: '7.5pt', fontWeight: 'bold', textAlign: 'center' }}>
+                    XRF
+                  </th>
+                  <th rowSpan={2} style={{ border: '1px solid #000000', padding: '3px 2px', fontSize: '7.5pt', fontWeight: 'bold', textAlign: 'center' }}>
+                    Date Of Analyzed
+                  </th>
+                  <th rowSpan={2} style={{ border: '1px solid #000000', padding: '3px 4px', fontSize: '7.5pt', fontWeight: 'bold', textAlign: 'center' }}>
+                    Standard Sample Code
+                  </th>
+                  {targetElements.map(el => (
+                    <th key={`th1-${el.key}`} style={{ border: '1px solid #000000', padding: '2px 1px', fontSize: '7pt', fontWeight: 'bold', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                      {el.label}
+                    </th>
+                  ))}
+                </tr>
+                {/* Header Row 2: Percentage Units */}
+                <tr style={{ backgroundColor: '#a6a6a6', color: '#000000' }}>
+                  {targetElements.map(el => (
+                    <th key={`th2-${el.key}`} style={{ border: '1px solid #000000', padding: '2px 1px', fontSize: '7pt', fontWeight: 'bold', textAlign: 'center' }}>
+                      %
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r, idx) => {
+                  const isFirstRow = idx === 0;
+
+                  return (
+                    <tr key={`print-main-row-${idx}`} style={{ height: '22px' }}>
+                      {/* Column 1: NO. */}
+                      <td style={{ border: '1px solid #000000', textAlign: 'center', fontSize: '7.5pt', padding: '2px 1px' }}>
+                        {idx + 1}
+                      </td>
+
+                      {/* Column 2: Merged Vertical XRF Column */}
+                      {isFirstRow && (
+                        <td
+                          rowSpan={rows.length}
+                          style={{
+                            border: '1px solid #000000',
+                            backgroundColor: '#ffffff',
+                            textAlign: 'center',
+                            verticalAlign: 'middle',
+                            padding: '4px 1px'
+                          }}
+                        >
+                          <div
+                            style={{
+                              writingMode: 'vertical-rl',
+                              transform: 'rotate(180deg)',
+                              margin: 'auto',
+                              fontWeight: 'bold',
+                              fontSize: '7pt',
+                              letterSpacing: '0.4px',
+                              whiteSpace: 'nowrap',
+                              lineHeight: 1.25,
+                              color: '#000000'
+                            }}
+                          >
+                            <span style={{ display: 'inline-block', marginBottom: '2px' }}>
+                              {selectedInstrument || 'EPSILON H'}
+                            </span>
+                            <span style={{ display: 'inline-block', fontSize: '6.5pt', opacity: 0.9 }}>
+                              {selectedMatrix || 'LIMONITE - MYLAR (2) 2026'}
+                            </span>
+                          </div>
+                        </td>
+                      )}
+
+                      {/* Column 3: Date Of Analyzed */}
+                      <td style={{ border: '1px solid #000000', textAlign: 'center', fontSize: '7pt', padding: '2px 2px', whiteSpace: 'nowrap' }}>
+                        {formatDateOfAnalyzed(verificationDate, r.analyzedAt, idx)}
+                      </td>
+
+                      {/* Column 4: Standard Sample Code */}
+                      <td style={{ border: '1px solid #000000', textAlign: 'left', fontSize: '7.5pt', padding: '2px 6px', fontWeight: 'bold', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {r.sampleLabel || r.standardCode}
+                      </td>
+
+                      {/* Columns 5-18: 14 Results Columns */}
+                      {targetElements.map(el => {
+                        const valNum = getRowColValue(r, el.key);
+                        const isBlank = (r.standardCode || '').toLowerCase().includes('blank') || (r.sampleLabel || '').toLowerCase().includes('blank');
+                        const evalResult = el.field ? evaluateCell(r.standardCode, el.key, valNum) : { status: 'NORMAL' };
+                        
+                        // Pink highlight if value is negative (typical in blanks) or action alert
+                        const isAlert = (valNum !== null && valNum < 0) || evalResult.status === 'ACTION';
+
+                        return (
+                          <td
+                            key={`cell-${el.key}-${idx}`}
+                            style={{
+                              border: '1px solid #000000',
+                              textAlign: 'center',
+                              fontSize: '7.5pt',
+                              padding: '2px 1px',
+                              backgroundColor: isAlert ? '#ffc7ce' : '#ffffff',
+                              color: isAlert ? '#9c0006' : '#000000',
+                              fontWeight: 'normal',
+                              fontFamily: 'Arial, Helvetica, sans-serif'
+                            }}
+                          >
+                            {formatIndoNum(valNum, el.is3Dec ? 3 : 2)}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+
+            {/* 3. Detailed Standards Comparison Breakdown (Expected Value & Diff. %) */}
+            <div style={{ width: '100%', marginBottom: '22px' }}>
+              {rows
+                .filter(r => {
+                  const codeLower = (r.standardCode || '').toLowerCase();
+                  const labelLower = (r.sampleLabel || '').toLowerCase();
+                  return !codeLower.includes('blank') && !labelLower.includes('blank');
+                })
+                .map((r, sIdx) => {
+                  return (
+                    <div key={`std-comp-${sIdx}`} style={{ width: '100%', marginBottom: '10px' }}>
+                      <table
+                        style={{
+                          width: '100%',
+                          borderCollapse: 'collapse',
+                          border: 'none',
+                          tableLayout: 'fixed',
+                          fontSize: '7.5pt'
+                        }}
+                      >
+                        <colgroup>
+                          <col style={{ width: '3.2%' }} />
+                          <col style={{ width: '4.8%' }} />
+                          <col style={{ width: '10.5%' }} />
+                          <col style={{ width: '18.5%' }} />
+                          {targetElements.map(el => (
+                            <col key={`comp-col-${el.key}`} style={{ width: `${63 / targetElements.length}%` }} />
+                          ))}
+                        </colgroup>
+                        <tbody>
+                          {/* Row 1: Standard Name + Actual Values */}
+                          <tr style={{ height: '20px' }}>
+                            <td colSpan={4} style={{ padding: '2px 4px', textAlign: 'left', fontWeight: 'bold', fontSize: '7.5pt', border: 'none' }}>
+                              <span style={{ display: 'inline-block', width: '28px', height: '10px', backgroundColor: '#64748b', marginRight: '6px', verticalAlign: 'middle' }} />
+                              <span style={{ verticalAlign: 'middle' }}>{r.sampleLabel || r.standardCode}</span>
+                            </td>
+                            {targetElements.map(el => {
+                              const valNum = getRowColValue(r, el.key);
+                              return (
+                                <td key={`act-val-${el.key}`} style={{ textAlign: 'center', fontWeight: 'bold', fontSize: '7.5pt', padding: '1px', border: 'none' }}>
+                                  {formatIndoNum(valNum, el.is3Dec ? 3 : 2)}
+                                </td>
+                              );
+                            })}
+                          </tr>
+
+                          {/* Row 2: Expected Value */}
+                          <tr style={{ height: '18px' }}>
+                            <td colSpan={4} style={{ padding: '1px 4px', textAlign: 'center', border: 'none' }}>
+                              <div style={{ backgroundColor: '#e2e8f0', borderRadius: '3px', padding: '1px 8px', fontStyle: 'italic', display: 'inline-block', fontSize: '7pt', color: '#1e293b' }}>
+                                Expected Value
+                              </div>
+                            </td>
+                            {targetElements.map(el => {
+                              const expVal = getExpectedColValue(r.standardCode, el.key);
+                              return (
+                                <td key={`exp-val-${el.key}`} style={{ textAlign: 'center', fontStyle: 'normal', fontSize: '7.5pt', padding: '1px', color: '#334155', border: 'none' }}>
+                                  {expVal > 0 ? formatIndoNum(expVal, el.is3Dec ? 3 : 2) : '-'}
+                                </td>
+                              );
+                            })}
+                          </tr>
+
+                          {/* Row 3: Diff. % with Up/Down Indicator */}
+                          <tr style={{ height: '18px' }}>
+                            <td colSpan={4} style={{ padding: '1px 4px', textAlign: 'center', border: 'none' }}>
+                              <div style={{ fontStyle: 'italic', display: 'inline-block', fontSize: '7pt', color: '#475569' }}>
+                                Diff. %
+                              </div>
+                            </td>
+                            {targetElements.map(el => {
+                              const actVal = getRowColValue(r, el.key);
+                              const expVal = getExpectedColValue(r.standardCode, el.key);
+                              const diffPct = getDiffPercentage(actVal, expVal);
+                              const isPositive = diffPct !== null && diffPct >= 0;
+
+                              return (
+                                <td key={`diff-val-${el.key}`} style={{ textAlign: 'center', fontSize: '7pt', padding: '1px', border: 'none', whiteSpace: 'nowrap' }}>
+                                  {diffPct !== null ? (
+                                    <span>
+                                      <span style={{ color: isPositive ? '#15803d' : '#b91c1c', marginRight: '2px', fontSize: '8pt', verticalAlign: 'middle' }}>
+                                        {isPositive ? '▲' : '▼'}
+                                      </span>
+                                      <span style={{ color: '#000000', fontWeight: 'bold' }}>
+                                        {formatIndoNum(diffPct, el.is3Dec ? 3 : 2)}
+                                      </span>
+                                    </span>
+                                  ) : (
+                                    '-'
+                                  )}
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  );
+                })}
+            </div>
+
+            {/* 4. Bottom Signatures Block: Left 2 Boxes & Right 2 Boxes */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', width: '100%', marginTop: '16px' }}>
+              {/* Left Signature Table (Dilaksanakan oleh & Diperiksa oleh) */}
+              <table style={{ width: '42%', borderCollapse: 'collapse', border: '1.5px solid #000000' }}>
+                <thead>
+                  <tr>
+                    <th style={{ width: '50%', border: '1px solid #000000', padding: '4px', fontStyle: 'italic', fontSize: '7.5pt', fontWeight: 'normal', textAlign: 'center' }}>
+                      Dilaksanakan oleh,
+                    </th>
+                    <th style={{ width: '50%', border: '1px solid #000000', padding: '4px', fontStyle: 'italic', fontSize: '7.5pt', fontWeight: 'normal', textAlign: 'center' }}>
+                      Diperiksa oleh,
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td style={{ border: '1px solid #000000', height: '62px', verticalAlign: 'bottom', textAlign: 'center', paddingBottom: '4px' }}></td>
+                    <td style={{ border: '1px solid #000000', height: '62px', verticalAlign: 'bottom', textAlign: 'center', paddingBottom: '4px' }}></td>
+                  </tr>
+                  <tr>
+                    <td style={{ border: '1px solid #000000', padding: '4px', fontSize: '7pt', textAlign: 'center', color: '#000000' }}>
+                      Foreman Laboratorium
+                    </td>
+                    <td style={{ border: '1px solid #000000', padding: '4px', fontSize: '7pt', textAlign: 'center', color: '#000000' }}>
+                      SPV Laboratorium
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+
+              {/* Right Signature Table (Disetujui oleh & Diketahui oleh) */}
+              <table style={{ width: '42%', borderCollapse: 'collapse', border: '1.5px solid #000000' }}>
+                <thead>
+                  <tr>
+                    <th style={{ width: '50%', border: '1px solid #000000', padding: '4px', fontStyle: 'italic', fontSize: '7.5pt', fontWeight: 'normal', textAlign: 'center' }}>
+                      Disetujui oleh,
+                    </th>
+                    <th style={{ width: '50%', border: '1px solid #000000', padding: '4px', fontStyle: 'italic', fontSize: '7.5pt', fontWeight: 'normal', textAlign: 'center' }}>
+                      Diketahui oleh,
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td style={{ border: '1px solid #000000', height: '62px', verticalAlign: 'bottom', textAlign: 'center', paddingBottom: '4px', fontWeight: 'bold', fontSize: '7.5pt', color: '#000000' }}>
+                      Tigwa Anggawikara
+                    </td>
+                    <td style={{ border: '1px solid #000000', height: '62px', verticalAlign: 'bottom', textAlign: 'center', paddingBottom: '4px', fontWeight: 'bold', fontSize: '7.5pt', color: '#000000' }}>
+                      Deni Nugraha Perdiana
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style={{ border: '1px solid #000000', padding: '4px', fontSize: '7pt', textAlign: 'center', color: '#000000' }}>
+                      Sptd. Laboratorium
+                    </td>
+                    <td style={{ border: '1px solid #000000', padding: '4px', fontSize: '7pt', textAlign: 'center', color: '#000000' }}>
+                      Preparation & Laboratorium Manager
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
           </div>
-        </div>
+        );
 
-        {/* Metadata Table */}
-        <table className="w-full text-[8pt] mb-2 print-border-table">
-          <tbody>
-            <tr>
-              <td className="print-header-cell w-[14%]">Instrumen XRF:</td>
-              <td className="w-[20%] font-bold">{selectedInstrument} ({filteredInstruments.find(i => i.code === selectedInstrument)?.name})</td>
-              <td className="print-header-cell w-[14%]">Tanggal Analisa:</td>
-              <td className="w-[18%] font-bold">{verificationDate}</td>
-              <td className="print-header-cell w-[14%]">Shift / Jam:</td>
-              <td className="w-[20%] font-bold">Shift {shift} ({verificationTime})</td>
-            </tr>
-            <tr>
-              <td className="print-header-cell">Aplikasi / Matriks:</td>
-              <td className="font-bold">{selectedMatrix} ({rows.length} CRM Standard)</td>
-              <td className="print-header-cell">Analis / Operator:</td>
-              <td className="font-bold">{userName} {userNik ? `(${userNik})` : ''}</td>
-              <td className="print-header-cell">Status Verifikasi:</td>
-              <td className={`font-black ${batchStats.overallStatus === 'PASS' ? 'print-status-pass' : batchStats.overallStatus === 'WARNING' ? 'print-status-warn' : 'print-status-action'}`}>
-                {batchStats.overallStatus === 'PASS' ? 'MEMENUHI SYARAT (PASS)' : batchStats.overallStatus === 'WARNING' ? 'PERINGATAN (WARNING)' : 'TIDAK MEMENUHI (ACTION)'}
-              </td>
-            </tr>
-          </tbody>
-        </table>
+        return (
+          <>
+            {/* Native Print Stylesheet & Container */}
+            <div className="xrf-print-only-container">
+              <style dangerouslySetInnerHTML={{ __html: `
+                @media screen {
+                  .xrf-print-only-container {
+                    display: none;
+                  }
+                }
+                @media print {
+                  @page {
+                    size: A4 landscape;
+                    margin: 8mm 10mm;
+                  }
+                  body {
+                    font-family: Arial, Helvetica, sans-serif !important;
+                    color: #000000 !important;
+                    background: #ffffff !important;
+                    -webkit-print-color-adjust: exact !important;
+                    print-color-adjust: exact !important;
+                  }
+                  .no-print-area, header, aside, nav, button, .lucide {
+                    display: none !important;
+                  }
+                  .xrf-print-only-container {
+                    display: block !important;
+                    width: 100% !important;
+                    max-width: 100% !important;
+                    margin: 0 auto !important;
+                    page-break-inside: avoid !important;
+                  }
+                }
+              ` }} />
 
-        {/* Dense Printable Results Table */}
-        <table className="w-full text-center print-border-table mb-2">
-          <thead>
-            <tr className="print-header-cell text-[8pt]">
-              <th className="w-6">No</th>
-              <th className="w-24 text-left">CRM Standar</th>
-              <th className="text-left">Label Sampel</th>
-              {activeColumns.map(c => (
-                <th key={`pr-th-${c}`} className="text-right">{c} (%)</th>
-              ))}
-              <th className="text-right w-12">BC</th>
-              <th className="text-right w-12">Fe/Ni</th>
-              <th className="text-right w-12">Sum%</th>
-              <th className="w-16">Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r, idx) => {
-              const calcs = computeRowCalculations(r);
-              const rowStatus = evaluateRow(r);
-              return (
-                <tr key={`pr-row-${idx}`}>
-                  <td>{idx + 1}</td>
-                  <td className="font-bold text-left">{r.standardCode}</td>
-                  <td className="text-left font-mono text-[7pt]">{r.sampleLabel}</td>
-                  {activeColumns.map(elem => {
-                    const field = elem.toLowerCase() as keyof StandardRowInput;
-                    const val = r[field];
-                    const evalResult = evaluateCell(r.standardCode, elem, val);
-                    const statusClass = evalResult.status === 'ACTION' ? 'print-status-action' : evalResult.status === 'WARNING' ? 'print-status-warn' : '';
+              {renderOfficialContent()}
+            </div>
 
-                    return (
-                      <td key={`pr-cell-${elem}-${idx}`} className={`text-right font-mono ${statusClass}`}>
-                        {val ? Number(val).toFixed(elem === 'Ni' || elem === 'Cr2O3' ? 3 : 2) : '-'}
-                      </td>
-                    );
-                  })}
-                  <td className="text-right font-mono">{calcs.bc}</td>
-                  <td className="text-right font-mono">{calcs.feNi}</td>
-                  <td className="text-right font-mono font-bold">{calcs.sum}</td>
-                  <td className={`font-bold ${rowStatus === 'PASS' ? 'print-status-pass' : rowStatus === 'WARNING' ? 'print-status-warn' : rowStatus === 'ACTION' ? 'print-status-action' : ''}`}>
-                    {rowStatus}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+            {/* Interactive On-Screen Print Preview Modal */}
+            {showPrintPreviewModal && (
+              <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto no-print-area">
+                <div className="bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-2xl max-w-6xl w-full max-h-[92vh] flex flex-col shadow-2xl overflow-hidden">
+                  {/* Modal Header */}
+                  <div className="flex items-center justify-between px-6 py-4 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
+                    <div className="flex items-center gap-2.5">
+                      <div className="p-2 bg-teal-50 dark:bg-teal-950/40 text-teal-600 rounded-xl">
+                        <Printer className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                          Pratinjau Format Cetak A4 Landscape
+                        </h3>
+                        <p className="text-[11px] text-slate-500">
+                          Template Resmi: DAILY VERIFIKASI SAMPLE STANDARD (TBP / GPS)
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => {
+                          setShowPrintPreviewModal(false);
+                          setTimeout(() => window.print(), 150);
+                        }}
+                        className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer shadow-sm active:scale-95"
+                      >
+                        <Printer className="w-4 h-4" />
+                        Cetak Sekarang (A4 Landscape)
+                      </button>
+                      <button
+                        onClick={() => setShowPrintPreviewModal(false)}
+                        className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors cursor-pointer"
+                        title="Tutup Pratinjau"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+                  </div>
 
-        {/* Nominal Reference Guidelines & Standard Notes */}
-        <div className="text-[7pt] text-slate-700 leading-tight mb-2 p-1.5 border border-slate-400 bg-slate-50">
-          <strong>Kriteria Penerimaan Verifikasi XRF:</strong> 
-          (1) Batas Peringatan (Warning) = Nilai Acuan ± 2σ (Perlu pengawasan). 
-          (2) Batas Tindakan (Action) = Nilai Acuan ± 3σ. Apabila hasil analisa berada di luar batas ± 3σ, analisa dihentikan untuk kalibrasi ulang atau pelaporan ke SPV Lab.
-          (3) Nilai Nominal CRM resmi: LIM01 s/d LIM05 dan OREAS/SAP terkalibrasi sesuai sertifikat CRM resmi terlampir (akurasi 3 desimal).
-        </div>
+                  {/* Modal Body: A4 Paper Preview */}
+                  <div className="p-6 overflow-y-auto flex justify-center bg-slate-200/70 dark:bg-slate-950">
+                    <div className="bg-white text-slate-900 p-8 rounded-sm shadow-xl border border-slate-300 w-full max-w-5xl">
+                      {renderOfficialContent()}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </>
+        );
+      })()}
 
-        {/* 3 Signatures Block (Dianalisa Oleh [Operator], Diperiksa Oleh [SPV], Disetujui Oleh [SPT]) */}
-        <table className="w-full text-center print-border-table">
-          <thead>
-            <tr className="print-header-cell text-[8pt]">
-              <th className="w-1/3">Dianalisa Oleh (Operator / Analis):</th>
-              <th className="w-1/3">Diperiksa Oleh (Supervisor Laboratory):</th>
-              <th className="w-1/3">Disetujui Oleh (Superintendent Laboratory):</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td className="sign-box align-bottom text-[8pt] pb-1">
-                <div className="font-bold underline">{userName || 'Analis Laboratorium'}</div>
-                <div className="text-[7pt] text-slate-600">NIK: {userNik || '....................................'}</div>
-                <div className="text-[7pt] text-slate-500">Tgl: {verificationDate}</div>
-              </td>
-              <td className="sign-box align-bottom text-[8pt] pb-1">
-                <div className="font-bold underline">( .................................................... )</div>
-                <div className="text-[7pt] text-slate-600">Supervisor QC / Laboratory</div>
-                <div className="text-[7pt] text-slate-500">Tgl: ............................................</div>
-              </td>
-              <td className="sign-box align-bottom text-[8pt] pb-1">
-                <div className="font-bold underline">( .................................................... )</div>
-                <div className="text-[7pt] text-slate-600">Superintendent Laboratory</div>
-                <div className="text-[7pt] text-slate-500">Tgl: ............................................</div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      {/* Modal Quick Paste from Excel */}
+            {/* Modal Quick Paste from Excel */}
       {showPasteModal && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 no-print-area">
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 max-w-2xl w-full shadow-2xl space-y-4">

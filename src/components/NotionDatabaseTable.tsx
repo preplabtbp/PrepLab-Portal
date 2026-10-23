@@ -5554,6 +5554,30 @@ export function NotionDatabaseTable({
     return map;
   }, [localRows, getRowVal]);
 
+  // Enterprise Helper: Extract human-readable clean task title for Delete & Audit Trail
+  const getRowTaskCleanTitle = (row: TableRowData, fallbackIndex?: number): string => {
+    if (!row) return fallbackIndex !== undefined ? `Baris #${fallbackIndex + 1}` : 'Kegiatan';
+    const rawTitle = (
+      getRowVal(row, 'Activity Name') ||
+      getRowVal(row, 'Activity') ||
+      getRowVal(row, 'Jenis kegiatan') ||
+      getRowVal(row, 'Jenis Kegiatan') ||
+      getRowVal(row, 'Task') ||
+      getRowVal(row, 'Judul') ||
+      getRowVal(row, 'Name') ||
+      getRowVal(row, 'Nama') ||
+      row['Activity Name'] ||
+      row['Jenis kegiatan'] ||
+      row['Jenis Kegiatan'] ||
+      row['Name'] ||
+      row['= Name'] ||
+      ''
+    );
+    const clean = getDisplayTitle(rawTitle);
+    if (clean) return clean;
+    return fallbackIndex !== undefined ? `Baris #${fallbackIndex + 1}` : 'Kegiatan';
+  };
+
   // Request Delete for a single row (opens modern confirmation dialog with subtask cascade detection)
   const handleRequestDeleteRow = (index: number, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
@@ -5561,7 +5585,7 @@ export function NotionDatabaseTable({
     if (!targetRow) return;
 
     const isSub = isSubItemRow(targetRow);
-    const taskName = (getRowVal(targetRow, 'Jenis kegiatan') || getRowVal(targetRow, 'Name') || getRowVal(targetRow, 'Judul') || `Baris #${index + 1}`).trim();
+    const taskName = getRowTaskCleanTitle(targetRow, index);
 
     // Find all nested subtasks under this parent
     const subtasks: TableRowData[] = [];
@@ -5622,7 +5646,7 @@ export function NotionDatabaseTable({
               postId,
               postTitle: title || 'Daily Laboratory',
               section: section || 'LABORATORIUM',
-              taskTitle: (getRowVal(r, 'Jenis kegiatan') || getRowVal(r, 'Name') || `Baris #${idx + 1}`).trim(),
+              taskTitle: getRowTaskCleanTitle(r, idx),
               rowData: r,
               subtasksData: null,
               subtaskCount: 0
@@ -5646,7 +5670,7 @@ export function NotionDatabaseTable({
             postId,
             postTitle: title || 'Daily Laboratory',
             section: section || 'LABORATORIUM',
-            taskTitle: taskName || 'Kegiatan',
+            taskTitle: getRowTaskCleanTitle(targetRow, rowIndex),
             rowData: targetRow,
             subtasksData: subtasks && subtasks.length > 0 ? subtasks : null,
             subtaskCount: subtaskCount || 0
@@ -5660,18 +5684,24 @@ export function NotionDatabaseTable({
       }
 
       // 1. Audit Trail: Send to Recycle Bin API
-      fetch('/api/bulletin/recycle-bin', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          items: recyclePayloadItems,
-          deletedByNik: effectiveNik,
-          deletedByName: effectiveName,
-          deletedByJabatan: effectiveJabatan
-        })
-      }).catch(err => {
+      try {
+        const token = localStorage.getItem('token') || localStorage.getItem('preplab_auth_token') || '';
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+
+        await fetch('/api/bulletin/recycle-bin', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            items: recyclePayloadItems,
+            deletedByNik: effectiveNik,
+            deletedByName: effectiveName,
+            deletedByJabatan: effectiveJabatan
+          })
+        });
+      } catch (err) {
         console.warn('[RecycleBin] Error logging to recycle bin:', err);
-      });
+      }
 
       // 2. Remove rows locally & re-index number
       const updatedRows = localRows.filter((_, idx) => !rowsToRemoveIndices.has(idx));
@@ -9049,7 +9079,7 @@ export function NotionDatabaseTable({
                             row['Jenis Kegiatan'] || 
                             row['Name'] || 
                             row['= Name'] || 
-                            `Baris ${actualRowIndex + 1}`
+                            ''
                           ).trim();
                           const displayTitle = getDisplayTitle(rawTitle);
                           const topicKey = displayTitle.toLowerCase().trim();

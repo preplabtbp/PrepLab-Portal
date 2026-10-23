@@ -1958,7 +1958,8 @@ const app = express();
     '/api/xrf',
     '/api/employees/photo',
     '/api/inspections/p2h-lab',
-    '/api/widgets'
+    '/api/widgets',
+    '/api/bulletin/recycle-bin'
   ];
 
   // Populate req.user if token valid on all /api routes
