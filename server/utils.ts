@@ -22,7 +22,7 @@ export function getIoInstance() {
 
 export async function sendWebPush(
   notifs: any | any[],
-  options?: { targetNiks?: string[]; skipWebPush?: boolean; senderNik?: string }
+  options?: { targetNiks?: string[]; skipWebPush?: boolean; senderNik?: string; universe?: string | null }
 ) {
   try {
     if (env.VAPID_PUBLIC_KEY && env.VAPID_PRIVATE_KEY) {

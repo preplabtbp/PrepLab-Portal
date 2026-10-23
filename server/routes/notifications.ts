@@ -23,6 +23,7 @@ router.get("/api/notifications", async (req, res) => {
     try {
       let data = [];
       const userId = req.query.userId as string;
+      let emp: any[] = [];
       if (userId) {
         const cleanUserId = userId.trim().toUpperCase();
         const hardcodedDevs = ['02D25000055', '02D24000043', '04D21001047', '04D24000042', 'M0403240177', 'PREPLABADMIN'];
@@ -43,7 +44,7 @@ router.get("/api/notifications", async (req, res) => {
         }
 
         let roles: string[] = [];
-        const emp = await db.select().from(employees).where(eq(employees.nik, userId)).limit(1);
+        emp = await db.select().from(employees).where(eq(employees.nik, userId)).limit(1);
         if (emp.length > 0) {
           const dept = emp[0].department;
           if (dept) {
