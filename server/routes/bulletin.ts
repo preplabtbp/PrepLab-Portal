@@ -1074,18 +1074,21 @@ router.post("/api/bulletin/rename-topic", async (req, res) => {
       }
 
       const pId = postId ? parseInt(String(postId), 10) : null;
-      const cleanOldBase = cleanOld.replace(/^↳\s*/, '').replace(/<!--[^>]+-->/g, '').replace(/\[[ xX]\]\s*/, '').trim();
-      const cleanNewBase = cleanNew.replace(/^↳\s*/, '').replace(/<!--[^>]+-->/g, '').replace(/\[[ xX]\]\s*/, '').trim();
+      const cleanOldBase = cleanOld.replace(/^[↳↪\s]+/, '').replace(/<!--[\s\S]*?-->/g, '').replace(/\[[ xX]\]\s*/, '').trim();
+      const cleanNewBase = cleanNew.replace(/^[↳↪\s]+/, '').replace(/<!--[\s\S]*?-->/g, '').replace(/\[[ xX]\]\s*/, '').trim();
 
       const titleOrFilters = [
         eq(bulletinComments.topicTitle, cleanOld),
         eq(bulletinComments.topicTitle, cleanOldBase),
         like(bulletinComments.topicTitle, `${cleanOld} - %`),
         like(bulletinComments.topicTitle, `${cleanOldBase} - %`),
-        ilike(bulletinComments.topicTitle, cleanOldBase)
+        ilike(bulletinComments.topicTitle, `%${cleanOldBase}%`),
+        ilike(bulletinComments.topicTitle, `%${cleanOld}%`),
+        ilike(bulletinComments.topicId, `%${cleanOldBase}%`)
       ];
       if (topicId) {
         titleOrFilters.push(eq(bulletinComments.topicId, String(topicId).trim()));
+        titleOrFilters.push(ilike(bulletinComments.topicId, `%${String(topicId).trim()}%`));
       }
 
       const whereClause = pId && !isNaN(pId)
@@ -1098,22 +1101,42 @@ router.post("/api/bulletin/rename-topic", async (req, res) => {
         .where(whereClause);
 
       for (const c of commentsToUpdate) {
-        let updatedTitle = c.topicTitle || '';
-        const cLower = updatedTitle.toLowerCase();
-        if (cLower === cleanOld.toLowerCase() || cLower === cleanOldBase.toLowerCase()) {
-          updatedTitle = cleanNewBase;
-        } else if (cLower.startsWith(`${cleanOldBase.toLowerCase()} - `)) {
-          const suffix = updatedTitle.slice(`${cleanOldBase} - `.length);
-          updatedTitle = `${cleanNewBase} - ${suffix}`;
-        } else {
-          updatedTitle = cleanNewBase;
+        const rawTitle = c.topicTitle || '';
+        // Check if comment title has sub-arrow (↳ or ↪)
+        const hasSubArrow = /^[↳↪]\s*/.test(rawTitle);
+        // Extract any HTML comments like <!--origin-id:593--> or <!--task-id:...-->
+        const htmlCommentsMatch = rawTitle.match(/<!--[\s\S]*?-->/g);
+        const metaTags = htmlCommentsMatch ? htmlCommentsMatch.join(' ') : '';
+        // Extract any sub-period suffix like " - 15 Okt 2026"
+        const cleanCTitle = rawTitle.replace(/^[↳↪\s]+/, '').replace(/<!--[\s\S]*?-->/g, '').trim();
+        const suffixMatch = cleanCTitle.match(/\s+-\s+([^-]+)$/);
+
+        let updatedCore = cleanNewBase;
+        if (suffixMatch) {
+          updatedCore = `${cleanNewBase} - ${suffixMatch[1].trim()}`;
+        }
+        let updatedTitle = updatedCore;
+        if (metaTags) {
+          updatedTitle = `${updatedTitle} ${metaTags}`;
+        }
+        if (hasSubArrow) {
+          updatedTitle = `↳ ${updatedTitle}`;
+        }
+
+        let updatedTopicId = c.topicId || '';
+        const oldSlug = cleanOldBase.toLowerCase().replace(/\s+/g, '-');
+        const newSlug = cleanNewBase.toLowerCase().replace(/\s+/g, '-');
+        if (oldSlug && updatedTopicId.includes(oldSlug)) {
+          updatedTopicId = updatedTopicId.replace(oldSlug, newSlug);
+        } else if (!updatedTopicId || updatedTopicId === c.topicTitle) {
+          updatedTopicId = updatedTitle.toLowerCase().replace(/\s+/g, '-');
         }
 
         await db
           .update(bulletinComments)
           .set({
             topicTitle: updatedTitle,
-            topicId: topicId ? String(topicId).trim() : cleanNewBase.toLowerCase().replace(/\s+/g, '-')
+            topicId: updatedTopicId
           })
           .where(eq(bulletinComments.id, c.id));
       }

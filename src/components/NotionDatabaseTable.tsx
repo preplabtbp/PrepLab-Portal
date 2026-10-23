@@ -3115,23 +3115,33 @@ export function NotionDatabaseTable({
   }, [fetchComments]);
 
   // Auto-migrate topic comments in database and local state when a task title is renamed
-  const handleRenameTopicComments = useCallback(async (oldTitle: string, newTitle: string, rowId?: string) => {
-    const targetPostId = getEffectivePostId();
+  const handleRenameTopicComments = useCallback(async (oldTitle: string, newTitle: string, rowId?: string, targetRowObj?: TableRowData) => {
+    const targetPostId = getEffectivePostId(targetRowObj);
     if (!oldTitle || !newTitle) return;
     const cleanOld = getDisplayTitle(oldTitle).trim();
     const cleanNew = getDisplayTitle(newTitle).trim();
     if (!cleanOld || !cleanNew || cleanOld.toLowerCase() === cleanNew.toLowerCase()) return;
 
-    // 1. Optimistic update in allComments local state
+    // 1. Optimistic update in allComments local state (preserving sub-arrow and meta tags)
     setAllComments(prev => prev.map(c => {
       const cTitle = (c.topicTitle || '').trim();
       const cClean = getDisplayTitle(cTitle).trim();
+      const hasSubArrow = /^[↳↪]\s*/.test(cTitle);
+      const metaMatch = cTitle.match(/<!--[\s\S]*?-->/g);
+      const metaTags = metaMatch ? metaMatch.join(' ') : '';
+
       if (cClean.toLowerCase() === cleanOld.toLowerCase() || cTitle.toLowerCase() === cleanOld.toLowerCase()) {
-        return { ...c, topicTitle: cleanNew };
+        let nextT = cleanNew;
+        if (metaTags) nextT = `${nextT} ${metaTags}`;
+        if (hasSubArrow) nextT = `↳ ${nextT}`;
+        return { ...c, topicTitle: nextT };
       }
       if (cClean.toLowerCase().startsWith(`${cleanOld.toLowerCase()} - `)) {
         const suffix = cClean.slice(`${cleanOld} - `.length);
-        return { ...c, topicTitle: `${cleanNew} - ${suffix}` };
+        let nextT = `${cleanNew} - ${suffix}`;
+        if (metaTags) nextT = `${nextT} ${metaTags}`;
+        if (hasSubArrow) nextT = `↳ ${nextT}`;
+        return { ...c, topicTitle: nextT };
       }
       return c;
     }));
@@ -4314,7 +4324,7 @@ export function NotionDatabaseTable({
         if (targetRow['Activity Name'] !== undefined) targetRow['Activity Name'] = newValue;
 
         if (oldRowTitle && newValue && oldRowTitle.trim() !== newValue.trim()) {
-          handleRenameTopicComments(oldRowTitle, newValue, targetRow.id);
+          handleRenameTopicComments(oldRowTitle, newValue, targetRow.id, targetRow);
         }
       }
 
@@ -4444,9 +4454,15 @@ export function NotionDatabaseTable({
       if (selectedRow) {
         const curSelectedTitle = getRowVal(selectedRow, 'Jenis kegiatan');
         const updatedTitle = getRowVal(targetRow, 'Jenis kegiatan');
+        const selTitleClean = getDisplayTitle(curSelectedTitle || '').toLowerCase();
+        const oldTitleClean = getDisplayTitle(copy[targetRowIndex]['Jenis kegiatan'] || '').toLowerCase();
         if (curSelectedTitle && curSelectedTitle === updatedTitle) {
           setSelectedRow(targetRow);
-        } else if (selectedRow === copy[targetRowIndex] || (selectedRow.id && selectedRow.id === targetRow.id)) {
+        } else if (
+          selectedRow === copy[targetRowIndex] || 
+          (selectedRow.id && selectedRow.id === targetRow.id) ||
+          (selTitleClean && selTitleClean === oldTitleClean)
+        ) {
           setSelectedRow(targetRow);
         }
       }
