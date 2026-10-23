@@ -266,6 +266,8 @@ export const XrfCalibrationScreen: React.FC<XrfCalibrationScreenProps> = ({
             standards={standards}
             assignedSite={assignedSite}
             isDevOrManager={isDevOrManager}
+            inspectorName={inspectorName}
+            inspectorNik={inspectorNik}
             onSuccessSave={() => setActiveTab('history-logs')}
           />
         )}

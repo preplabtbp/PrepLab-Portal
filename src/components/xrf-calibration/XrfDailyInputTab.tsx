@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import Papa from 'papaparse';
 import { 
-  Save, Clipboard, RefreshCw, AlertCircle, CheckCircle2, AlertTriangle, 
+  Save, Clipboard, RefreshCw, AlertCircle, CheckCircle2, AlertTriangle, PenTool, Users, UserCheck, Search, ShieldCheck, 
   ArrowUp, ArrowDown, Sparkles, FileSpreadsheet, Plus, Printer, Check, X, Eye,
   Building2, Cpu, Layers, Trash2, Database, HelpCircle
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { extractSmartStandardCode, isWdxrfInstrument, getWdxrfProfile } from '../../utils/xrfStandardDetector';
+import { VerifiedSignaturePad } from '../VerifiedSignaturePad';
+import { getEmployees } from '../../sheets-api';
 import { TimeInput24 } from '../ui/TimeInput24';
 
 interface XrfDailyInputTabProps {
@@ -14,6 +16,8 @@ interface XrfDailyInputTabProps {
   standards: Array<{ code: string; name: string }>;
   assignedSite?: 'GTS' | 'TBP';
   isDevOrManager?: boolean;
+  inspectorName?: string;
+  inspectorNik?: string;
   onSuccessSave?: () => void;
 }
 
@@ -110,6 +114,8 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
   standards,
   assignedSite = 'GTS',
   isDevOrManager = false,
+  inspectorName,
+  inspectorNik,
   onSuccessSave,
 }) => {
   // 1. Matrix Application State: LIMONITE, SAPROLITE, SUPERMINI, ZETIUM, or DYNAMIC
@@ -150,6 +156,50 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
   const [loading, setLoading] = useState(false);
   const [showPasteModal, setShowPasteModal] = useState(false);
   const [showPrintPreviewModal, setShowPrintPreviewModal] = useState(false);
+  const [showSignatureModal, setShowSignatureModal] = useState(false);
+  const [employees, setEmployees] = useState<any[]>([]);
+
+  // TTD State: Foreman (Dilaksanakan oleh)
+  const [foremanName, setForemanName] = useState<string>(() => inspectorName || '');
+  const [foremanNik, setForemanNik] = useState<string>(() => inspectorNik || '');
+  const [foremanSignature, setForemanSignature] = useState<string>('');
+  const [foremanSearch, setForemanSearch] = useState<string>('');
+  const [isChangingForeman, setIsChangingForeman] = useState(false);
+
+  // TTD State: SPV (Diperiksa oleh)
+  const [spvName, setSpvName] = useState<string>('');
+  const [spvNik, setSpvNik] = useState<string>('');
+  const [spvSignature, setSpvSignature] = useState<string>('');
+  const [spvSearch, setSpvSearch] = useState<string>('');
+  const [isChangingSpv, setIsChangingSpv] = useState(false);
+
+  // Fetch employees & init names
+  useEffect(() => {
+    getEmployees().then(list => {
+      setEmployees(list);
+      // Auto-set SPV if empty
+      if (!spvName && list.length > 0) {
+        const foundSpv = list.find((e: any) => /spv|supervisor/i.test(e.jabatan || ''));
+        if (foundSpv) {
+          setSpvName(foundSpv.nama);
+          setSpvNik(foundSpv.nik || '');
+        }
+      }
+      // Auto-set Foreman if empty
+      if (!foremanName) {
+        if (inspectorName) {
+          setForemanName(inspectorName);
+          setForemanNik(inspectorNik || '');
+        } else if (list.length > 0) {
+          const foundForeman = list.find((e: any) => /foreman/i.test(e.jabatan || ''));
+          if (foundForeman) {
+            setForemanName(foundForeman.nama);
+            setForemanNik(foundForeman.nik || '');
+          }
+        }
+      }
+    }).catch(console.error);
+  }, [inspectorName, inspectorNik]);
   const [rawPastedText, setRawPastedText] = useState('');
   const [xrfApplication, setXrfApplication] = useState<string>('LIMONITE - MYLAR (2) 2026');
 
@@ -867,6 +917,20 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
               Paste Excel
             </button>
 
+            {/* Digital Signature Button */}
+            <button
+              type="button"
+              onClick={() => setShowSignatureModal(true)}
+              className="px-3.5 py-2 bg-teal-50 hover:bg-teal-100 dark:bg-teal-950/40 dark:hover:bg-teal-900/40 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs active:scale-95"
+              title="Pengesahan Tanda Tangan Digital (Foreman & SPV)"
+            >
+              <PenTool className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
+              <span>TTD Digital</span>
+              {(foremanSignature || spvSignature) && (
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              )}
+            </button>
+
             {/* Preview Template Button */}
             <button
               type="button"
@@ -1578,15 +1642,45 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
                 </thead>
                 <tbody>
                   <tr>
-                    <td style={{ border: '1px solid #000000', height: '40px', verticalAlign: 'bottom', textAlign: 'center', paddingBottom: '2px' }}></td>
-                    <td style={{ border: '1px solid #000000', height: '40px', verticalAlign: 'bottom', textAlign: 'center', paddingBottom: '2px' }}></td>
+                    <td style={{ border: '1px solid #000000', height: '40px', verticalAlign: 'middle', textAlign: 'center', padding: '1px' }}>
+                      {foremanSignature ? (
+                        <img
+                          src={foremanSignature}
+                          alt="TTD Foreman"
+                          style={{ maxHeight: '38px', maxWidth: '95%', objectFit: 'contain', margin: 'auto', display: 'block' }}
+                        />
+                      ) : (
+                        <div style={{ height: '38px' }} />
+                      )}
+                    </td>
+                    <td style={{ border: '1px solid #000000', height: '40px', verticalAlign: 'middle', textAlign: 'center', padding: '1px' }}>
+                      {spvSignature ? (
+                        <img
+                          src={spvSignature}
+                          alt="TTD SPV"
+                          style={{ maxHeight: '38px', maxWidth: '95%', objectFit: 'contain', margin: 'auto', display: 'block' }}
+                        />
+                      ) : (
+                        <div style={{ height: '38px' }} />
+                      )}
+                    </td>
                   </tr>
                   <tr>
                     <td style={{ border: '1px solid #000000', padding: '2px', fontSize: '6pt', textAlign: 'center', color: '#000000' }}>
-                      Foreman Laboratorium
+                      {foremanName && (
+                        <div style={{ fontWeight: 'bold', fontSize: '6.5pt', marginBottom: '1px', color: '#000000' }}>
+                          {foremanName}
+                        </div>
+                      )}
+                      <div>Foreman Laboratorium</div>
                     </td>
                     <td style={{ border: '1px solid #000000', padding: '2px', fontSize: '6pt', textAlign: 'center', color: '#000000' }}>
-                      SPV Laboratorium
+                      {spvName && (
+                        <div style={{ fontWeight: 'bold', fontSize: '6.5pt', marginBottom: '1px', color: '#000000' }}>
+                          {spvName}
+                        </div>
+                      )}
+                      <div>SPV Laboratorium</div>
                     </td>
                   </tr>
                 </tbody>
@@ -1708,6 +1802,18 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
                     </div>
                     <div className="flex items-center gap-2">
                       <button
+                        type="button"
+                        onClick={() => setShowSignatureModal(true)}
+                        className="px-3.5 py-1.5 bg-teal-50 hover:bg-teal-100 dark:bg-teal-950/40 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs active:scale-95"
+                        title="Atur atau bubuhkan tanda tangan digital"
+                      >
+                        <PenTool className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
+                        {foremanSignature || spvSignature ? 'Ubah TTD Digital' : 'Isi TTD Digital'}
+                        {(foremanSignature || spvSignature) && (
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                        )}
+                      </button>
+                      <button
                         onClick={() => {
                           setShowPrintPreviewModal(false);
                           setTimeout(() => window.print(), 150);
@@ -1736,6 +1842,221 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
                 </div>
               </div>
             )}
+
+            {/* Digital Signature Modal */}
+            {showSignatureModal && (
+              <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 overflow-y-auto no-print-area">
+                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-4xl w-full max-h-[92vh] flex flex-col shadow-2xl overflow-hidden">
+                  {/* Modal Header */}
+                  <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-teal-100 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300 rounded-xl">
+                        <PenTool className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                          Pengesahan Tanda Tangan Digital
+                          <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-teal-50 dark:bg-teal-950 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800">
+                            XRF Verification
+                          </span>
+                        </h3>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                          Gunakan PIN tanda tangan tersimpan atau tanda tangan langsung di layar.
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowSignatureModal(false)}
+                      className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+
+                  {/* Modal Body */}
+                  <div className="p-6 overflow-y-auto space-y-6 flex-1">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {/* 1. Foreman Laboratorium */}
+                      <div className="bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <label className="text-xs font-bold text-teal-700 dark:text-teal-300 uppercase tracking-wider flex items-center gap-1.5">
+                            <UserCheck className="w-4 h-4 text-teal-600" />
+                            Dilaksanakan oleh (Foreman)
+                          </label>
+                          {foremanSignature && (
+                            <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/50 px-2 py-0.5 rounded-full flex items-center gap-1">
+                              <Check className="w-3 h-3" /> Tertandatangani
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Officer Selector */}
+                        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-3">
+                          {!isChangingForeman && foremanName ? (
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <p className="font-bold text-sm text-slate-900 dark:text-white">{foremanName}</p>
+                                <p className="text-xs text-slate-500">Foreman Laboratorium {foremanNik ? ('• NIK: ' + foremanNik) : ''}</p>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => setIsChangingForeman(true)}
+                                className="text-xs font-semibold text-teal-600 hover:text-teal-700 dark:text-teal-400 cursor-pointer"
+                              >
+                                Ganti
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="space-y-2">
+                              <div className="relative">
+                                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                                <input
+                                  type="text"
+                                  placeholder="Cari nama Foreman..."
+                                  value={foremanSearch}
+                                  onChange={e => setForemanSearch(e.target.value)}
+                                  className="w-full text-xs pl-9 pr-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
+                                />
+                              </div>
+                              {foremanSearch && (
+                                <div className="max-h-40 overflow-y-auto bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg">
+                                  {employees
+                                    .filter(e => (e.nama || '').toLowerCase().includes(foremanSearch.toLowerCase()))
+                                    .slice(0, 6)
+                                    .map(e => (
+                                      <div
+                                        key={e.nama}
+                                        onClick={() => {
+                                          setForemanName(e.nama);
+                                          setForemanNik(e.nik || '');
+                                          setForemanSearch('');
+                                          setIsChangingForeman(false);
+                                        }}
+                                        className="p-2 hover:bg-teal-50 dark:hover:bg-teal-950/40 cursor-pointer text-xs border-b border-slate-100 dark:border-slate-700 flex justify-between"
+                                      >
+                                        <span className="font-semibold text-slate-800 dark:text-slate-200">{e.nama}</span>
+                                        <span className="text-slate-400">{e.jabatan || 'Foreman'}</span>
+                                      </div>
+                                    ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Verified Signature Pad */}
+                        <VerifiedSignaturePad
+                          signerName={foremanName}
+                          signerNik={foremanNik}
+                          label="Tanda Tangan Foreman"
+                          value={foremanSignature}
+                          onChange={setForemanSignature}
+                          accentColor="teal"
+                          heightClass="h-32"
+                        />
+                      </div>
+
+                      {/* 2. SPV Laboratorium */}
+                      <div className="bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <label className="text-xs font-bold text-blue-700 dark:text-blue-300 uppercase tracking-wider flex items-center gap-1.5">
+                            <Users className="w-4 h-4 text-blue-600" />
+                            Diperiksa oleh (SPV)
+                          </label>
+                          {spvSignature && (
+                            <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/50 px-2 py-0.5 rounded-full flex items-center gap-1">
+                              <Check className="w-3 h-3" /> Tertandatangani
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Officer Selector */}
+                        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-3">
+                          {!isChangingSpv && spvName ? (
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <p className="font-bold text-sm text-slate-900 dark:text-white">{spvName}</p>
+                                <p className="text-xs text-slate-500">SPV Laboratorium {spvNik ? ('• NIK: ' + spvNik) : ''}</p>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => setIsChangingSpv(true)}
+                                className="text-xs font-semibold text-blue-600 hover:text-blue-700 dark:text-blue-400 cursor-pointer"
+                              >
+                                Ganti
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="space-y-2">
+                              <div className="relative">
+                                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                                <input
+                                  type="text"
+                                  placeholder="Cari nama SPV..."
+                                  value={spvSearch}
+                                  onChange={e => setSpvSearch(e.target.value)}
+                                  className="w-full text-xs pl-9 pr-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
+                                />
+                              </div>
+                              {spvSearch && (
+                                <div className="max-h-40 overflow-y-auto bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg">
+                                  {employees
+                                    .filter(e => (e.nama || '').toLowerCase().includes(spvSearch.toLowerCase()))
+                                    .slice(0, 6)
+                                    .map(e => (
+                                      <div
+                                        key={e.nama}
+                                        onClick={() => {
+                                          setSpvName(e.nama);
+                                          setSpvNik(e.nik || '');
+                                          setSpvSearch('');
+                                          setIsChangingSpv(false);
+                                        }}
+                                        className="p-2 hover:bg-blue-50 dark:hover:bg-blue-950/40 cursor-pointer text-xs border-b border-slate-100 dark:border-slate-700 flex justify-between"
+                                      >
+                                        <span className="font-semibold text-slate-800 dark:text-slate-200">{e.nama}</span>
+                                        <span className="text-slate-400">{e.jabatan || 'Supervisor'}</span>
+                                      </div>
+                                    ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Verified Signature Pad */}
+                        <VerifiedSignaturePad
+                          signerName={spvName}
+                          signerNik={spvNik}
+                          label="Tanda Tangan SPV"
+                          value={spvSignature}
+                          onChange={setSpvSignature}
+                          accentColor="blue"
+                          heightClass="h-32"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Modal Footer */}
+                  <div className="px-6 py-3.5 bg-slate-50 dark:bg-slate-800/80 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between">
+                    <p className="text-xs text-slate-500">
+                      Tanda tangan akan otomatis disematkan ke lembar cetak A4 Landscape.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setShowSignatureModal(false)}
+                      className="px-5 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-sm active:scale-95 flex items-center gap-1.5"
+                    >
+                      <Check className="w-4 h-4" />
+                      Selesai & Terapkan
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
           </>
         );
       })()}
