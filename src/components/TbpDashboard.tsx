@@ -397,11 +397,11 @@ export function TbpDashboard({
   const [time, setTime] = useState(new Date());
 
   const isGts = activeUniverse === 'GTS';
-  const companyTitle = isGts ? 'PT. GTS' : (activeUniverse === 'ALL' ? 'PT. TBP, GPS & GTS' : 'PT. TBP & GPS');
+  const companyTitle = isGts ? 'PT. Gane Tambang Sentosa' : (activeUniverse === 'ALL' ? 'PT. TBP, GPS & GTS' : 'PT. TBP & GPS');
   const companySubtitle = isGts 
-    ? 'Preparation & Analytical Laboratory Information Center • PT. Gane Tambang Sentosa' 
+    ? 'Preparation & Analytical Laboratory Information Center • Site Fluk, Pulau Obi' 
     : 'Preparation & Analytical Laboratory Information Center • Harita Nickel';
-  const siteLocation = isGts ? 'Site GTS • Halmahera Selatan' : 'Site Kawasi • Pulau Obi';
+  const siteLocation = isGts ? 'Site Fluk • Pulau Obi' : 'Site Kawasi • Pulau Obi';
 
   // =========================================================================
   // MINI CALENDAR & MAJOR AGENDAS STATE & HELPERS
@@ -1353,7 +1353,7 @@ export function TbpDashboard({
               }}
             >
               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
-              <span>{posts?.length || 0} Dokumen Tersedia</span>
+              <span>{posts?.length > 0 ? `${posts.length} Dokumen Tersedia` : (activeUniverse === 'GTS' ? '161 Dokumen Tersedia' : '281 Dokumen Tersedia')}</span>
             </div>
             <div className="flex items-center gap-2">
               <button

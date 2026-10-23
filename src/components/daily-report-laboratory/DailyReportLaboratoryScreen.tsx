@@ -77,7 +77,7 @@ export const DailyReportLaboratoryScreen: React.FC<DailyReportLaboratoryScreenPr
   }, [allRecords, date, shiftType]);
 
   // Track station balance overrides
-  const [overriddenStations, setOverriddenStations] = useState<Record<string, { value: number; by: string; time: string; isReconciled?: boolean }>>({});
+  const [overriddenStations, setOverriddenStations] = useState<Record<string, { value: number; by: string; time: string; rootCause?: DiscrepancyRootCauseType; isReconciled?: boolean }>>({});
 
   // Override Modal State
   const [overrideModalOpen, setOverrideModalOpen] = useState(false);

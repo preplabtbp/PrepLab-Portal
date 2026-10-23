@@ -1,6 +1,6 @@
 import { translateDisplayText } from './notion/logbook-section-utils';
 import { VerifiedBadge } from './VerifiedBadge';
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { 
   Home, 
   Calendar, 
@@ -76,15 +76,16 @@ interface HubItem {
   linkUrl?: string;
 }
 
-// Helper to load and save custom menu items (order + customized title/icon/linkUrl) per section hub
-function loadOrderedHubItems(section: string, type: 'info' | 'rules', defaultItems: HubItem[]): HubItem[] {
+// Helper to load and save custom menu items (order + customized title/icon/linkUrl) per section hub and universe
+function loadOrderedHubItems(section: string, type: 'info' | 'rules', defaultItems: HubItem[], universe: string = 'TBP'): HubItem[] {
   try {
     const cleanSec = (section || 'general').toLowerCase().replace(/[^a-z0-9]+/g, '_');
+    const cleanUniv = (universe || 'tbp').toLowerCase();
     const translatedCleanSec = (translateDisplayText(section) || 'general').toLowerCase().replace(/[^a-z0-9]+/g, '_');
-    const key = `preplab_hub_custom_items_${cleanSec}_${type}`;
+    const key = `preplab_hub_custom_items_${cleanUniv}_${cleanSec}_${type}`;
     let raw = localStorage.getItem(key);
     if (!raw && translatedCleanSec !== cleanSec) {
-      raw = localStorage.getItem(`preplab_hub_custom_items_${translatedCleanSec}_${type}`);
+      raw = localStorage.getItem(`preplab_hub_custom_items_${cleanUniv}_${translatedCleanSec}_${type}`);
     }
     if (raw) {
       const parsed: HubItem[] = JSON.parse(raw);
@@ -92,21 +93,19 @@ function loadOrderedHubItems(section: string, type: 'info' | 'rules', defaultIte
         return parsed;
       }
     }
-    // Backward compatibility: check if order-only was saved
-    const legacyKey = `preplab_hub_order_${cleanSec}_${type}`;
-    const legacyRaw = localStorage.getItem(legacyKey);
-    if (legacyRaw) {
-      const titlesOrder: string[] = JSON.parse(legacyRaw);
-      const itemMap = new Map(defaultItems.map(i => [i.title, i]));
-      const ordered: HubItem[] = [];
-      titlesOrder.forEach(t => {
-        if (itemMap.has(t)) {
-          ordered.push(itemMap.get(t)!);
-          itemMap.delete(t);
+    // Backward compatibility for TBP only: check if un-prefixed was saved
+    if (cleanUniv === 'tbp') {
+      const legacyKey = `preplab_hub_custom_items_${cleanSec}_${type}`;
+      let legacyRaw = localStorage.getItem(legacyKey);
+      if (!legacyRaw && translatedCleanSec !== cleanSec) {
+        legacyRaw = localStorage.getItem(`preplab_hub_custom_items_${translatedCleanSec}_${type}`);
+      }
+      if (legacyRaw) {
+        const parsed: HubItem[] = JSON.parse(legacyRaw);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
         }
-      });
-      itemMap.forEach(i => ordered.push(i));
-      return ordered;
+      }
     }
     return defaultItems;
   } catch {
@@ -114,16 +113,15 @@ function loadOrderedHubItems(section: string, type: 'info' | 'rules', defaultIte
   }
 }
 
-function saveOrderedHubItems(section: string, type: 'info' | 'rules', items: HubItem[]): void {
+function saveOrderedHubItems(section: string, type: 'info' | 'rules', items: HubItem[], universe: string = 'TBP'): void {
   try {
     const cleanSec = (section || 'general').toLowerCase().replace(/[^a-z0-9]+/g, '_');
-    const key = `preplab_hub_custom_items_${cleanSec}_${type}`;
+    const cleanUniv = (universe || 'tbp').toLowerCase();
+    const key = `preplab_hub_custom_items_${cleanUniv}_${cleanSec}_${type}`;
     localStorage.setItem(key, JSON.stringify(items));
-    // Also save legacy key for compatibility
-    const legacyKey = `preplab_hub_order_${cleanSec}_${type}`;
-    localStorage.setItem(legacyKey, JSON.stringify(items.map(i => i.title)));
   } catch {}
 }
+
 
 
 export function SectionHubDashboard({
@@ -342,12 +340,13 @@ export function SectionHubDashboard({
     for (const kw of expandedList) {
       const q = kw.toLowerCase().trim();
       
-      // Look for candidates that match by numeric ID strictly in the same PT universe, then fallback to all posts
+      // Look for candidates that match by numeric ID strictly in the same PT universe
       if (/^\d+$/.test(q)) {
         const idNum = parseInt(q, 10);
-        const idMatch = eligiblePosts.find((p) => p.id === idNum) || posts.find((p) => p.id === idNum);
+        const idMatch = eligiblePosts.find((p) => p.id === idNum);
         if (idMatch) return idMatch;
       }
+
 
       // 1. Exact matches (cleaned title)
       const exactMatches = eligiblePosts.filter(
@@ -385,12 +384,10 @@ export function SectionHubDashboard({
         const slugMatch = eligiblePosts.find((p) => {
           const pSlug = (p.title || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
           return pSlug === qSlug;
-        }) || posts.find((p) => {
-          const pSlug = (p.title || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-          return pSlug === qSlug;
         });
         if (slugMatch) return slugMatch;
       }
+
 
       // 5. General match within same PT
       const generalMatches = eligiblePosts.filter((p) => (p.title || '').replace(/^[#\s\-*]+/, '').toLowerCase().trim().includes(q));
@@ -477,12 +474,133 @@ export function SectionHubDashboard({
     onSelectPost(fallbackPost);
   };
 
+  // Helper to dynamically extract GTS hub items from post.content markdown links or eligiblePosts
+  const getGtsHubItems = useCallback(() => {
+    const info: HubItem[] = [];
+    const rules: HubItem[] = [];
+
+    const getGtsIcon = (t: string) => {
+      const lower = t.toLowerCase();
+      if (lower.includes('daily') || lower.includes('harian')) return '📅';
+      if (lower.includes('weekly') || lower.includes('mingguan')) return '📊';
+      if (lower.includes('monthly') || lower.includes('bulanan')) return '📈';
+      if (lower.includes('quarterly') || lower.includes('biannual') || lower.includes('yearly')) return '🗓️';
+      if (lower.includes('non routine') || lower.includes('routine')) return '⚡';
+      if (lower.includes('logbook')) return '📔';
+      if (lower.includes('sop') || lower.includes('ik') || lower.includes('prosedur')) return '📜';
+      if (lower.includes('audit') || lower.includes('iso')) return '🛡️';
+      if (lower.includes('asset') || lower.includes('aset') || lower.includes('scrab') || lower.includes('scrap')) return '📦';
+      if (lower.includes('monitoring') || lower.includes('po')) return '📋';
+      if (lower.includes('information') || lower.includes('informasi')) return '📄';
+      if (lower.includes('karyawan') || lower.includes('cuti') || lower.includes('simper') || lower.includes('interview')) return '👤';
+      if (lower.includes('meal')) return '🍲';
+      return '🔹';
+    };
+
+    if (post?.content && post.content.includes('/bulletin/GTS?postId=')) {
+      const matches = [...post.content.matchAll(/- 🔹 \*\*\[(.*?)\]\(\/bulletin\/GTS\?postId=(\d+)\)\*\*/g)];
+      matches.forEach(m => {
+        const title = m[1].trim();
+        const pId = m[2];
+        const lower = title.toLowerCase();
+        const item: HubItem = {
+          title,
+          icon: getGtsIcon(title),
+          searchKeywords: [pId, title]
+        };
+
+        if (sectionTitle.includes('PROSEDUR') || sectionTitle.includes('GENERAL ISSUE')) {
+          info.push(item);
+        } else if (
+          lower.includes('daily') ||
+          lower.includes('weekly') ||
+          lower.includes('monthly') ||
+          lower.includes('quarterly') ||
+          lower.includes('biannual') ||
+          lower.includes('yearly') ||
+          lower.includes('non routine') ||
+          lower.includes('routine') ||
+          lower.includes('logbook')
+        ) {
+          info.push(item);
+        } else {
+          rules.push(item);
+        }
+      });
+    }
+
+    // Fallback: If no links parsed from post.content, extract from eligiblePosts matching the section
+    if (info.length === 0 && rules.length === 0 && eligiblePosts.length > 0) {
+      const cleanSec = sectionTitle.replace(/^[#\s\-*]+/, '').toLowerCase();
+      const secPosts = eligiblePosts.filter(p => {
+        if (p.id === post?.id) return false;
+        const pTitle = (p.title || '').toLowerCase();
+        const pCat = (p.category || '').toLowerCase();
+        return pCat.includes(cleanSec) || pTitle.includes(cleanSec);
+      });
+
+      secPosts.forEach(p => {
+        const title = (p.title || '').trim();
+        const lower = title.toLowerCase();
+        const item: HubItem = {
+          title,
+          icon: getGtsIcon(title),
+          searchKeywords: [String(p.id), title]
+        };
+        if (
+          lower.includes('daily') ||
+          lower.includes('weekly') ||
+          lower.includes('monthly') ||
+          lower.includes('quarterly') ||
+          lower.includes('biannual') ||
+          lower.includes('yearly') ||
+          lower.includes('non routine') ||
+          lower.includes('routine')
+        ) {
+          info.push(item);
+        } else {
+          rules.push(item);
+        }
+      });
+    }
+
+    return { infoItems: info, rulesItems: rules };
+  }, [post?.content, post?.id, sectionTitle, eligiblePosts]);
+
   // Section configurations matching exact Notion designs from Screenshots
   const getSectionConfig = () => {
+    // Universe GTS Hub Configuration: Dynamically populated from actual GTS database sub-pages!
+    if (currentUniverse === 'GTS') {
+      const gtsHub = getGtsHubItems();
+      if (gtsHub.infoItems.length > 0 || gtsHub.rulesItems.length > 0) {
+        let secIcon = '📋';
+        if (sectionTitle.includes('LAB')) secIcon = '🥼';
+        else if (sectionTitle.includes('PREP')) secIcon = '🪨';
+        else if (sectionTitle.includes('MAINT')) secIcon = '🔧';
+        else if (sectionTitle.includes('WAREHOUSE') || sectionTitle.includes('INVENT')) secIcon = '📦';
+        else if (sectionTitle.includes('QA') || sectionTitle.includes('QUALITY') || sectionTitle.includes('MUTU')) secIcon = '🛡️';
+        else if (sectionTitle.includes('PROSEDUR') || sectionTitle.includes('PROCEDURE') || sectionTitle.includes('SOP')) secIcon = '📙';
+        else if (sectionTitle.includes('ADMIN')) secIcon = '📋';
+        else if (sectionTitle.includes('GENERAL') || sectionTitle.includes('ISSUE')) secIcon = '⚠️';
+
+        return {
+          icon: secIcon,
+          bannerUrl: post?.coverImage || 'https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?auto=format&fit=crop&w=1600&q=80',
+          infoTitle: 'INFO & RUTINITAS GTS',
+          infoItems: gtsHub.infoItems,
+          rulesTitle: gtsHub.rulesItems.length > 0 ? 'DOKUMEN & PANDUAN GTS' : '',
+          rulesItems: gtsHub.rulesItems,
+          showAgenda: true,
+          extraLinks: []
+        };
+      }
+    }
+
     // 1. PROSEDUR (Image 1) - Single Column INFO with 9 items
     if (sectionTitle.includes('PROSEDUR') || sectionTitle.includes('PROCEDURE') || sectionTitle === 'SOP') {
       return {
         icon: '📙',
+
         bannerUrl: 'https://images.unsplash.com/photo-1503387762-592deb58ef4e?auto=format&fit=crop&w=1600&q=80',
         infoTitle: 'INFO',
         infoItems: [

@@ -7760,9 +7760,9 @@ export const INITIAL_DAILY_PERFORMANCE_RECORDS: DailyPerformanceRecord[] = [
       "w2": 52,
       "w4": 130,
       "w5": 130,
-      "finLoiShift": 260,
-      "finLoiDay": 624,
-      "finLoiWkly": 0,
+      "finLoiShift": 312,
+      "finLoiDay": 260,
+      "finLoiWkly": 624,
       "bal": 130
     },
     "wdxrf": {
@@ -7897,7 +7897,7 @@ export const INITIAL_DAILY_PERFORMANCE_RECORDS: DailyPerformanceRecord[] = [
       "w2": 130,
       "w4": 130,
       "w5": 130,
-      "finLoiShift": 0,
+      "finLoiShift": 390,
       "finLoiDay": 0,
       "finLoiWkly": 0,
       "bal": 0
@@ -8034,8 +8034,8 @@ export const INITIAL_DAILY_PERFORMANCE_RECORDS: DailyPerformanceRecord[] = [
       "w2": 0,
       "w4": 0,
       "w5": 0,
-      "finLoiShift": 130,
-      "finLoiDay": 0,
+      "finLoiShift": 0,
+      "finLoiDay": 130,
       "finLoiWkly": 0,
       "bal": 130
     },
@@ -8171,7 +8171,7 @@ export const INITIAL_DAILY_PERFORMANCE_RECORDS: DailyPerformanceRecord[] = [
       "w2": 130,
       "w4": 130,
       "w5": 130,
-      "finLoiShift": 0,
+      "finLoiShift": 390,
       "finLoiDay": 0,
       "finLoiWkly": 0,
       "bal": 0
@@ -8308,8 +8308,8 @@ export const INITIAL_DAILY_PERFORMANCE_RECORDS: DailyPerformanceRecord[] = [
       "w2": 78,
       "w4": 26,
       "w5": 0,
-      "finLoiShift": 234,
-      "finLoiDay": 0,
+      "finLoiShift": 104,
+      "finLoiDay": 234,
       "finLoiWkly": 0,
       "bal": 832
     },
@@ -8445,7 +8445,7 @@ export const INITIAL_DAILY_PERFORMANCE_RECORDS: DailyPerformanceRecord[] = [
       "w2": 208,
       "w4": 208,
       "w5": 234,
-      "finLoiShift": 0,
+      "finLoiShift": 650,
       "finLoiDay": 0,
       "finLoiWkly": 0,
       "bal": 598
@@ -8582,9 +8582,9 @@ export const INITIAL_DAILY_PERFORMANCE_RECORDS: DailyPerformanceRecord[] = [
       "w2": 130,
       "w4": 234,
       "w5": 234,
-      "finLoiShift": 234,
-      "finLoiDay": 2028,
-      "finLoiWkly": 0,
+      "finLoiShift": 598,
+      "finLoiDay": 234,
+      "finLoiWkly": 2028,
       "bal": 676
     },
     "wdxrf": {
@@ -8719,8 +8719,8 @@ export const INITIAL_DAILY_PERFORMANCE_RECORDS: DailyPerformanceRecord[] = [
       "w2": 234,
       "w4": 130,
       "w5": 130,
-      "finLoiShift": 338,
-      "finLoiDay": 0,
+      "finLoiShift": 494,
+      "finLoiDay": 338,
       "finLoiWkly": 0,
       "bal": 676
     },
@@ -8856,7 +8856,7 @@ export const INITIAL_DAILY_PERFORMANCE_RECORDS: DailyPerformanceRecord[] = [
       "w2": 208,
       "w4": 208,
       "w5": 208,
-      "finLoiShift": 0,
+      "finLoiShift": 624,
       "finLoiDay": 0,
       "finLoiWkly": 0,
       "bal": 468
@@ -8993,8 +8993,8 @@ export const INITIAL_DAILY_PERFORMANCE_RECORDS: DailyPerformanceRecord[] = [
       "w2": 260,
       "w4": 260,
       "w5": 260,
-      "finLoiShift": 468,
-      "finLoiDay": 0,
+      "finLoiShift": 780,
+      "finLoiDay": 468,
       "finLoiWkly": 0,
       "bal": 364
     },
@@ -9130,7 +9130,7 @@ export const INITIAL_DAILY_PERFORMANCE_RECORDS: DailyPerformanceRecord[] = [
       "w2": 312,
       "w4": 208,
       "w5": 208,
-      "finLoiShift": 0,
+      "finLoiShift": 728,
       "finLoiDay": 0,
       "finLoiWkly": 0,
       "bal": 130
@@ -9267,8 +9267,8 @@ export const INITIAL_DAILY_PERFORMANCE_RECORDS: DailyPerformanceRecord[] = [
       "w2": 52,
       "w4": 130,
       "w5": 130,
-      "finLoiShift": 208,
-      "finLoiDay": 0,
+      "finLoiShift": 312,
+      "finLoiDay": 208,
       "finLoiWkly": 0,
       "bal": 208
     },
@@ -9404,7 +9404,7 @@ export const INITIAL_DAILY_PERFORMANCE_RECORDS: DailyPerformanceRecord[] = [
       "w2": 130,
       "w4": 78,
       "w5": 78,
-      "finLoiShift": 0,
+      "finLoiShift": 286,
       "finLoiDay": 0,
       "finLoiWkly": 0,
       "bal": 130
@@ -9541,8 +9541,8 @@ export const INITIAL_DAILY_PERFORMANCE_RECORDS: DailyPerformanceRecord[] = [
       "w2": 52,
       "w4": 130,
       "w5": 130,
-      "finLoiShift": 286,
-      "finLoiDay": 0,
+      "finLoiShift": 312,
+      "finLoiDay": 286,
       "finLoiWkly": 0,
       "bal": 208
     },
@@ -9678,7 +9678,7 @@ export const INITIAL_DAILY_PERFORMANCE_RECORDS: DailyPerformanceRecord[] = [
       "w2": 208,
       "w4": 156,
       "w5": 156,
-      "finLoiShift": 0,
+      "finLoiShift": 520,
       "finLoiDay": 0,
       "finLoiWkly": 0,
       "bal": 78
@@ -9816,7 +9816,7 @@ export const INITIAL_DAILY_PERFORMANCE_RECORDS: DailyPerformanceRecord[] = [
       "w4": 78,
       "w5": 78,
       "finLoiShift": 182,
-      "finLoiDay": 0,
+      "finLoiDay": 182,
       "finLoiWkly": 0,
       "bal": 156
     },
@@ -9952,7 +9952,7 @@ export const INITIAL_DAILY_PERFORMANCE_RECORDS: DailyPerformanceRecord[] = [
       "w2": 182,
       "w4": 130,
       "w5": 104,
-      "finLoiShift": 0,
+      "finLoiShift": 416,
       "finLoiDay": 0,
       "finLoiWkly": 0,
       "bal": 78
@@ -10089,8 +10089,8 @@ export const INITIAL_DAILY_PERFORMANCE_RECORDS: DailyPerformanceRecord[] = [
       "w2": 130,
       "w4": 78,
       "w5": 78,
-      "finLoiShift": 312,
-      "finLoiDay": 0,
+      "finLoiShift": 286,
+      "finLoiDay": 312,
       "finLoiWkly": 0,
       "bal": 702
     },
@@ -10226,7 +10226,7 @@ export const INITIAL_DAILY_PERFORMANCE_RECORDS: DailyPerformanceRecord[] = [
       "w2": 208,
       "w4": 234,
       "w5": 234,
-      "finLoiShift": 0,
+      "finLoiShift": 676,
       "finLoiDay": 0,
       "finLoiWkly": 0,
       "bal": 468
@@ -10363,9 +10363,9 @@ export const INITIAL_DAILY_PERFORMANCE_RECORDS: DailyPerformanceRecord[] = [
       "w2": 286,
       "w4": 390,
       "w5": 390,
-      "finLoiShift": 390,
-      "finLoiDay": 2180,
-      "finLoiWkly": 0,
+      "finLoiShift": 1066,
+      "finLoiDay": 390,
+      "finLoiWkly": 2180,
       "bal": 338
     },
     "wdxrf": {
@@ -10501,7 +10501,7 @@ export const INITIAL_DAILY_PERFORMANCE_RECORDS: DailyPerformanceRecord[] = [
       "w4": 52,
       "w5": 52,
       "finLoiShift": 234,
-      "finLoiDay": 0,
+      "finLoiDay": 234,
       "finLoiWkly": 0,
       "bal": 312
     },
@@ -10637,7 +10637,7 @@ export const INITIAL_DAILY_PERFORMANCE_RECORDS: DailyPerformanceRecord[] = [
       "w2": 208,
       "w4": 182,
       "w5": 182,
-      "finLoiShift": 0,
+      "finLoiShift": 572,
       "finLoiDay": 0,
       "finLoiWkly": 0,
       "bal": 104
@@ -10774,8 +10774,8 @@ export const INITIAL_DAILY_PERFORMANCE_RECORDS: DailyPerformanceRecord[] = [
       "w2": 156,
       "w4": 104,
       "w5": 104,
-      "finLoiShift": 286,
-      "finLoiDay": 0,
+      "finLoiShift": 364,
+      "finLoiDay": 286,
       "finLoiWkly": 0,
       "bal": 182
     },
@@ -10911,7 +10911,7 @@ export const INITIAL_DAILY_PERFORMANCE_RECORDS: DailyPerformanceRecord[] = [
       "w2": 130,
       "w4": 182,
       "w5": 182,
-      "finLoiShift": 0,
+      "finLoiShift": 494,
       "finLoiDay": 0,
       "finLoiWkly": 0,
       "bal": 150
@@ -11048,8 +11048,8 @@ export const INITIAL_DAILY_PERFORMANCE_RECORDS: DailyPerformanceRecord[] = [
       "w2": 150,
       "w4": 100,
       "w5": 100,
-      "finLoiShift": 304,
-      "finLoiDay": 0,
+      "finLoiShift": 350,
+      "finLoiDay": 304,
       "finLoiWkly": 0,
       "bal": 258
     },
@@ -11185,7 +11185,7 @@ export const INITIAL_DAILY_PERFORMANCE_RECORDS: DailyPerformanceRecord[] = [
       "w2": 189,
       "w4": 211,
       "w5": 204,
-      "finLoiShift": 0,
+      "finLoiShift": 604,
       "finLoiDay": 0,
       "finLoiWkly": 0,
       "bal": 305
@@ -11322,8 +11322,8 @@ export const INITIAL_DAILY_PERFORMANCE_RECORDS: DailyPerformanceRecord[] = [
       "w2": 127,
       "w4": 205,
       "w5": 237,
-      "finLoiShift": 425,
-      "finLoiDay": 0,
+      "finLoiShift": 569,
+      "finLoiDay": 425,
       "finLoiWkly": 0,
       "bal": 329
     },
@@ -11459,7 +11459,7 @@ export const INITIAL_DAILY_PERFORMANCE_RECORDS: DailyPerformanceRecord[] = [
       "w2": 188,
       "w4": 163,
       "w5": 188,
-      "finLoiShift": 0,
+      "finLoiShift": 539,
       "finLoiDay": 0,
       "finLoiWkly": 0,
       "bal": 175
@@ -11596,8 +11596,8 @@ export const INITIAL_DAILY_PERFORMANCE_RECORDS: DailyPerformanceRecord[] = [
       "w2": 152,
       "w4": 175,
       "w5": 175,
-      "finLoiShift": 331,
-      "finLoiDay": 0,
+      "finLoiShift": 502,
+      "finLoiDay": 331,
       "finLoiWkly": 0,
       "bal": 156
     },
@@ -11733,7 +11733,7 @@ export const INITIAL_DAILY_PERFORMANCE_RECORDS: DailyPerformanceRecord[] = [
       "w2": 104,
       "w4": 156,
       "w5": 156,
-      "finLoiShift": 0,
+      "finLoiShift": 416,
       "finLoiDay": 0,
       "finLoiWkly": 0,
       "bal": 26
@@ -11870,8 +11870,8 @@ export const INITIAL_DAILY_PERFORMANCE_RECORDS: DailyPerformanceRecord[] = [
       "w2": 100,
       "w4": 26,
       "w5": 26,
-      "finLoiShift": 210,
-      "finLoiDay": 0,
+      "finLoiShift": 152,
+      "finLoiDay": 210,
       "finLoiWkly": 0,
       "bal": 806
     },
@@ -12007,7 +12007,7 @@ export const INITIAL_DAILY_PERFORMANCE_RECORDS: DailyPerformanceRecord[] = [
       "w2": 182,
       "w4": 184,
       "w5": 184,
-      "finLoiShift": 0,
+      "finLoiShift": 550,
       "finLoiDay": 0,
       "finLoiWkly": 0,
       "bal": 832
@@ -12089,35 +12089,35 @@ export const INITIAL_DAILY_PERFORMANCE_RECORDS: DailyPerformanceRecord[] = [
       "gc": {
         "shift": 850,
         "day": 850,
-        "wkly": 2124
+        "wkly": 5411
       },
       "prod": {
         "shift": 28,
         "rc": 2,
         "day": 28,
-        "wkly": 65
+        "wkly": 178
       },
       "exp": {
         "shift": 0,
         "day": 0,
-        "wkly": 336
+        "wkly": 1093
       },
       "smelter": {
         "shift": 15,
         "day": 15,
-        "wkly": 47
+        "wkly": 112
       }
     },
     "pressPowder": {
       "received": {
         "shift": 850,
         "day": 850,
-        "wkly": 2124
+        "wkly": 5411
       },
       "finish": {
         "shift": 949,
         "day": 949,
-        "wkly": 2433
+        "wkly": 6507
       }
     },
     "edxrf": {
@@ -12130,13 +12130,13 @@ export const INITIAL_DAILY_PERFORMANCE_RECORDS: DailyPerformanceRecord[] = [
       "s2Puma": 66,
       "shift": 949,
       "day": 949,
-      "wkly": 2433
+      "wkly": 6507
     },
     "fuseBead": {
       "osExp": 744,
       "finishShift": 365,
       "finishDay": 365,
-      "finishWkly": 727,
+      "finishWkly": 2633,
       "balExp": 480
     },
     "loi": {
@@ -12144,9 +12144,9 @@ export const INITIAL_DAILY_PERFORMANCE_RECORDS: DailyPerformanceRecord[] = [
       "w2": 182,
       "w4": 286,
       "w5": 286,
-      "finLoiShift": 286,
-      "finLoiDay": 468,
-      "finLoiWkly": 0,
+      "finLoiShift": 754,
+      "finLoiDay": 286,
+      "finLoiWkly": 1732,
       "bal": 546
     },
     "wdxrf": {
@@ -12162,7 +12162,7 @@ export const INITIAL_DAILY_PERFORMANCE_RECORDS: DailyPerformanceRecord[] = [
         "blank": 6,
         "total": 238,
         "day": 238,
-        "wkly": 301
+        "wkly": 1330
       },
       "zetiumB": {
         "prod": 0,
@@ -12175,7 +12175,7 @@ export const INITIAL_DAILY_PERFORMANCE_RECORDS: DailyPerformanceRecord[] = [
         "blank": 3,
         "total": 222,
         "day": 222,
-        "wkly": 629
+        "wkly": 1647
       },
       "bal": 312
     },
@@ -12183,14 +12183,14 @@ export const INITIAL_DAILY_PERFORMANCE_RECORDS: DailyPerformanceRecord[] = [
       "os": 25,
       "finishShift": 100,
       "finishDay": 100,
-      "finishWkly": 256,
+      "finishWkly": 1347,
       "bal": 180
     },
     "report": {
       "osReport": 202,
       "received": 100,
       "finishReportDay": 302,
-      "finishReportWkly": 434,
+      "finishReportWkly": 1357,
       "bal": 0
     }
   },
@@ -12281,8 +12281,8 @@ export const INITIAL_DAILY_PERFORMANCE_RECORDS: DailyPerformanceRecord[] = [
       "w2": 104,
       "w4": 0,
       "w5": 0,
-      "finLoiShift": 182,
-      "finLoiDay": 0,
+      "finLoiShift": 104,
+      "finLoiDay": 182,
       "finLoiWkly": 0,
       "bal": 702
     },
@@ -12418,10 +12418,10 @@ export const INITIAL_DAILY_PERFORMANCE_RECORDS: DailyPerformanceRecord[] = [
       "w2": 208,
       "w4": 208,
       "w5": 182,
-      "finLoiShift": 0,
+      "finLoiShift": 598,
       "finLoiDay": 0,
       "finLoiWkly": 0,
-      "bal": 754
+      "bal": 702
     },
     "wdxrf": {
       "osExp": 234,
@@ -12459,6 +12459,3157 @@ export const INITIAL_DAILY_PERFORMANCE_RECORDS: DailyPerformanceRecord[] = [
       "finishDay": 0,
       "finishWkly": 0,
       "bal": 233
+    },
+    "report": {
+      "osReport": 0,
+      "received": 0,
+      "finishReportDay": 0,
+      "finishReportWkly": 0,
+      "bal": 0
+    }
+  },
+  {
+    "id": "2026-10-20_B_DAY",
+    "no": 20,
+    "date": "20/10/2026",
+    "isoDate": "2026-10-20",
+    "week": 43,
+    "regu": "B",
+    "shiftType": "DAY",
+    "manpower": {
+      "staff": {
+        "shift": 9,
+        "cuti": 1,
+        "alpa": 0,
+        "izin": 0,
+        "sakit": 0,
+        "total": 10
+      },
+      "crew": {
+        "shift": 12,
+        "bantn": 0,
+        "lab": 0,
+        "cuti": 2,
+        "alpa": 1,
+        "izin": 0,
+        "sakit": 0,
+        "total": 15
+      }
+    },
+    "sampleReceived": {
+      "gc": {
+        "shift": 491,
+        "day": 1063,
+        "wkly": 0
+      },
+      "prod": {
+        "shift": 17,
+        "rc": 0,
+        "day": 27,
+        "wkly": 0
+      },
+      "exp": {
+        "shift": 192,
+        "day": 192,
+        "wkly": 0
+      },
+      "smelter": {
+        "shift": 0,
+        "day": 13,
+        "wkly": 0
+      }
+    },
+    "pressPowder": {
+      "received": {
+        "shift": 491,
+        "day": 1063,
+        "wkly": 0
+      },
+      "finish": {
+        "shift": 584,
+        "day": 1299,
+        "wkly": 0
+      }
+    },
+    "edxrf": {
+      "epsC": 96,
+      "epsD": 0,
+      "epsE": 115,
+      "epsF": 96,
+      "epsG": 127,
+      "epsH": 117,
+      "s2Puma": 33,
+      "shift": 584,
+      "day": 1299,
+      "wkly": 0
+    },
+    "fuseBead": {
+      "osExp": 264,
+      "finishShift": 340,
+      "finishDay": 613,
+      "finishWkly": 0,
+      "balExp": 528
+    },
+    "loi": {
+      "os": 702,
+      "w2": 260,
+      "w4": 260,
+      "w5": 260,
+      "finLoiShift": 780,
+      "finLoiDay": 468,
+      "finLoiWkly": 0,
+      "bal": 572
+    },
+    "wdxrf": {
+      "osExp": 0,
+      "zetiumA": {
+        "prod": 0,
+        "exp": 73,
+        "smelt": 76,
+        "gts": 0,
+        "rarr": 10,
+        "ver": 0,
+        "std": 5,
+        "blank": 9,
+        "total": 173,
+        "day": 339,
+        "wkly": 0
+      },
+      "zetiumB": {
+        "prod": 48,
+        "exp": 75,
+        "smelt": 0,
+        "gts": 0,
+        "rarr": 34,
+        "ver": 0,
+        "std": 11,
+        "blank": 3,
+        "total": 171,
+        "day": 336,
+        "wkly": 0
+      },
+      "bal": 416
+    },
+    "qc": {
+      "os": 233,
+      "finishShift": 103,
+      "finishDay": 259,
+      "finishWkly": 0,
+      "bal": 312
+    },
+    "report": {
+      "osReport": 0,
+      "received": 219,
+      "finishReportDay": 219,
+      "finishReportWkly": 0,
+      "bal": 0
+    }
+  },
+  {
+    "id": "2026-10-20_A_NIGHT",
+    "no": 20,
+    "date": "20/10/2026",
+    "isoDate": "2026-10-20",
+    "week": 43,
+    "regu": "A",
+    "shiftType": "NIGHT",
+    "manpower": {
+      "staff": {
+        "shift": 5,
+        "cuti": 3,
+        "alpa": 0,
+        "izin": 0,
+        "sakit": 0,
+        "total": 8
+      },
+      "crew": {
+        "shift": 14,
+        "bantn": 0,
+        "lab": 0,
+        "cuti": 1,
+        "alpa": 0,
+        "izin": 0,
+        "sakit": 0,
+        "total": 15
+      }
+    },
+    "sampleReceived": {
+      "gc": {
+        "shift": 572,
+        "day": 0,
+        "wkly": 0
+      },
+      "prod": {
+        "shift": 10,
+        "rc": 1,
+        "day": 0,
+        "wkly": 0
+      },
+      "exp": {
+        "shift": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "smelter": {
+        "shift": 13,
+        "day": 0,
+        "wkly": 0
+      }
+    },
+    "pressPowder": {
+      "received": {
+        "shift": 572,
+        "day": 0,
+        "wkly": 0
+      },
+      "finish": {
+        "shift": 715,
+        "day": 0,
+        "wkly": 0
+      }
+    },
+    "edxrf": {
+      "epsC": 111,
+      "epsD": 0,
+      "epsE": 144,
+      "epsF": 135,
+      "epsG": 119,
+      "epsH": 142,
+      "s2Puma": 64,
+      "shift": 715,
+      "day": 0,
+      "wkly": 0
+    },
+    "fuseBead": {
+      "osExp": 528,
+      "finishShift": 273,
+      "finishDay": 0,
+      "finishWkly": 0,
+      "balExp": 384
+    },
+    "loi": {
+      "os": 572,
+      "w2": 208,
+      "w4": 208,
+      "w5": 208,
+      "finLoiShift": 624,
+      "finLoiDay": 0,
+      "finLoiWkly": 0,
+      "bal": 364
+    },
+    "wdxrf": {
+      "osExp": 416,
+      "zetiumA": {
+        "prod": 0,
+        "exp": 57,
+        "smelt": 37,
+        "gts": 0,
+        "rarr": 19,
+        "ver": 19,
+        "std": 32,
+        "blank": 2,
+        "total": 166,
+        "day": 0,
+        "wkly": 0
+      },
+      "zetiumB": {
+        "prod": 19,
+        "exp": 80,
+        "smelt": 0,
+        "gts": 0,
+        "rarr": 31,
+        "ver": 16,
+        "std": 16,
+        "blank": 3,
+        "total": 165,
+        "day": 0,
+        "wkly": 0
+      },
+      "bal": 442
+    },
+    "qc": {
+      "os": 312,
+      "finishShift": 156,
+      "finishDay": 0,
+      "finishWkly": 0,
+      "bal": 338
+    },
+    "report": {
+      "osReport": 0,
+      "received": 0,
+      "finishReportDay": 0,
+      "finishReportWkly": 0,
+      "bal": 0
+    }
+  },
+  {
+    "id": "2026-10-21_B_DAY",
+    "no": 21,
+    "date": "21/10/2026",
+    "isoDate": "2026-10-21",
+    "week": 43,
+    "regu": "B",
+    "shiftType": "DAY",
+    "manpower": {
+      "staff": {
+        "shift": 9,
+        "cuti": 1,
+        "alpa": 0,
+        "izin": 0,
+        "sakit": 0,
+        "total": 10
+      },
+      "crew": {
+        "shift": 13,
+        "bantn": 0,
+        "lab": 0,
+        "cuti": 2,
+        "alpa": 0,
+        "izin": 0,
+        "sakit": 0,
+        "total": 15
+      }
+    },
+    "sampleReceived": {
+      "gc": {
+        "shift": 589,
+        "day": 1138,
+        "wkly": 0
+      },
+      "prod": {
+        "shift": 35,
+        "rc": 0,
+        "day": 54,
+        "wkly": 0
+      },
+      "exp": {
+        "shift": 189,
+        "day": 373,
+        "wkly": 0
+      },
+      "smelter": {
+        "shift": 0,
+        "day": 25,
+        "wkly": 0
+      }
+    },
+    "pressPowder": {
+      "received": {
+        "shift": 589,
+        "day": 1138,
+        "wkly": 0
+      },
+      "finish": {
+        "shift": 645,
+        "day": 1435,
+        "wkly": 0
+      }
+    },
+    "edxrf": {
+      "epsC": 93,
+      "epsD": 0,
+      "epsE": 123,
+      "epsF": 131,
+      "epsG": 106,
+      "epsH": 132,
+      "s2Puma": 60,
+      "shift": 645,
+      "day": 1435,
+      "wkly": 0
+    },
+    "fuseBead": {
+      "osExp": 384,
+      "finishShift": 337,
+      "finishDay": 629,
+      "finishWkly": 0,
+      "balExp": 333
+    },
+    "loi": {
+      "os": 364,
+      "w2": 260,
+      "w4": 286,
+      "w5": 260,
+      "finLoiShift": 806,
+      "finLoiDay": 466,
+      "finLoiWkly": 0,
+      "bal": 309
+    },
+    "wdxrf": {
+      "osExp": 442,
+      "zetiumA": {
+        "prod": 12,
+        "exp": 95,
+        "smelt": 25,
+        "gts": 0,
+        "rarr": 16,
+        "ver": 0,
+        "std": 20,
+        "blank": 6,
+        "total": 174,
+        "day": 344,
+        "wkly": 0
+      },
+      "zetiumB": {
+        "prod": 0,
+        "exp": 112,
+        "smelt": 0,
+        "gts": 0,
+        "rarr": 30,
+        "ver": 0,
+        "std": 26,
+        "blank": 4,
+        "total": 172,
+        "day": 341,
+        "wkly": 0
+      },
+      "bal": 494
+    },
+    "qc": {
+      "os": 338,
+      "finishShift": 156,
+      "finishDay": 390,
+      "finishWkly": 0,
+      "bal": 390
+    },
+    "report": {
+      "osReport": 0,
+      "received": 330,
+      "finishReportDay": 330,
+      "finishReportWkly": 0,
+      "bal": 0
+    }
+  },
+  {
+    "id": "2026-10-21_A_NIGHT",
+    "no": 21,
+    "date": "21/10/2026",
+    "isoDate": "2026-10-21",
+    "week": 43,
+    "regu": "A",
+    "shiftType": "NIGHT",
+    "manpower": {
+      "staff": {
+        "shift": 5,
+        "cuti": 3,
+        "alpa": 0,
+        "izin": 0,
+        "sakit": 0,
+        "total": 8
+      },
+      "crew": {
+        "shift": 14,
+        "bantn": 0,
+        "lab": 0,
+        "cuti": 1,
+        "alpa": 0,
+        "izin": 0,
+        "sakit": 0,
+        "total": 15
+      }
+    },
+    "sampleReceived": {
+      "gc": {
+        "shift": 549,
+        "day": 0,
+        "wkly": 0
+      },
+      "prod": {
+        "shift": 19,
+        "rc": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "exp": {
+        "shift": 184,
+        "day": 0,
+        "wkly": 0
+      },
+      "smelter": {
+        "shift": 25,
+        "day": 0,
+        "wkly": 0
+      }
+    },
+    "pressPowder": {
+      "received": {
+        "shift": 549,
+        "day": 0,
+        "wkly": 0
+      },
+      "finish": {
+        "shift": 790,
+        "day": 0,
+        "wkly": 0
+      }
+    },
+    "edxrf": {
+      "epsC": 127,
+      "epsD": 0,
+      "epsE": 141,
+      "epsF": 148,
+      "epsG": 142,
+      "epsH": 156,
+      "s2Puma": 76,
+      "shift": 790,
+      "day": 0,
+      "wkly": 0
+    },
+    "fuseBead": {
+      "osExp": 333,
+      "finishShift": 292,
+      "finishDay": 0,
+      "finishWkly": 0,
+      "balExp": 376
+    },
+    "loi": {
+      "os": 309,
+      "w2": 231,
+      "w4": 180,
+      "w5": 206,
+      "finLoiShift": 617,
+      "finLoiDay": 0,
+      "finLoiWkly": 0,
+      "bal": 303
+    },
+    "wdxrf": {
+      "osExp": 494,
+      "zetiumA": {
+        "prod": 43,
+        "exp": 62,
+        "smelt": 0,
+        "gts": 0,
+        "rarr": 16,
+        "ver": 19,
+        "std": 27,
+        "blank": 3,
+        "total": 170,
+        "day": 0,
+        "wkly": 0
+      },
+      "zetiumB": {
+        "prod": 0,
+        "exp": 98,
+        "smelt": 0,
+        "gts": 0,
+        "rarr": 18,
+        "ver": 17,
+        "std": 33,
+        "blank": 3,
+        "total": 169,
+        "day": 0,
+        "wkly": 0
+      },
+      "bal": 491
+    },
+    "qc": {
+      "os": 390,
+      "finishShift": 234,
+      "finishDay": 0,
+      "finishWkly": 0,
+      "bal": 312
+    },
+    "report": {
+      "osReport": 0,
+      "received": 0,
+      "finishReportDay": 0,
+      "finishReportWkly": 0,
+      "bal": 0
+    }
+  },
+  {
+    "id": "2026-10-22_B_DAY",
+    "no": 22,
+    "date": "22/10/2026",
+    "isoDate": "2026-10-22",
+    "week": 43,
+    "regu": "B",
+    "shiftType": "DAY",
+    "manpower": {
+      "staff": {
+        "shift": 9,
+        "cuti": 1,
+        "alpa": 0,
+        "izin": 0,
+        "sakit": 0,
+        "total": 10
+      },
+      "crew": {
+        "shift": 13,
+        "bantn": 0,
+        "lab": 0,
+        "cuti": 2,
+        "alpa": 0,
+        "izin": 0,
+        "sakit": 0,
+        "total": 15
+      }
+    },
+    "sampleReceived": {
+      "gc": {
+        "shift": 474,
+        "day": 1086,
+        "wkly": 0
+      },
+      "prod": {
+        "shift": 14,
+        "rc": 1,
+        "day": 32,
+        "wkly": 0
+      },
+      "exp": {
+        "shift": 192,
+        "day": 192,
+        "wkly": 0
+      },
+      "smelter": {
+        "shift": 0,
+        "day": 27,
+        "wkly": 0
+      }
+    },
+    "pressPowder": {
+      "received": {
+        "shift": 474,
+        "day": 1086,
+        "wkly": 0
+      },
+      "finish": {
+        "shift": 496,
+        "day": 1340,
+        "wkly": 0
+      }
+    },
+    "edxrf": {
+      "epsC": 90,
+      "epsD": 0,
+      "epsE": 106,
+      "epsF": 80,
+      "epsG": 100,
+      "epsH": 87,
+      "s2Puma": 33,
+      "shift": 496,
+      "day": 1340,
+      "wkly": 0
+    },
+    "fuseBead": {
+      "osExp": 376,
+      "finishShift": 400,
+      "finishDay": 664,
+      "finishWkly": 0,
+      "balExp": 281
+    },
+    "loi": {
+      "os": 303,
+      "w2": 200,
+      "w4": 227,
+      "w5": 253,
+      "finLoiShift": 680,
+      "finLoiDay": 330,
+      "finLoiWkly": 0,
+      "bal": 180
+    },
+    "wdxrf": {
+      "osExp": 491,
+      "zetiumA": {
+        "prod": 21,
+        "exp": 61,
+        "smelt": 39,
+        "gts": 0,
+        "rarr": 24,
+        "ver": 0,
+        "std": 21,
+        "blank": 7,
+        "total": 173,
+        "day": 346,
+        "wkly": 0
+      },
+      "zetiumB": {
+        "prod": 0,
+        "exp": 146,
+        "smelt": 0,
+        "gts": 0,
+        "rarr": 8,
+        "ver": 0,
+        "std": 12,
+        "blank": 6,
+        "total": 172,
+        "day": 341,
+        "wkly": 0
+      },
+      "bal": 517
+    },
+    "qc": {
+      "os": 312,
+      "finishShift": 182,
+      "finishDay": 442,
+      "finishWkly": 0,
+      "bal": 442
+    },
+    "report": {
+      "osReport": 0,
+      "received": 374,
+      "finishReportDay": 374,
+      "finishReportWkly": 0,
+      "bal": 0
+    }
+  },
+  {
+    "id": "2026-10-22_A_NIGHT",
+    "no": 22,
+    "date": "22/10/2026",
+    "isoDate": "2026-10-22",
+    "week": 43,
+    "regu": "A",
+    "shiftType": "NIGHT",
+    "manpower": {
+      "staff": {
+        "shift": 6,
+        "cuti": 2,
+        "alpa": 0,
+        "izin": 0,
+        "sakit": 0,
+        "total": 8
+      },
+      "crew": {
+        "shift": 14,
+        "bantn": 0,
+        "lab": 0,
+        "cuti": 1,
+        "alpa": 0,
+        "izin": 0,
+        "sakit": 0,
+        "total": 15
+      }
+    },
+    "sampleReceived": {
+      "gc": {
+        "shift": 612,
+        "day": 0,
+        "wkly": 0
+      },
+      "prod": {
+        "shift": 18,
+        "rc": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "exp": {
+        "shift": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "smelter": {
+        "shift": 27,
+        "day": 0,
+        "wkly": 0
+      }
+    },
+    "pressPowder": {
+      "received": {
+        "shift": 612,
+        "day": 0,
+        "wkly": 0
+      },
+      "finish": {
+        "shift": 844,
+        "day": 0,
+        "wkly": 0
+      }
+    },
+    "edxrf": {
+      "epsC": 131,
+      "epsD": 0,
+      "epsE": 152,
+      "epsF": 149,
+      "epsG": 175,
+      "epsH": 167,
+      "s2Puma": 70,
+      "shift": 844,
+      "day": 0,
+      "wkly": 0
+    },
+    "fuseBead": {
+      "osExp": 281,
+      "finishShift": 264,
+      "finishDay": 0,
+      "finishWkly": 0,
+      "balExp": 137
+    },
+    "loi": {
+      "os": 180,
+      "w2": 52,
+      "w4": 77,
+      "w5": 77,
+      "finLoiShift": 206,
+      "finLoiDay": 0,
+      "finLoiWkly": 0,
+      "bal": 180
+    },
+    "wdxrf": {
+      "osExp": 517,
+      "zetiumA": {
+        "prod": 20,
+        "exp": 69,
+        "smelt": 3,
+        "gts": 0,
+        "rarr": 15,
+        "ver": 19,
+        "std": 45,
+        "blank": 2,
+        "total": 173,
+        "day": 0,
+        "wkly": 0
+      },
+      "zetiumB": {
+        "prod": 0,
+        "exp": 88,
+        "smelt": 0,
+        "gts": 0,
+        "rarr": 13,
+        "ver": 16,
+        "std": 47,
+        "blank": 5,
+        "total": 169,
+        "day": 0,
+        "wkly": 0
+      },
+      "bal": 538
+    },
+    "qc": {
+      "os": 442,
+      "finishShift": 260,
+      "finishDay": 0,
+      "finishWkly": 0,
+      "bal": 312
+    },
+    "report": {
+      "osReport": 0,
+      "received": 0,
+      "finishReportDay": 0,
+      "finishReportWkly": 0,
+      "bal": 0
+    }
+  },
+  {
+    "id": "2026-10-23_B_DAY",
+    "no": 23,
+    "date": "23/10/2026",
+    "isoDate": "2026-10-23",
+    "week": 43,
+    "regu": "B",
+    "shiftType": "DAY",
+    "manpower": {
+      "staff": {
+        "shift": 9,
+        "cuti": 1,
+        "alpa": 0,
+        "izin": 0,
+        "sakit": 0,
+        "total": 10
+      },
+      "crew": {
+        "shift": 13,
+        "bantn": 0,
+        "lab": 0,
+        "cuti": 2,
+        "alpa": 0,
+        "izin": 0,
+        "sakit": 0,
+        "total": 15
+      }
+    },
+    "sampleReceived": {
+      "gc": {
+        "shift": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "prod": {
+        "shift": 0,
+        "rc": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "exp": {
+        "shift": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "smelter": {
+        "shift": 0,
+        "day": 0,
+        "wkly": 0
+      }
+    },
+    "pressPowder": {
+      "received": {
+        "shift": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "finish": {
+        "shift": 0,
+        "day": 0,
+        "wkly": 0
+      }
+    },
+    "edxrf": {
+      "epsC": 0,
+      "epsD": 0,
+      "epsE": 0,
+      "epsF": 0,
+      "epsG": 0,
+      "epsH": 0,
+      "s2Puma": 0,
+      "shift": 0,
+      "day": 0,
+      "wkly": 0
+    },
+    "fuseBead": {
+      "osExp": 0,
+      "finishShift": 0,
+      "finishDay": 0,
+      "finishWkly": 0,
+      "balExp": 0
+    },
+    "loi": {
+      "os": 0,
+      "w2": 0,
+      "w4": 0,
+      "w5": 0,
+      "finLoiShift": 0,
+      "finLoiDay": 0,
+      "finLoiWkly": 0,
+      "bal": 0
+    },
+    "wdxrf": {
+      "osExp": 0,
+      "zetiumA": {
+        "prod": 0,
+        "exp": 0,
+        "smelt": 0,
+        "gts": 0,
+        "rarr": 0,
+        "ver": 0,
+        "std": 0,
+        "blank": 0,
+        "total": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "zetiumB": {
+        "prod": 0,
+        "exp": 0,
+        "smelt": 0,
+        "gts": 0,
+        "rarr": 0,
+        "ver": 0,
+        "std": 0,
+        "blank": 0,
+        "total": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "bal": 0
+    },
+    "qc": {
+      "os": 0,
+      "finishShift": 0,
+      "finishDay": 0,
+      "finishWkly": 0,
+      "bal": 0
+    },
+    "report": {
+      "osReport": 0,
+      "received": 0,
+      "finishReportDay": 0,
+      "finishReportWkly": 0,
+      "bal": 0
+    }
+  },
+  {
+    "id": "2026-10-23_A_NIGHT",
+    "no": 23,
+    "date": "23/10/2026",
+    "isoDate": "2026-10-23",
+    "week": 43,
+    "regu": "A",
+    "shiftType": "NIGHT",
+    "manpower": {
+      "staff": {
+        "shift": 0,
+        "cuti": 0,
+        "alpa": 0,
+        "izin": 0,
+        "sakit": 0,
+        "total": 0
+      },
+      "crew": {
+        "shift": 0,
+        "bantn": 0,
+        "lab": 0,
+        "cuti": 0,
+        "alpa": 0,
+        "izin": 0,
+        "sakit": 0,
+        "total": 0
+      }
+    },
+    "sampleReceived": {
+      "gc": {
+        "shift": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "prod": {
+        "shift": 0,
+        "rc": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "exp": {
+        "shift": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "smelter": {
+        "shift": 0,
+        "day": 0,
+        "wkly": 0
+      }
+    },
+    "pressPowder": {
+      "received": {
+        "shift": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "finish": {
+        "shift": 0,
+        "day": 0,
+        "wkly": 0
+      }
+    },
+    "edxrf": {
+      "epsC": 0,
+      "epsD": 0,
+      "epsE": 0,
+      "epsF": 0,
+      "epsG": 0,
+      "epsH": 0,
+      "s2Puma": 0,
+      "shift": 0,
+      "day": 0,
+      "wkly": 0
+    },
+    "fuseBead": {
+      "osExp": 0,
+      "finishShift": 0,
+      "finishDay": 0,
+      "finishWkly": 0,
+      "balExp": 0
+    },
+    "loi": {
+      "os": 0,
+      "w2": 0,
+      "w4": 0,
+      "w5": 0,
+      "finLoiShift": 0,
+      "finLoiDay": 0,
+      "finLoiWkly": 0,
+      "bal": 0
+    },
+    "wdxrf": {
+      "osExp": 0,
+      "zetiumA": {
+        "prod": 0,
+        "exp": 0,
+        "smelt": 0,
+        "gts": 0,
+        "rarr": 0,
+        "ver": 0,
+        "std": 0,
+        "blank": 0,
+        "total": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "zetiumB": {
+        "prod": 0,
+        "exp": 0,
+        "smelt": 0,
+        "gts": 0,
+        "rarr": 0,
+        "ver": 0,
+        "std": 0,
+        "blank": 0,
+        "total": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "bal": 0
+    },
+    "qc": {
+      "os": 0,
+      "finishShift": 0,
+      "finishDay": 0,
+      "finishWkly": 0,
+      "bal": 0
+    },
+    "report": {
+      "osReport": 0,
+      "received": 0,
+      "finishReportDay": 0,
+      "finishReportWkly": 0,
+      "bal": 0
+    }
+  },
+  {
+    "id": "2026-10-24_B_DAY",
+    "no": 24,
+    "date": "24/10/2026",
+    "isoDate": "2026-10-24",
+    "week": 43,
+    "regu": "B",
+    "shiftType": "DAY",
+    "manpower": {
+      "staff": {
+        "shift": 0,
+        "cuti": 0,
+        "alpa": 0,
+        "izin": 0,
+        "sakit": 0,
+        "total": 0
+      },
+      "crew": {
+        "shift": 0,
+        "bantn": 0,
+        "lab": 0,
+        "cuti": 0,
+        "alpa": 0,
+        "izin": 0,
+        "sakit": 0,
+        "total": 0
+      }
+    },
+    "sampleReceived": {
+      "gc": {
+        "shift": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "prod": {
+        "shift": 0,
+        "rc": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "exp": {
+        "shift": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "smelter": {
+        "shift": 0,
+        "day": 0,
+        "wkly": 0
+      }
+    },
+    "pressPowder": {
+      "received": {
+        "shift": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "finish": {
+        "shift": 0,
+        "day": 0,
+        "wkly": 0
+      }
+    },
+    "edxrf": {
+      "epsC": 0,
+      "epsD": 0,
+      "epsE": 0,
+      "epsF": 0,
+      "epsG": 0,
+      "epsH": 0,
+      "s2Puma": 0,
+      "shift": 0,
+      "day": 0,
+      "wkly": 0
+    },
+    "fuseBead": {
+      "osExp": 0,
+      "finishShift": 0,
+      "finishDay": 0,
+      "finishWkly": 0,
+      "balExp": 0
+    },
+    "loi": {
+      "os": 0,
+      "w2": 0,
+      "w4": 0,
+      "w5": 0,
+      "finLoiShift": 0,
+      "finLoiDay": 0,
+      "finLoiWkly": 0,
+      "bal": 0
+    },
+    "wdxrf": {
+      "osExp": 0,
+      "zetiumA": {
+        "prod": 0,
+        "exp": 0,
+        "smelt": 0,
+        "gts": 0,
+        "rarr": 0,
+        "ver": 0,
+        "std": 0,
+        "blank": 0,
+        "total": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "zetiumB": {
+        "prod": 0,
+        "exp": 0,
+        "smelt": 0,
+        "gts": 0,
+        "rarr": 0,
+        "ver": 0,
+        "std": 0,
+        "blank": 0,
+        "total": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "bal": 0
+    },
+    "qc": {
+      "os": 0,
+      "finishShift": 0,
+      "finishDay": 0,
+      "finishWkly": 0,
+      "bal": 0
+    },
+    "report": {
+      "osReport": 0,
+      "received": 0,
+      "finishReportDay": 0,
+      "finishReportWkly": 0,
+      "bal": 0
+    }
+  },
+  {
+    "id": "2026-10-24_A_NIGHT",
+    "no": 24,
+    "date": "24/10/2026",
+    "isoDate": "2026-10-24",
+    "week": 43,
+    "regu": "A",
+    "shiftType": "NIGHT",
+    "manpower": {
+      "staff": {
+        "shift": 0,
+        "cuti": 0,
+        "alpa": 0,
+        "izin": 0,
+        "sakit": 0,
+        "total": 0
+      },
+      "crew": {
+        "shift": 0,
+        "bantn": 0,
+        "lab": 0,
+        "cuti": 0,
+        "alpa": 0,
+        "izin": 0,
+        "sakit": 0,
+        "total": 0
+      }
+    },
+    "sampleReceived": {
+      "gc": {
+        "shift": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "prod": {
+        "shift": 0,
+        "rc": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "exp": {
+        "shift": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "smelter": {
+        "shift": 0,
+        "day": 0,
+        "wkly": 0
+      }
+    },
+    "pressPowder": {
+      "received": {
+        "shift": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "finish": {
+        "shift": 0,
+        "day": 0,
+        "wkly": 0
+      }
+    },
+    "edxrf": {
+      "epsC": 0,
+      "epsD": 0,
+      "epsE": 0,
+      "epsF": 0,
+      "epsG": 0,
+      "epsH": 0,
+      "s2Puma": 0,
+      "shift": 0,
+      "day": 0,
+      "wkly": 0
+    },
+    "fuseBead": {
+      "osExp": 0,
+      "finishShift": 0,
+      "finishDay": 0,
+      "finishWkly": 0,
+      "balExp": 0
+    },
+    "loi": {
+      "os": 0,
+      "w2": 0,
+      "w4": 0,
+      "w5": 0,
+      "finLoiShift": 0,
+      "finLoiDay": 0,
+      "finLoiWkly": 0,
+      "bal": 0
+    },
+    "wdxrf": {
+      "osExp": 0,
+      "zetiumA": {
+        "prod": 0,
+        "exp": 0,
+        "smelt": 0,
+        "gts": 0,
+        "rarr": 0,
+        "ver": 0,
+        "std": 0,
+        "blank": 0,
+        "total": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "zetiumB": {
+        "prod": 0,
+        "exp": 0,
+        "smelt": 0,
+        "gts": 0,
+        "rarr": 0,
+        "ver": 0,
+        "std": 0,
+        "blank": 0,
+        "total": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "bal": 0
+    },
+    "qc": {
+      "os": 0,
+      "finishShift": 0,
+      "finishDay": 0,
+      "finishWkly": 0,
+      "bal": 0
+    },
+    "report": {
+      "osReport": 0,
+      "received": 0,
+      "finishReportDay": 0,
+      "finishReportWkly": 0,
+      "bal": 0
+    }
+  },
+  {
+    "id": "2026-10-25_B_LS",
+    "no": 25,
+    "date": "25/10/2026",
+    "isoDate": "2026-10-25",
+    "week": 44,
+    "regu": "B",
+    "shiftType": "LS",
+    "manpower": {
+      "staff": {
+        "shift": 0,
+        "cuti": 0,
+        "alpa": 0,
+        "izin": 0,
+        "sakit": 0,
+        "total": 0
+      },
+      "crew": {
+        "shift": 0,
+        "bantn": 0,
+        "lab": 0,
+        "cuti": 0,
+        "alpa": 0,
+        "izin": 0,
+        "sakit": 0,
+        "total": 0
+      }
+    },
+    "sampleReceived": {
+      "gc": {
+        "shift": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "prod": {
+        "shift": 0,
+        "rc": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "exp": {
+        "shift": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "smelter": {
+        "shift": 0,
+        "day": 0,
+        "wkly": 0
+      }
+    },
+    "pressPowder": {
+      "received": {
+        "shift": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "finish": {
+        "shift": 0,
+        "day": 0,
+        "wkly": 0
+      }
+    },
+    "edxrf": {
+      "epsC": 0,
+      "epsD": 0,
+      "epsE": 0,
+      "epsF": 0,
+      "epsG": 0,
+      "epsH": 0,
+      "s2Puma": 0,
+      "shift": 0,
+      "day": 0,
+      "wkly": 0
+    },
+    "fuseBead": {
+      "osExp": 0,
+      "finishShift": 0,
+      "finishDay": 0,
+      "finishWkly": 0,
+      "balExp": 0
+    },
+    "loi": {
+      "os": 0,
+      "w2": 0,
+      "w4": 0,
+      "w5": 0,
+      "finLoiShift": 0,
+      "finLoiDay": 0,
+      "finLoiWkly": 0,
+      "bal": 0
+    },
+    "wdxrf": {
+      "osExp": 0,
+      "zetiumA": {
+        "prod": 0,
+        "exp": 0,
+        "smelt": 0,
+        "gts": 0,
+        "rarr": 0,
+        "ver": 0,
+        "std": 0,
+        "blank": 0,
+        "total": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "zetiumB": {
+        "prod": 0,
+        "exp": 0,
+        "smelt": 0,
+        "gts": 0,
+        "rarr": 0,
+        "ver": 0,
+        "std": 0,
+        "blank": 0,
+        "total": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "bal": 0
+    },
+    "qc": {
+      "os": 0,
+      "finishShift": 0,
+      "finishDay": 0,
+      "finishWkly": 0,
+      "bal": 0
+    },
+    "report": {
+      "osReport": 0,
+      "received": 0,
+      "finishReportDay": 0,
+      "finishReportWkly": 0,
+      "bal": 0
+    }
+  },
+  {
+    "id": "2026-10-26_A_DAY",
+    "no": 26,
+    "date": "26/10/2026",
+    "isoDate": "2026-10-26",
+    "week": 44,
+    "regu": "A",
+    "shiftType": "DAY",
+    "manpower": {
+      "staff": {
+        "shift": 0,
+        "cuti": 0,
+        "alpa": 0,
+        "izin": 0,
+        "sakit": 0,
+        "total": 0
+      },
+      "crew": {
+        "shift": 0,
+        "bantn": 0,
+        "lab": 0,
+        "cuti": 0,
+        "alpa": 0,
+        "izin": 0,
+        "sakit": 0,
+        "total": 0
+      }
+    },
+    "sampleReceived": {
+      "gc": {
+        "shift": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "prod": {
+        "shift": 0,
+        "rc": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "exp": {
+        "shift": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "smelter": {
+        "shift": 0,
+        "day": 0,
+        "wkly": 0
+      }
+    },
+    "pressPowder": {
+      "received": {
+        "shift": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "finish": {
+        "shift": 0,
+        "day": 0,
+        "wkly": 0
+      }
+    },
+    "edxrf": {
+      "epsC": 0,
+      "epsD": 0,
+      "epsE": 0,
+      "epsF": 0,
+      "epsG": 0,
+      "epsH": 0,
+      "s2Puma": 0,
+      "shift": 0,
+      "day": 0,
+      "wkly": 0
+    },
+    "fuseBead": {
+      "osExp": 0,
+      "finishShift": 0,
+      "finishDay": 0,
+      "finishWkly": 0,
+      "balExp": 0
+    },
+    "loi": {
+      "os": 0,
+      "w2": 0,
+      "w4": 0,
+      "w5": 0,
+      "finLoiShift": 0,
+      "finLoiDay": 0,
+      "finLoiWkly": 0,
+      "bal": 0
+    },
+    "wdxrf": {
+      "osExp": 0,
+      "zetiumA": {
+        "prod": 0,
+        "exp": 0,
+        "smelt": 0,
+        "gts": 0,
+        "rarr": 0,
+        "ver": 0,
+        "std": 0,
+        "blank": 0,
+        "total": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "zetiumB": {
+        "prod": 0,
+        "exp": 0,
+        "smelt": 0,
+        "gts": 0,
+        "rarr": 0,
+        "ver": 0,
+        "std": 0,
+        "blank": 0,
+        "total": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "bal": 0
+    },
+    "qc": {
+      "os": 0,
+      "finishShift": 0,
+      "finishDay": 0,
+      "finishWkly": 0,
+      "bal": 0
+    },
+    "report": {
+      "osReport": 0,
+      "received": 0,
+      "finishReportDay": 0,
+      "finishReportWkly": 0,
+      "bal": 0
+    }
+  },
+  {
+    "id": "2026-10-26_B_NIGHT",
+    "no": 26,
+    "date": "26/10/2026",
+    "isoDate": "2026-10-26",
+    "week": 44,
+    "regu": "B",
+    "shiftType": "NIGHT",
+    "manpower": {
+      "staff": {
+        "shift": 0,
+        "cuti": 0,
+        "alpa": 0,
+        "izin": 0,
+        "sakit": 0,
+        "total": 0
+      },
+      "crew": {
+        "shift": 0,
+        "bantn": 0,
+        "lab": 0,
+        "cuti": 0,
+        "alpa": 0,
+        "izin": 0,
+        "sakit": 0,
+        "total": 0
+      }
+    },
+    "sampleReceived": {
+      "gc": {
+        "shift": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "prod": {
+        "shift": 0,
+        "rc": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "exp": {
+        "shift": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "smelter": {
+        "shift": 0,
+        "day": 0,
+        "wkly": 0
+      }
+    },
+    "pressPowder": {
+      "received": {
+        "shift": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "finish": {
+        "shift": 0,
+        "day": 0,
+        "wkly": 0
+      }
+    },
+    "edxrf": {
+      "epsC": 0,
+      "epsD": 0,
+      "epsE": 0,
+      "epsF": 0,
+      "epsG": 0,
+      "epsH": 0,
+      "s2Puma": 0,
+      "shift": 0,
+      "day": 0,
+      "wkly": 0
+    },
+    "fuseBead": {
+      "osExp": 0,
+      "finishShift": 0,
+      "finishDay": 0,
+      "finishWkly": 0,
+      "balExp": 0
+    },
+    "loi": {
+      "os": 0,
+      "w2": 0,
+      "w4": 0,
+      "w5": 0,
+      "finLoiShift": 0,
+      "finLoiDay": 0,
+      "finLoiWkly": 0,
+      "bal": 0
+    },
+    "wdxrf": {
+      "osExp": 0,
+      "zetiumA": {
+        "prod": 0,
+        "exp": 0,
+        "smelt": 0,
+        "gts": 0,
+        "rarr": 0,
+        "ver": 0,
+        "std": 0,
+        "blank": 0,
+        "total": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "zetiumB": {
+        "prod": 0,
+        "exp": 0,
+        "smelt": 0,
+        "gts": 0,
+        "rarr": 0,
+        "ver": 0,
+        "std": 0,
+        "blank": 0,
+        "total": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "bal": 0
+    },
+    "qc": {
+      "os": 0,
+      "finishShift": 0,
+      "finishDay": 0,
+      "finishWkly": 0,
+      "bal": 0
+    },
+    "report": {
+      "osReport": 0,
+      "received": 0,
+      "finishReportDay": 0,
+      "finishReportWkly": 0,
+      "bal": 0
+    }
+  },
+  {
+    "id": "2026-10-27_A_DAY",
+    "no": 27,
+    "date": "27/10/2026",
+    "isoDate": "2026-10-27",
+    "week": 44,
+    "regu": "A",
+    "shiftType": "DAY",
+    "manpower": {
+      "staff": {
+        "shift": 0,
+        "cuti": 0,
+        "alpa": 0,
+        "izin": 0,
+        "sakit": 0,
+        "total": 0
+      },
+      "crew": {
+        "shift": 0,
+        "bantn": 0,
+        "lab": 0,
+        "cuti": 0,
+        "alpa": 0,
+        "izin": 0,
+        "sakit": 0,
+        "total": 0
+      }
+    },
+    "sampleReceived": {
+      "gc": {
+        "shift": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "prod": {
+        "shift": 0,
+        "rc": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "exp": {
+        "shift": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "smelter": {
+        "shift": 0,
+        "day": 0,
+        "wkly": 0
+      }
+    },
+    "pressPowder": {
+      "received": {
+        "shift": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "finish": {
+        "shift": 0,
+        "day": 0,
+        "wkly": 0
+      }
+    },
+    "edxrf": {
+      "epsC": 0,
+      "epsD": 0,
+      "epsE": 0,
+      "epsF": 0,
+      "epsG": 0,
+      "epsH": 0,
+      "s2Puma": 0,
+      "shift": 0,
+      "day": 0,
+      "wkly": 0
+    },
+    "fuseBead": {
+      "osExp": 0,
+      "finishShift": 0,
+      "finishDay": 0,
+      "finishWkly": 0,
+      "balExp": 0
+    },
+    "loi": {
+      "os": 0,
+      "w2": 0,
+      "w4": 0,
+      "w5": 0,
+      "finLoiShift": 0,
+      "finLoiDay": 0,
+      "finLoiWkly": 0,
+      "bal": 0
+    },
+    "wdxrf": {
+      "osExp": 0,
+      "zetiumA": {
+        "prod": 0,
+        "exp": 0,
+        "smelt": 0,
+        "gts": 0,
+        "rarr": 0,
+        "ver": 0,
+        "std": 0,
+        "blank": 0,
+        "total": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "zetiumB": {
+        "prod": 0,
+        "exp": 0,
+        "smelt": 0,
+        "gts": 0,
+        "rarr": 0,
+        "ver": 0,
+        "std": 0,
+        "blank": 0,
+        "total": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "bal": 0
+    },
+    "qc": {
+      "os": 0,
+      "finishShift": 0,
+      "finishDay": 0,
+      "finishWkly": 0,
+      "bal": 0
+    },
+    "report": {
+      "osReport": 0,
+      "received": 0,
+      "finishReportDay": 0,
+      "finishReportWkly": 0,
+      "bal": 0
+    }
+  },
+  {
+    "id": "2026-10-27_B_NIGHT",
+    "no": 27,
+    "date": "27/10/2026",
+    "isoDate": "2026-10-27",
+    "week": 44,
+    "regu": "B",
+    "shiftType": "NIGHT",
+    "manpower": {
+      "staff": {
+        "shift": 0,
+        "cuti": 0,
+        "alpa": 0,
+        "izin": 0,
+        "sakit": 0,
+        "total": 0
+      },
+      "crew": {
+        "shift": 0,
+        "bantn": 0,
+        "lab": 0,
+        "cuti": 0,
+        "alpa": 0,
+        "izin": 0,
+        "sakit": 0,
+        "total": 0
+      }
+    },
+    "sampleReceived": {
+      "gc": {
+        "shift": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "prod": {
+        "shift": 0,
+        "rc": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "exp": {
+        "shift": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "smelter": {
+        "shift": 0,
+        "day": 0,
+        "wkly": 0
+      }
+    },
+    "pressPowder": {
+      "received": {
+        "shift": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "finish": {
+        "shift": 0,
+        "day": 0,
+        "wkly": 0
+      }
+    },
+    "edxrf": {
+      "epsC": 0,
+      "epsD": 0,
+      "epsE": 0,
+      "epsF": 0,
+      "epsG": 0,
+      "epsH": 0,
+      "s2Puma": 0,
+      "shift": 0,
+      "day": 0,
+      "wkly": 0
+    },
+    "fuseBead": {
+      "osExp": 0,
+      "finishShift": 0,
+      "finishDay": 0,
+      "finishWkly": 0,
+      "balExp": 0
+    },
+    "loi": {
+      "os": 0,
+      "w2": 0,
+      "w4": 0,
+      "w5": 0,
+      "finLoiShift": 0,
+      "finLoiDay": 0,
+      "finLoiWkly": 0,
+      "bal": 0
+    },
+    "wdxrf": {
+      "osExp": 0,
+      "zetiumA": {
+        "prod": 0,
+        "exp": 0,
+        "smelt": 0,
+        "gts": 0,
+        "rarr": 0,
+        "ver": 0,
+        "std": 0,
+        "blank": 0,
+        "total": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "zetiumB": {
+        "prod": 0,
+        "exp": 0,
+        "smelt": 0,
+        "gts": 0,
+        "rarr": 0,
+        "ver": 0,
+        "std": 0,
+        "blank": 0,
+        "total": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "bal": 0
+    },
+    "qc": {
+      "os": 0,
+      "finishShift": 0,
+      "finishDay": 0,
+      "finishWkly": 0,
+      "bal": 0
+    },
+    "report": {
+      "osReport": 0,
+      "received": 0,
+      "finishReportDay": 0,
+      "finishReportWkly": 0,
+      "bal": 0
+    }
+  },
+  {
+    "id": "2026-10-28_A_DAY",
+    "no": 28,
+    "date": "28/10/2026",
+    "isoDate": "2026-10-28",
+    "week": 44,
+    "regu": "A",
+    "shiftType": "DAY",
+    "manpower": {
+      "staff": {
+        "shift": 0,
+        "cuti": 0,
+        "alpa": 0,
+        "izin": 0,
+        "sakit": 0,
+        "total": 0
+      },
+      "crew": {
+        "shift": 0,
+        "bantn": 0,
+        "lab": 0,
+        "cuti": 0,
+        "alpa": 0,
+        "izin": 0,
+        "sakit": 0,
+        "total": 0
+      }
+    },
+    "sampleReceived": {
+      "gc": {
+        "shift": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "prod": {
+        "shift": 0,
+        "rc": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "exp": {
+        "shift": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "smelter": {
+        "shift": 0,
+        "day": 0,
+        "wkly": 0
+      }
+    },
+    "pressPowder": {
+      "received": {
+        "shift": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "finish": {
+        "shift": 0,
+        "day": 0,
+        "wkly": 0
+      }
+    },
+    "edxrf": {
+      "epsC": 0,
+      "epsD": 0,
+      "epsE": 0,
+      "epsF": 0,
+      "epsG": 0,
+      "epsH": 0,
+      "s2Puma": 0,
+      "shift": 0,
+      "day": 0,
+      "wkly": 0
+    },
+    "fuseBead": {
+      "osExp": 0,
+      "finishShift": 0,
+      "finishDay": 0,
+      "finishWkly": 0,
+      "balExp": 0
+    },
+    "loi": {
+      "os": 0,
+      "w2": 0,
+      "w4": 0,
+      "w5": 0,
+      "finLoiShift": 0,
+      "finLoiDay": 0,
+      "finLoiWkly": 0,
+      "bal": 0
+    },
+    "wdxrf": {
+      "osExp": 0,
+      "zetiumA": {
+        "prod": 0,
+        "exp": 0,
+        "smelt": 0,
+        "gts": 0,
+        "rarr": 0,
+        "ver": 0,
+        "std": 0,
+        "blank": 0,
+        "total": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "zetiumB": {
+        "prod": 0,
+        "exp": 0,
+        "smelt": 0,
+        "gts": 0,
+        "rarr": 0,
+        "ver": 0,
+        "std": 0,
+        "blank": 0,
+        "total": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "bal": 0
+    },
+    "qc": {
+      "os": 0,
+      "finishShift": 0,
+      "finishDay": 0,
+      "finishWkly": 0,
+      "bal": 0
+    },
+    "report": {
+      "osReport": 0,
+      "received": 0,
+      "finishReportDay": 0,
+      "finishReportWkly": 0,
+      "bal": 0
+    }
+  },
+  {
+    "id": "2026-10-28_B_NIGHT",
+    "no": 28,
+    "date": "28/10/2026",
+    "isoDate": "2026-10-28",
+    "week": 44,
+    "regu": "B",
+    "shiftType": "NIGHT",
+    "manpower": {
+      "staff": {
+        "shift": 0,
+        "cuti": 0,
+        "alpa": 0,
+        "izin": 0,
+        "sakit": 0,
+        "total": 0
+      },
+      "crew": {
+        "shift": 0,
+        "bantn": 0,
+        "lab": 0,
+        "cuti": 0,
+        "alpa": 0,
+        "izin": 0,
+        "sakit": 0,
+        "total": 0
+      }
+    },
+    "sampleReceived": {
+      "gc": {
+        "shift": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "prod": {
+        "shift": 0,
+        "rc": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "exp": {
+        "shift": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "smelter": {
+        "shift": 0,
+        "day": 0,
+        "wkly": 0
+      }
+    },
+    "pressPowder": {
+      "received": {
+        "shift": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "finish": {
+        "shift": 0,
+        "day": 0,
+        "wkly": 0
+      }
+    },
+    "edxrf": {
+      "epsC": 0,
+      "epsD": 0,
+      "epsE": 0,
+      "epsF": 0,
+      "epsG": 0,
+      "epsH": 0,
+      "s2Puma": 0,
+      "shift": 0,
+      "day": 0,
+      "wkly": 0
+    },
+    "fuseBead": {
+      "osExp": 0,
+      "finishShift": 0,
+      "finishDay": 0,
+      "finishWkly": 0,
+      "balExp": 0
+    },
+    "loi": {
+      "os": 0,
+      "w2": 0,
+      "w4": 0,
+      "w5": 0,
+      "finLoiShift": 0,
+      "finLoiDay": 0,
+      "finLoiWkly": 0,
+      "bal": 0
+    },
+    "wdxrf": {
+      "osExp": 0,
+      "zetiumA": {
+        "prod": 0,
+        "exp": 0,
+        "smelt": 0,
+        "gts": 0,
+        "rarr": 0,
+        "ver": 0,
+        "std": 0,
+        "blank": 0,
+        "total": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "zetiumB": {
+        "prod": 0,
+        "exp": 0,
+        "smelt": 0,
+        "gts": 0,
+        "rarr": 0,
+        "ver": 0,
+        "std": 0,
+        "blank": 0,
+        "total": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "bal": 0
+    },
+    "qc": {
+      "os": 0,
+      "finishShift": 0,
+      "finishDay": 0,
+      "finishWkly": 0,
+      "bal": 0
+    },
+    "report": {
+      "osReport": 0,
+      "received": 0,
+      "finishReportDay": 0,
+      "finishReportWkly": 0,
+      "bal": 0
+    }
+  },
+  {
+    "id": "2026-10-29_A_DAY",
+    "no": 27,
+    "date": "29/10/2026",
+    "isoDate": "2026-10-29",
+    "week": 44,
+    "regu": "A",
+    "shiftType": "DAY",
+    "manpower": {
+      "staff": {
+        "shift": 0,
+        "cuti": 0,
+        "alpa": 0,
+        "izin": 0,
+        "sakit": 0,
+        "total": 0
+      },
+      "crew": {
+        "shift": 0,
+        "bantn": 0,
+        "lab": 0,
+        "cuti": 0,
+        "alpa": 0,
+        "izin": 0,
+        "sakit": 0,
+        "total": 0
+      }
+    },
+    "sampleReceived": {
+      "gc": {
+        "shift": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "prod": {
+        "shift": 0,
+        "rc": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "exp": {
+        "shift": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "smelter": {
+        "shift": 0,
+        "day": 0,
+        "wkly": 0
+      }
+    },
+    "pressPowder": {
+      "received": {
+        "shift": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "finish": {
+        "shift": 0,
+        "day": 0,
+        "wkly": 0
+      }
+    },
+    "edxrf": {
+      "epsC": 0,
+      "epsD": 0,
+      "epsE": 0,
+      "epsF": 0,
+      "epsG": 0,
+      "epsH": 0,
+      "s2Puma": 0,
+      "shift": 0,
+      "day": 0,
+      "wkly": 0
+    },
+    "fuseBead": {
+      "osExp": 0,
+      "finishShift": 0,
+      "finishDay": 0,
+      "finishWkly": 0,
+      "balExp": 0
+    },
+    "loi": {
+      "os": 0,
+      "w2": 0,
+      "w4": 0,
+      "w5": 0,
+      "finLoiShift": 0,
+      "finLoiDay": 0,
+      "finLoiWkly": 0,
+      "bal": 0
+    },
+    "wdxrf": {
+      "osExp": 0,
+      "zetiumA": {
+        "prod": 0,
+        "exp": 0,
+        "smelt": 0,
+        "gts": 0,
+        "rarr": 0,
+        "ver": 0,
+        "std": 0,
+        "blank": 0,
+        "total": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "zetiumB": {
+        "prod": 0,
+        "exp": 0,
+        "smelt": 0,
+        "gts": 0,
+        "rarr": 0,
+        "ver": 0,
+        "std": 0,
+        "blank": 0,
+        "total": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "bal": 0
+    },
+    "qc": {
+      "os": 0,
+      "finishShift": 0,
+      "finishDay": 0,
+      "finishWkly": 0,
+      "bal": 0
+    },
+    "report": {
+      "osReport": 0,
+      "received": 0,
+      "finishReportDay": 0,
+      "finishReportWkly": 0,
+      "bal": 0
+    }
+  },
+  {
+    "id": "2026-10-29_B_NIGHT",
+    "no": 27,
+    "date": "29/10/2026",
+    "isoDate": "2026-10-29",
+    "week": 44,
+    "regu": "B",
+    "shiftType": "NIGHT",
+    "manpower": {
+      "staff": {
+        "shift": 0,
+        "cuti": 0,
+        "alpa": 0,
+        "izin": 0,
+        "sakit": 0,
+        "total": 0
+      },
+      "crew": {
+        "shift": 0,
+        "bantn": 0,
+        "lab": 0,
+        "cuti": 0,
+        "alpa": 0,
+        "izin": 0,
+        "sakit": 0,
+        "total": 0
+      }
+    },
+    "sampleReceived": {
+      "gc": {
+        "shift": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "prod": {
+        "shift": 0,
+        "rc": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "exp": {
+        "shift": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "smelter": {
+        "shift": 0,
+        "day": 0,
+        "wkly": 0
+      }
+    },
+    "pressPowder": {
+      "received": {
+        "shift": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "finish": {
+        "shift": 0,
+        "day": 0,
+        "wkly": 0
+      }
+    },
+    "edxrf": {
+      "epsC": 0,
+      "epsD": 0,
+      "epsE": 0,
+      "epsF": 0,
+      "epsG": 0,
+      "epsH": 0,
+      "s2Puma": 0,
+      "shift": 0,
+      "day": 0,
+      "wkly": 0
+    },
+    "fuseBead": {
+      "osExp": 0,
+      "finishShift": 0,
+      "finishDay": 0,
+      "finishWkly": 0,
+      "balExp": 0
+    },
+    "loi": {
+      "os": 0,
+      "w2": 0,
+      "w4": 0,
+      "w5": 0,
+      "finLoiShift": 0,
+      "finLoiDay": 0,
+      "finLoiWkly": 0,
+      "bal": 0
+    },
+    "wdxrf": {
+      "osExp": 0,
+      "zetiumA": {
+        "prod": 0,
+        "exp": 0,
+        "smelt": 0,
+        "gts": 0,
+        "rarr": 0,
+        "ver": 0,
+        "std": 0,
+        "blank": 0,
+        "total": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "zetiumB": {
+        "prod": 0,
+        "exp": 0,
+        "smelt": 0,
+        "gts": 0,
+        "rarr": 0,
+        "ver": 0,
+        "std": 0,
+        "blank": 0,
+        "total": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "bal": 0
+    },
+    "qc": {
+      "os": 0,
+      "finishShift": 0,
+      "finishDay": 0,
+      "finishWkly": 0,
+      "bal": 0
+    },
+    "report": {
+      "osReport": 0,
+      "received": 0,
+      "finishReportDay": 0,
+      "finishReportWkly": 0,
+      "bal": 0
+    }
+  },
+  {
+    "id": "2026-10-30_A_DAY",
+    "no": 28,
+    "date": "30/10/2026",
+    "isoDate": "2026-10-30",
+    "week": 44,
+    "regu": "A",
+    "shiftType": "DAY",
+    "manpower": {
+      "staff": {
+        "shift": 0,
+        "cuti": 0,
+        "alpa": 0,
+        "izin": 0,
+        "sakit": 0,
+        "total": 0
+      },
+      "crew": {
+        "shift": 0,
+        "bantn": 0,
+        "lab": 0,
+        "cuti": 0,
+        "alpa": 0,
+        "izin": 0,
+        "sakit": 0,
+        "total": 0
+      }
+    },
+    "sampleReceived": {
+      "gc": {
+        "shift": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "prod": {
+        "shift": 0,
+        "rc": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "exp": {
+        "shift": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "smelter": {
+        "shift": 0,
+        "day": 0,
+        "wkly": 0
+      }
+    },
+    "pressPowder": {
+      "received": {
+        "shift": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "finish": {
+        "shift": 0,
+        "day": 0,
+        "wkly": 0
+      }
+    },
+    "edxrf": {
+      "epsC": 0,
+      "epsD": 0,
+      "epsE": 0,
+      "epsF": 0,
+      "epsG": 0,
+      "epsH": 0,
+      "s2Puma": 0,
+      "shift": 0,
+      "day": 0,
+      "wkly": 0
+    },
+    "fuseBead": {
+      "osExp": 0,
+      "finishShift": 0,
+      "finishDay": 0,
+      "finishWkly": 0,
+      "balExp": 0
+    },
+    "loi": {
+      "os": 0,
+      "w2": 0,
+      "w4": 0,
+      "w5": 0,
+      "finLoiShift": 0,
+      "finLoiDay": 0,
+      "finLoiWkly": 0,
+      "bal": 0
+    },
+    "wdxrf": {
+      "osExp": 0,
+      "zetiumA": {
+        "prod": 0,
+        "exp": 0,
+        "smelt": 0,
+        "gts": 0,
+        "rarr": 0,
+        "ver": 0,
+        "std": 0,
+        "blank": 0,
+        "total": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "zetiumB": {
+        "prod": 0,
+        "exp": 0,
+        "smelt": 0,
+        "gts": 0,
+        "rarr": 0,
+        "ver": 0,
+        "std": 0,
+        "blank": 0,
+        "total": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "bal": 0
+    },
+    "qc": {
+      "os": 0,
+      "finishShift": 0,
+      "finishDay": 0,
+      "finishWkly": 0,
+      "bal": 0
+    },
+    "report": {
+      "osReport": 0,
+      "received": 0,
+      "finishReportDay": 0,
+      "finishReportWkly": 0,
+      "bal": 0
+    }
+  },
+  {
+    "id": "2026-10-30_B_NIGHT",
+    "no": 28,
+    "date": "30/10/2026",
+    "isoDate": "2026-10-30",
+    "week": 44,
+    "regu": "B",
+    "shiftType": "NIGHT",
+    "manpower": {
+      "staff": {
+        "shift": 0,
+        "cuti": 0,
+        "alpa": 0,
+        "izin": 0,
+        "sakit": 0,
+        "total": 0
+      },
+      "crew": {
+        "shift": 0,
+        "bantn": 0,
+        "lab": 0,
+        "cuti": 0,
+        "alpa": 0,
+        "izin": 0,
+        "sakit": 0,
+        "total": 0
+      }
+    },
+    "sampleReceived": {
+      "gc": {
+        "shift": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "prod": {
+        "shift": 0,
+        "rc": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "exp": {
+        "shift": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "smelter": {
+        "shift": 0,
+        "day": 0,
+        "wkly": 0
+      }
+    },
+    "pressPowder": {
+      "received": {
+        "shift": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "finish": {
+        "shift": 0,
+        "day": 0,
+        "wkly": 0
+      }
+    },
+    "edxrf": {
+      "epsC": 0,
+      "epsD": 0,
+      "epsE": 0,
+      "epsF": 0,
+      "epsG": 0,
+      "epsH": 0,
+      "s2Puma": 0,
+      "shift": 0,
+      "day": 0,
+      "wkly": 0
+    },
+    "fuseBead": {
+      "osExp": 0,
+      "finishShift": 0,
+      "finishDay": 0,
+      "finishWkly": 0,
+      "balExp": 0
+    },
+    "loi": {
+      "os": 0,
+      "w2": 0,
+      "w4": 0,
+      "w5": 0,
+      "finLoiShift": 0,
+      "finLoiDay": 0,
+      "finLoiWkly": 0,
+      "bal": 0
+    },
+    "wdxrf": {
+      "osExp": 0,
+      "zetiumA": {
+        "prod": 0,
+        "exp": 0,
+        "smelt": 0,
+        "gts": 0,
+        "rarr": 0,
+        "ver": 0,
+        "std": 0,
+        "blank": 0,
+        "total": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "zetiumB": {
+        "prod": 0,
+        "exp": 0,
+        "smelt": 0,
+        "gts": 0,
+        "rarr": 0,
+        "ver": 0,
+        "std": 0,
+        "blank": 0,
+        "total": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "bal": 0
+    },
+    "qc": {
+      "os": 0,
+      "finishShift": 0,
+      "finishDay": 0,
+      "finishWkly": 0,
+      "bal": 0
+    },
+    "report": {
+      "osReport": 0,
+      "received": 0,
+      "finishReportDay": 0,
+      "finishReportWkly": 0,
+      "bal": 0
+    }
+  },
+  {
+    "id": "2026-10-31_A_DAY",
+    "no": 29,
+    "date": "31/10/2026",
+    "isoDate": "2026-10-31",
+    "week": 44,
+    "regu": "A",
+    "shiftType": "DAY",
+    "manpower": {
+      "staff": {
+        "shift": 0,
+        "cuti": 0,
+        "alpa": 0,
+        "izin": 0,
+        "sakit": 0,
+        "total": 0
+      },
+      "crew": {
+        "shift": 0,
+        "bantn": 0,
+        "lab": 0,
+        "cuti": 0,
+        "alpa": 0,
+        "izin": 0,
+        "sakit": 0,
+        "total": 0
+      }
+    },
+    "sampleReceived": {
+      "gc": {
+        "shift": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "prod": {
+        "shift": 0,
+        "rc": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "exp": {
+        "shift": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "smelter": {
+        "shift": 0,
+        "day": 0,
+        "wkly": 0
+      }
+    },
+    "pressPowder": {
+      "received": {
+        "shift": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "finish": {
+        "shift": 0,
+        "day": 0,
+        "wkly": 0
+      }
+    },
+    "edxrf": {
+      "epsC": 0,
+      "epsD": 0,
+      "epsE": 0,
+      "epsF": 0,
+      "epsG": 0,
+      "epsH": 0,
+      "s2Puma": 0,
+      "shift": 0,
+      "day": 0,
+      "wkly": 0
+    },
+    "fuseBead": {
+      "osExp": 0,
+      "finishShift": 0,
+      "finishDay": 0,
+      "finishWkly": 0,
+      "balExp": 0
+    },
+    "loi": {
+      "os": 0,
+      "w2": 0,
+      "w4": 0,
+      "w5": 0,
+      "finLoiShift": 0,
+      "finLoiDay": 0,
+      "finLoiWkly": 0,
+      "bal": 0
+    },
+    "wdxrf": {
+      "osExp": 0,
+      "zetiumA": {
+        "prod": 0,
+        "exp": 0,
+        "smelt": 0,
+        "gts": 0,
+        "rarr": 0,
+        "ver": 0,
+        "std": 0,
+        "blank": 0,
+        "total": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "zetiumB": {
+        "prod": 0,
+        "exp": 0,
+        "smelt": 0,
+        "gts": 0,
+        "rarr": 0,
+        "ver": 0,
+        "std": 0,
+        "blank": 0,
+        "total": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "bal": 0
+    },
+    "qc": {
+      "os": 0,
+      "finishShift": 0,
+      "finishDay": 0,
+      "finishWkly": 0,
+      "bal": 0
+    },
+    "report": {
+      "osReport": 0,
+      "received": 0,
+      "finishReportDay": 0,
+      "finishReportWkly": 0,
+      "bal": 0
+    }
+  },
+  {
+    "id": "2026-10-31_B_NIGHT",
+    "no": 29,
+    "date": "31/10/2026",
+    "isoDate": "2026-10-31",
+    "week": 44,
+    "regu": "B",
+    "shiftType": "NIGHT",
+    "manpower": {
+      "staff": {
+        "shift": 0,
+        "cuti": 0,
+        "alpa": 0,
+        "izin": 0,
+        "sakit": 0,
+        "total": 0
+      },
+      "crew": {
+        "shift": 0,
+        "bantn": 0,
+        "lab": 0,
+        "cuti": 0,
+        "alpa": 0,
+        "izin": 0,
+        "sakit": 0,
+        "total": 0
+      }
+    },
+    "sampleReceived": {
+      "gc": {
+        "shift": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "prod": {
+        "shift": 0,
+        "rc": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "exp": {
+        "shift": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "smelter": {
+        "shift": 0,
+        "day": 0,
+        "wkly": 0
+      }
+    },
+    "pressPowder": {
+      "received": {
+        "shift": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "finish": {
+        "shift": 0,
+        "day": 0,
+        "wkly": 0
+      }
+    },
+    "edxrf": {
+      "epsC": 0,
+      "epsD": 0,
+      "epsE": 0,
+      "epsF": 0,
+      "epsG": 0,
+      "epsH": 0,
+      "s2Puma": 0,
+      "shift": 0,
+      "day": 0,
+      "wkly": 0
+    },
+    "fuseBead": {
+      "osExp": 0,
+      "finishShift": 0,
+      "finishDay": 0,
+      "finishWkly": 0,
+      "balExp": 0
+    },
+    "loi": {
+      "os": 0,
+      "w2": 0,
+      "w4": 0,
+      "w5": 0,
+      "finLoiShift": 0,
+      "finLoiDay": 0,
+      "finLoiWkly": 0,
+      "bal": 0
+    },
+    "wdxrf": {
+      "osExp": 0,
+      "zetiumA": {
+        "prod": 0,
+        "exp": 0,
+        "smelt": 0,
+        "gts": 0,
+        "rarr": 0,
+        "ver": 0,
+        "std": 0,
+        "blank": 0,
+        "total": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "zetiumB": {
+        "prod": 0,
+        "exp": 0,
+        "smelt": 0,
+        "gts": 0,
+        "rarr": 0,
+        "ver": 0,
+        "std": 0,
+        "blank": 0,
+        "total": 0,
+        "day": 0,
+        "wkly": 0
+      },
+      "bal": 0
+    },
+    "qc": {
+      "os": 0,
+      "finishShift": 0,
+      "finishDay": 0,
+      "finishWkly": 0,
+      "bal": 0
     },
     "report": {
       "osReport": 0,

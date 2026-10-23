@@ -1611,7 +1611,7 @@ export function BulletinBoard({
 
 **📅 Tanggal & Waktu**: ${new Date(aiMeetingDate).toLocaleString("id-ID", { dateStyle: "full", timeStyle: "short" })}  
 **👤 PIC / Pemimpin Rapat**: ${aiMeetingPic || inspectorName}  
-**🏢 Departemen**: Preparation & Laboratory (PT. TBP & GPS)  
+**🏢 Departemen**: Preparation & Laboratory (${selectedPtFilter === 'GTS' ? 'PT. Gane Tambang Sentosa - Site Fluk' : 'PT. TBP & GPS'})  
 **🤖 AI Status**: *Teringkas Otomatis oleh AI Assistant*
 
 ---
