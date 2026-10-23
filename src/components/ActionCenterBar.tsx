@@ -478,29 +478,62 @@ export function ActionCenterBar({
     return userProfile.jabatan || localStorage.getItem('p2h_inspector_jabatan') || '';
   }, [inspectorJabatan, userProfile]);
 
+  // Section resolution: strictly prioritize specific section, do NOT treat combined department as section
+  const rawSection = (userProfile.section || localStorage.getItem('p2h_inspector_section') || '').trim();
+  const rawDept = (userProfile.department || localStorage.getItem('p2h_inspector_dept') || '').trim();
+
   const effectiveSection = useMemo(() => {
-    return userProfile.section || localStorage.getItem('p2h_inspector_section') || userProfile.department || localStorage.getItem('p2h_inspector_dept') || '';
-  }, [userProfile]);
+    if (rawSection) return rawSection;
+    // Only fallback to department if it is NOT a combined department like "Preparation & Laboratory"
+    const dLower = rawDept.toLowerCase();
+    if (dLower.includes('&') || dLower.includes('dan') || (dLower.includes('prep') && dLower.includes('lab'))) {
+      return '';
+    }
+    return rawDept;
+  }, [rawSection, rawDept]);
 
   const jLower = effectiveJabatan.toLowerCase();
   const sLower = effectiveSection.toLowerCase();
 
+  // Explicit non-lab section checks
+  const isExplicitNonLab = useMemo(() => {
+    return sLower.includes('prep') || 
+           sLower.includes('maint') || 
+           sLower.includes('workshop') || 
+           sLower.includes('admin') || 
+           sLower.includes('fasilitas') || 
+           sLower.includes('facility') || 
+           sLower.includes('hse') || 
+           sLower.includes('k3');
+  }, [sLower]);
+
   // Section classifications:
   const isPrepSection = useMemo(() => {
-    return sLower.includes('prep') || jLower.includes('prep');
+    if (sLower.includes('prep')) return true;
+    if (!sLower && (jLower.includes('prep') || jLower.includes('crusher') || jLower.includes('pulveriz'))) return true;
+    return false;
   }, [sLower, jLower]);
 
+  // Strictly Laboratory section only (non-Laboratory personnel must never be classified as lab):
   const isLabSection = useMemo(() => {
-    return sLower.includes('lab') || sLower.includes('qa') || sLower.includes('quality') ||
-           jLower.includes('lab') || jLower.includes('chemist') || jLower.includes('qa') ||
-           jLower.includes('quality') || jLower.includes('assay') || jLower.includes('analyst');
-  }, [sLower, jLower]);
+    if (isExplicitNonLab) return false;
+    // Section strictly indicates Laboratory or QA/QC
+    if (sLower.includes('lab') || sLower.includes('laboratorium') || sLower.includes('qa') || sLower.includes('qc') || sLower.includes('quality')) {
+      return true;
+    }
+    // If section is empty, only match if jabatan strictly indicates Laboratory personnel and NOT Preparasi/Maintenance
+    if (!sLower) {
+      const isLabRole = jLower.includes('chemist') || jLower.includes('analyst') || jLower.includes('assay') ||
+                        (jLower.includes('lab') && !jLower.includes('prep') && !jLower.includes('maint'));
+      return isLabRole;
+    }
+    return false;
+  }, [isExplicitNonLab, sLower, jLower]);
 
   const isMaintSection = useMemo(() => {
-    return sLower.includes('maint') || sLower.includes('workshop') ||
-           jLower.includes('maint') || jLower.includes('workshop') ||
-           jLower.includes('mekanik') || jLower.includes('electric') ||
-           jLower.includes('welder') || jLower.includes('bubut');
+    if (sLower.includes('maint') || sLower.includes('workshop')) return true;
+    if (!sLower && (jLower.includes('maint') || jLower.includes('mekanik') || jLower.includes('electric') || jLower.includes('welder') || jLower.includes('bubut'))) return true;
+    return false;
   }, [sLower, jLower]);
 
   // Strict Role Isolations:
@@ -983,7 +1016,8 @@ export function ActionCenterBar({
       });
     }
 
-    if (isLabSection || dailyTasks?.pemantauan?.completedToday) {
+    // Pemantauan Harian Lab HANYA untuk personil dengan section Laboratory
+    if (isLabSection) {
       list.push({
         id: 'pemantauan',
         title: 'Pemantauan Harian Lab (Suhu & Gas)',

@@ -126,7 +126,7 @@ export const DailyPerformanceV2Screen: React.FC<DailyPerformanceV2ScreenProps> =
                   {userPt || 'TBP'} Laboratory
                 </span>
                 <span className="text-[10px] font-black uppercase tracking-wider text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/80 px-2 py-0.5 rounded border border-indigo-200 dark:border-indigo-800">
-                  v2.0 Best Practice
+                  Cockpit Operasional
                 </span>
                 {isSelectedDateLongShift ? (
                   <span className="text-[10px] font-black text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/80 px-2 py-0.5 rounded border border-amber-300 dark:border-amber-700 flex items-center gap-1">
@@ -140,7 +140,7 @@ export const DailyPerformanceV2Screen: React.FC<DailyPerformanceV2ScreenProps> =
                 )}
               </div>
               <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight flex items-center gap-2 mt-0.5">
-                Daily Performance Lab 2.0
+                Daily Performance Laboratory
               </h1>
             </div>
           </div>
