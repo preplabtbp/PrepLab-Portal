@@ -1052,6 +1052,38 @@ export function NotionDatabaseTable({
     multiline: boolean;
   } | null>(null);
 
+  // Drag and Drop Rows state & handlers (Notion-style row reordering)
+  const [draggedRowIndex, setDraggedRowIndex] = useState<number | null>(null);
+  const [dragOverRowIndex, setDragOverRowIndex] = useState<number | null>(null);
+  const [dropPosition, setDropPosition] = useState<'top' | 'bottom'>('bottom');
+
+  const handleRowDragStart = (e: React.DragEvent, rowIndex: number) => {
+    e.dataTransfer.setData('text/plain', String(rowIndex));
+    e.dataTransfer.effectAllowed = 'move';
+    setDraggedRowIndex(rowIndex);
+  };
+
+  const handleRowDragOver = (e: React.DragEvent, rowIndex: number) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (draggedRowIndex === null || draggedRowIndex === rowIndex) {
+      setDragOverRowIndex(null);
+      return;
+    }
+    const rect = e.currentTarget.getBoundingClientRect();
+    const midY = rect.top + rect.height / 2;
+    const isTop = e.clientY < midY;
+    setDropPosition(isTop ? 'top' : 'bottom');
+    setDragOverRowIndex(rowIndex);
+  };
+
+  const handleRowDragEnd = () => {
+    setDraggedRowIndex(null);
+    setDragOverRowIndex(null);
+  };
+
+  // handleRowDrop diimplementasikan di bawah handleTogglePinRow agar dapat mengakses state pin & localStorage
+
   // User Identity & Role Permissions for Deletion / Recycle Bin
   const effectiveNik = currentAuthorNik || localStorage.getItem('p2h_inspector_nik') || '';
   const effectiveName = currentAuthorName || localStorage.getItem('p2h_inspector_name') || 'User';
@@ -1751,6 +1783,47 @@ export function NotionDatabaseTable({
     return false;
   }, [pinnedRowKeys, getRawRowTitle, getRawRowDesc]);
 
+  // Helper untuk mendapatkan key unik penanda pin baris
+  const getRowPinKey = useCallback((row: TableRowData): string => {
+    if (!row) return '';
+    if (row.id) return String(row.id);
+    const rawTitle = getRawRowTitle(row);
+    const cleanTitle = getDisplayTitle(rawTitle);
+    const strippedTitle = stripColorTags(cleanTitle);
+    if (strippedTitle) return strippedTitle;
+    if (cleanTitle) return cleanTitle;
+    const taskCode = row.taskCode || row['Task ID'] || row['ID Task'];
+    if (taskCode) return String(taskCode);
+    return '';
+  }, [getRawRowTitle]);
+
+  // Helper untuk mencari index suatu baris di dalam array pinnedRowKeys
+  const getRowPinIndex = useCallback((row: TableRowData, keys: string[] = pinnedRowKeys): number => {
+    if (!row) return -1;
+    const rowId = row.id ? String(row.id) : '';
+    if (rowId) {
+      const idx = keys.indexOf(rowId);
+      if (idx !== -1) return idx;
+    }
+    const rawTitle = getRawRowTitle(row);
+    const cleanTitle = getDisplayTitle(rawTitle);
+    if (cleanTitle) {
+      const idx = keys.indexOf(cleanTitle);
+      if (idx !== -1) return idx;
+    }
+    const strippedTitle = stripColorTags(cleanTitle);
+    if (strippedTitle) {
+      const idx = keys.indexOf(strippedTitle);
+      if (idx !== -1) return idx;
+    }
+    const taskCode = row.taskCode || row['Task ID'] || row['ID Task'];
+    if (taskCode) {
+      const idx = keys.indexOf(String(taskCode));
+      if (idx !== -1) return idx;
+    }
+    return -1;
+  }, [pinnedRowKeys, getRawRowTitle]);
+
   // Sinkronisasi baris dengan penanda <!--pin--> ke pinnedRowKeys saat rows prop dimuat
   useEffect(() => {
     if (!rows || rows.length === 0) return;
@@ -1910,6 +1983,193 @@ export function NotionDatabaseTable({
     } else {
       toast.info('Sematkan (pin) task telah dilepas.');
     }
+  };
+
+  // ── HANDLER DRAG & DROP BARIS (Mendukung baris reguler & reordering baris pinned) ──
+  const handleRowDrop = async (e: React.DragEvent, targetIndex: number) => {
+    e.preventDefault();
+    if (draggedRowIndex === null || draggedRowIndex === targetIndex) {
+      handleRowDragEnd();
+      return;
+    }
+
+    const currentRows = [...localRows];
+    if (
+      draggedRowIndex < 0 ||
+      draggedRowIndex >= currentRows.length ||
+      targetIndex < 0 ||
+      targetIndex >= currentRows.length
+    ) {
+      handleRowDragEnd();
+      return;
+    }
+
+    const sourceRow = currentRows[draggedRowIndex];
+    const targetRow = currentRows[targetIndex];
+    if (!sourceRow || !targetRow) {
+      handleRowDragEnd();
+      return;
+    }
+
+    const sourceIsPinned = isRowPinned(sourceRow);
+    const targetIsPinned = isRowPinned(targetRow);
+
+    // Kumpulkan bundle baris induk beserta semua sub-kegiatannya
+    let bundleCount = 1;
+    while (
+      draggedRowIndex + bundleCount < currentRows.length &&
+      isSubItemRow(currentRows[draggedRowIndex + bundleCount])
+    ) {
+      bundleCount++;
+    }
+
+    // ── KELOLA PINNED KEYS JIKA TERKAIT BARIS PINNED ──
+    let nextPinnedKeys = [...pinnedRowKeys];
+    let pinKeysChanged = false;
+
+    // Helper untuk membersihkan pin tags dari objek baris
+    const cleanPinTagsFromRow = (r: TableRowData) => {
+      r.isPinned = 'false';
+      (r as any)._pinned = 'false';
+      for (const k of Object.keys(r)) {
+        if (typeof r[k] === 'string') {
+          r[k] = r[k]
+            .replace(/<!--\s*pin.*?-->/gi, '')
+            .replace(/<!-?\s*pinned.*?-->/gi, '')
+            .replace(/<!pin.*?>/gi, '')
+            .trim();
+        }
+      }
+    };
+
+    // Helper untuk menambahkan pin tag ke objek baris
+    const addPinTagToRow = (r: TableRowData) => {
+      r.isPinned = 'true';
+      (r as any)._pinned = 'true';
+      const descKey = Object.keys(r).find(k => {
+        const kl = k.toLowerCase().trim();
+        return kl === 'keterangan' || kl === 'description' || kl === 'deskripsi' || kl === 'catatan';
+      }) || 'Keterangan';
+      let curDesc = r[descKey] || '';
+      if (!curDesc.includes('<!--pin-->')) {
+        r[descKey] = `${curDesc} <!--pin-->`.trim();
+      }
+    };
+
+    const sourceKey = getRowPinKey(sourceRow);
+    const targetKey = getRowPinKey(targetRow);
+
+    if (sourceIsPinned && targetIsPinned) {
+      // KASUS 1: Dua baris pinned saling tukar / atur urutan
+      let sourceKeyIdx = getRowPinIndex(sourceRow, nextPinnedKeys);
+      let targetKeyIdx = getRowPinIndex(targetRow, nextPinnedKeys);
+
+      if (targetKeyIdx === -1 && targetKey) {
+        nextPinnedKeys.push(targetKey);
+        targetKeyIdx = nextPinnedKeys.length - 1;
+      }
+
+      let keyToMove = sourceKey;
+      if (sourceKeyIdx !== -1) {
+        keyToMove = nextPinnedKeys[sourceKeyIdx];
+        nextPinnedKeys.splice(sourceKeyIdx, 1);
+      }
+
+      let newTargetIdx = getRowPinIndex(targetRow, nextPinnedKeys);
+      if (newTargetIdx === -1) {
+        newTargetIdx = targetKeyIdx !== -1 ? targetKeyIdx : nextPinnedKeys.length;
+      }
+
+      const insertPinIdx = dropPosition === 'top' ? newTargetIdx : newTargetIdx + 1;
+      const safePinIdx = Math.max(0, Math.min(nextPinnedKeys.length, insertPinIdx));
+      if (keyToMove) {
+        nextPinnedKeys.splice(safePinIdx, 0, keyToMove);
+      }
+      pinKeysChanged = true;
+    } else if (!sourceIsPinned && targetIsPinned) {
+      // KASUS 2: Baris unpinned digeser masuk ke area pinned -> jadikan pinned pada urutan tersebut
+      addPinTagToRow(sourceRow);
+      const targetKeyIdx = getRowPinIndex(targetRow, nextPinnedKeys);
+      const insertPinIdx = dropPosition === 'top' 
+        ? (targetKeyIdx !== -1 ? targetKeyIdx : 0) 
+        : (targetKeyIdx !== -1 ? targetKeyIdx + 1 : nextPinnedKeys.length);
+      const safePinIdx = Math.max(0, Math.min(nextPinnedKeys.length, insertPinIdx));
+      if (sourceKey && !nextPinnedKeys.includes(sourceKey)) {
+        nextPinnedKeys.splice(safePinIdx, 0, sourceKey);
+        pinKeysChanged = true;
+      }
+    } else if (sourceIsPinned && !targetIsPinned) {
+      // KASUS 3: Baris pinned digeser keluar ke area reguler unpinned -> lepas pin
+      cleanPinTagsFromRow(sourceRow);
+      const sourceKeyIdx = getRowPinIndex(sourceRow, nextPinnedKeys);
+      if (sourceKeyIdx !== -1) {
+        nextPinnedKeys.splice(sourceKeyIdx, 1);
+        pinKeysChanged = true;
+      } else {
+        const keysToRemove = new Set<string>();
+        if (sourceRow.id) keysToRemove.add(String(sourceRow.id));
+        const rawT = getRawRowTitle(sourceRow);
+        const cleanT = getDisplayTitle(rawT);
+        const strippedT = stripColorTags(cleanT);
+        if (rawT) keysToRemove.add(rawT);
+        if (cleanT) keysToRemove.add(cleanT);
+        if (strippedT) keysToRemove.add(strippedT);
+        const nextFiltered = nextPinnedKeys.filter(k => !keysToRemove.has(k));
+        if (nextFiltered.length !== nextPinnedKeys.length) {
+          nextPinnedKeys = nextFiltered;
+          pinKeysChanged = true;
+        }
+      }
+    }
+
+    if (pinKeysChanged) {
+      setPinnedRowKeys(nextPinnedKeys);
+      try {
+        localStorage.setItem(tablePinStorageKey, JSON.stringify(nextPinnedKeys));
+      } catch {}
+    }
+
+    // ── KELOLA URUTAN LOKAL ROWS (Array Baris) ──
+    let targetEndIdx = targetIndex;
+    while (
+      targetEndIdx + 1 < currentRows.length &&
+      isSubItemRow(currentRows[targetEndIdx + 1])
+    ) {
+      targetEndIdx++;
+    }
+
+    const movingBundle = currentRows.splice(draggedRowIndex, bundleCount);
+
+    let finalTargetIdx = dropPosition === 'top' ? targetIndex : targetEndIdx;
+    if (draggedRowIndex < finalTargetIdx) {
+      finalTargetIdx -= bundleCount;
+    }
+    let insertionIdx = dropPosition === 'top' ? finalTargetIdx : finalTargetIdx + 1;
+    insertionIdx = Math.max(0, Math.min(currentRows.length, insertionIdx));
+
+    currentRows.splice(insertionIdx, 0, ...movingBundle);
+
+    setLocalRows(currentRows);
+    onRowsChange?.(currentRows);
+    await saveTableToBackend(currentRows);
+
+    const titleMoved = getDisplayTitle(
+      getRowVal(sourceRow, 'Activity Name') ||
+      getRowVal(sourceRow, 'Jenis kegiatan') ||
+      'Kegiatan'
+    );
+
+    if (sourceIsPinned && targetIsPinned) {
+      toast.success(`Urutan pinned task "${titleMoved}" berhasil diatur!`);
+    } else if (!sourceIsPinned && targetIsPinned) {
+      toast.success(`Task "${titleMoved}" disematkan (pinned) ke posisi baru!`);
+    } else if (sourceIsPinned && !targetIsPinned) {
+      toast.info(`Sematkan (pin) dilepas, task "${titleMoved}" dipindahkan ke urutan reguler.`);
+    } else {
+      toast.success(`Urutan baris "${titleMoved}" berhasil dipindahkan!`);
+    }
+
+    handleRowDragEnd();
   };
 
   // Employees List for PIC Dropdown & Search
@@ -5166,9 +5426,9 @@ export function NotionDatabaseTable({
     try {
       let updatedRows: TableRowData[];
       if (editingRowIndex === null) {
-        // Adding new row -> place at TOP (#1, row 1)
-        updatedRows = [cleanedRow, ...localRows];
-        toast.success(`Data kegiatan baru (${finalTaskCode}) berhasil ditambahkan di Baris #1!`);
+        // Adding new row -> place at BOTTOM (ala Notion)
+        updatedRows = [...localRows, cleanedRow];
+        toast.success(`Data kegiatan baru (${finalTaskCode}) berhasil ditambahkan di Baris #${updatedRows.length}!`);
       } else {
         // Editing existing row: pastikan targetIndex cocok dengan id / referensi row yang diedit
         let targetIndex = editingRowIndex;
@@ -5197,8 +5457,9 @@ export function NotionDatabaseTable({
     }
   };
 
-  // Insert Blank Row Inline directly into table (starts manual inline editing immediately at row #1)
-  const handleInsertBlankRow = (_insertAtIndex: number = 0) => {
+  // Insert Blank Row Inline directly into table (starts manual inline editing at bottom ala Notion)
+  const handleInsertBlankRow = (insertOption: boolean | number = true) => {
+    const isBottom = typeof insertOption === 'boolean' ? insertOption : insertOption !== 0;
     const now = new Date();
     const createdStr = getTodayDDMMYYYY();
     const inheritedCadence = currentCadence || 'Non Routine';
@@ -5237,27 +5498,39 @@ export function NotionDatabaseTable({
       }
     });
 
-    // Sisipkan di posisi paling atas (#1)
-    const nextRows = [blankRow, ...localRows];
+    const targetIndex = isBottom ? localRows.length : 0;
+    const nextRows = isBottom ? [...localRows, blankRow] : [blankRow, ...localRows];
 
     setLocalRows(nextRows);
     onRowsChange?.(nextRows);
     saveTableToBackend(nextRows);
 
-    // Immediately activate inline editor on the new empty cell at row 0
+    // Immediately activate inline editor on the new empty cell
     const titleColHeader = displayHeaders.find(h => {
       const hl = h.toLowerCase().trim();
       return hl.includes('activity name') || hl.includes('jenis kegiatan') || hl === 'task' || hl === 'judul';
     }) || 'Activity Name';
 
     setActiveInlineEditor({
-      rowIndex: 0,
+      rowIndex: targetIndex,
       colName: titleColHeader,
       initialValue: '',
       multiline: false
     });
 
-    toast.success(`Kegiatan baru (${autoTaskCode}) ditambahkan di Baris #1! Silakan ketik nama kegiatan.`);
+    // Auto-scroll ke paling bawah tabel
+    if (isBottom) {
+      setTimeout(() => {
+        if (tableScrollRef.current) {
+          tableScrollRef.current.scrollTo({
+            top: tableScrollRef.current.scrollHeight,
+            behavior: 'smooth'
+          });
+        }
+      }, 80);
+    }
+
+    toast.success(`Kegiatan baru (${autoTaskCode}) ditambahkan di Baris #${targetIndex + 1}! Silakan ketik nama kegiatan.`);
   };
 
   // Map setiap baris sub-item ke baris parent-nya di localRows
@@ -5281,6 +5554,30 @@ export function NotionDatabaseTable({
     return map;
   }, [localRows, getRowVal]);
 
+  // Enterprise Helper: Extract human-readable clean task title for Delete & Audit Trail
+  const getRowTaskCleanTitle = (row: TableRowData, fallbackIndex?: number): string => {
+    if (!row) return fallbackIndex !== undefined ? `Baris #${fallbackIndex + 1}` : 'Kegiatan';
+    const rawTitle = (
+      getRowVal(row, 'Activity Name') ||
+      getRowVal(row, 'Activity') ||
+      getRowVal(row, 'Jenis kegiatan') ||
+      getRowVal(row, 'Jenis Kegiatan') ||
+      getRowVal(row, 'Task') ||
+      getRowVal(row, 'Judul') ||
+      getRowVal(row, 'Name') ||
+      getRowVal(row, 'Nama') ||
+      row['Activity Name'] ||
+      row['Jenis kegiatan'] ||
+      row['Jenis Kegiatan'] ||
+      row['Name'] ||
+      row['= Name'] ||
+      ''
+    );
+    const clean = getDisplayTitle(rawTitle);
+    if (clean) return clean;
+    return fallbackIndex !== undefined ? `Baris #${fallbackIndex + 1}` : 'Kegiatan';
+  };
+
   // Request Delete for a single row (opens modern confirmation dialog with subtask cascade detection)
   const handleRequestDeleteRow = (index: number, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
@@ -5288,7 +5585,7 @@ export function NotionDatabaseTable({
     if (!targetRow) return;
 
     const isSub = isSubItemRow(targetRow);
-    const taskName = (getRowVal(targetRow, 'Jenis kegiatan') || getRowVal(targetRow, 'Name') || getRowVal(targetRow, 'Judul') || `Baris #${index + 1}`).trim();
+    const taskName = getRowTaskCleanTitle(targetRow, index);
 
     // Find all nested subtasks under this parent
     const subtasks: TableRowData[] = [];
@@ -5349,7 +5646,7 @@ export function NotionDatabaseTable({
               postId,
               postTitle: title || 'Daily Laboratory',
               section: section || 'LABORATORIUM',
-              taskTitle: (getRowVal(r, 'Jenis kegiatan') || getRowVal(r, 'Name') || `Baris #${idx + 1}`).trim(),
+              taskTitle: getRowTaskCleanTitle(r, idx),
               rowData: r,
               subtasksData: null,
               subtaskCount: 0
@@ -5373,7 +5670,7 @@ export function NotionDatabaseTable({
             postId,
             postTitle: title || 'Daily Laboratory',
             section: section || 'LABORATORIUM',
-            taskTitle: taskName || 'Kegiatan',
+            taskTitle: getRowTaskCleanTitle(targetRow, rowIndex),
             rowData: targetRow,
             subtasksData: subtasks && subtasks.length > 0 ? subtasks : null,
             subtaskCount: subtaskCount || 0
@@ -5387,18 +5684,24 @@ export function NotionDatabaseTable({
       }
 
       // 1. Audit Trail: Send to Recycle Bin API
-      fetch('/api/bulletin/recycle-bin', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          items: recyclePayloadItems,
-          deletedByNik: effectiveNik,
-          deletedByName: effectiveName,
-          deletedByJabatan: effectiveJabatan
-        })
-      }).catch(err => {
+      try {
+        const token = localStorage.getItem('token') || localStorage.getItem('preplab_auth_token') || '';
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+
+        await fetch('/api/bulletin/recycle-bin', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            items: recyclePayloadItems,
+            deletedByNik: effectiveNik,
+            deletedByName: effectiveName,
+            deletedByJabatan: effectiveJabatan
+          })
+        });
+      } catch (err) {
         console.warn('[RecycleBin] Error logging to recycle bin:', err);
-      });
+      }
 
       // 2. Remove rows locally & re-index number
       const updatedRows = localRows.filter((_, idx) => !rowsToRemoveIndices.has(idx));
@@ -6796,7 +7099,7 @@ export function NotionDatabaseTable({
     <div 
       className={`w-full my-0 mb-0 border-b transition-all font-sans antialiased ${
         isNotionLight 
-          ? 'bg-white border-[#e9e9e8] text-[#37352f]' 
+          ? 'bg-white border-[#cbd5e1] text-[#37352f]' 
           : 'bg-[#181818] border-[#2d2d2d] text-slate-200'
       }`}
       style={{
@@ -6808,7 +7111,7 @@ export function NotionDatabaseTable({
       {/* ========================================================================= */}
       <div 
         className={`sticky top-0 md:top-12 z-30 transition-all border-b shadow-xs backdrop-blur-md ${
-          isNotionLight ? 'bg-white/95 border-[#e9e9e8]' : 'bg-[#191919]/95 border-[#2d2d2d]'
+          isNotionLight ? 'bg-white/95 border-[#cbd5e1]' : 'bg-[#191919]/95 border-[#2d2d2d]'
         }`}
       >
         {/* Main Clean Row: Left (Title & View Tabs) | Right (Essential Icon Tools, Full Tools Logo, + New) */}
@@ -6831,7 +7134,7 @@ export function NotionDatabaseTable({
 
             {/* Notion View Switcher Tabs */}
             <div className={`flex items-center p-0.5 rounded-lg border transition-colors ${
-              isNotionLight ? 'bg-[#f7f7f5] border-[#e9e9e8]' : 'bg-[#151515] border-[#2d2d2d]'
+              isNotionLight ? 'bg-[#f7f7f5] border-[#cbd5e1]' : 'bg-[#151515] border-[#2d2d2d]'
             }`}>
               <NotionTooltip content="Tampilan Tabel" position="bottom">
                 <button
@@ -6999,7 +7302,7 @@ export function NotionDatabaseTable({
               {isFilterPopoverOpen && (
                 <div 
                   className={`absolute right-0 top-full mt-1.5 w-80 sm:w-96 max-h-[82vh] overflow-y-auto rounded-2xl shadow-2xl border p-3.5 z-50 transition-all text-left space-y-3 ${
-                    isNotionLight ? 'bg-white border-[#e9e9e7] text-[#37352f]' : 'bg-[#202020] border-[#333333] text-slate-100'
+                    isNotionLight ? 'bg-white border-[#cbd5e1] text-[#37352f]' : 'bg-[#202020] border-[#333333] text-slate-100'
                   }`}
                   style={{
                     fontFamily: 'ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif'
@@ -7104,7 +7407,7 @@ export function NotionDatabaseTable({
                                 ? isSelected
                                   ? 'bg-[#37352f] text-white border border-[#37352f] dark:bg-teal-600 dark:border-teal-500 shadow-2xs font-semibold'
                                   : isNotionLight
-                                  ? 'bg-[#f7f7f5] hover:bg-[#efefed] text-[#37352f] border border-[#e9e9e7] opacity-80 hover:opacity-100 font-medium'
+                                  ? 'bg-[#f7f7f5] hover:bg-[#efefed] text-[#37352f] border border-[#cbd5e1] opacity-80 hover:opacity-100 font-medium'
                                   : 'bg-[#282828] hover:bg-[#333333] text-slate-300 border border-slate-700 opacity-80 hover:opacity-100 font-medium'
                                 : isSelected
                                 ? 'font-semibold ring-2 ring-slate-800/80 dark:ring-white/80 ring-offset-1 shadow-xs scale-[1.02] border border-transparent opacity-100'
@@ -7199,7 +7502,7 @@ export function NotionDatabaseTable({
                                 ? isSelected
                                   ? 'bg-[#37352f] text-white border border-[#37352f] dark:bg-teal-600 dark:border-teal-500 shadow-2xs font-semibold'
                                   : isNotionLight
-                                  ? 'bg-[#f7f7f5] hover:bg-[#efefed] text-[#37352f] border border-[#e9e9e7] opacity-80 hover:opacity-100 font-medium'
+                                  ? 'bg-[#f7f7f5] hover:bg-[#efefed] text-[#37352f] border border-[#cbd5e1] opacity-80 hover:opacity-100 font-medium'
                                   : 'bg-[#282828] hover:bg-[#333333] text-slate-300 border border-slate-700 opacity-80 hover:opacity-100 font-medium'
                                 : isSelected
                                 ? 'font-semibold ring-2 ring-slate-800/80 dark:ring-white/80 ring-offset-1 shadow-xs scale-[1.02] border border-transparent opacity-100'
@@ -7246,7 +7549,7 @@ export function NotionDatabaseTable({
                         className="w-full pl-8 pr-2.5 py-1 rounded-lg border text-[11px] outline-none focus:border-teal-500 font-sans"
                         style={{
                           backgroundColor: isNotionLight ? '#fbfbfa' : '#1a1a1a',
-                          borderColor: isNotionLight ? '#e9e9e7' : '#333333',
+                          borderColor: isNotionLight ? '#cbd5e1' : '#374151',
                           color: isNotionLight ? '#37352f' : '#f1f5f9'
                         }}
                       />
@@ -7260,7 +7563,7 @@ export function NotionDatabaseTable({
                           selectedPics.length === 0
                             ? 'bg-[#37352f] text-white border-[#37352f] dark:bg-teal-600 dark:border-teal-500 shadow-2xs'
                             : isNotionLight
-                            ? 'bg-[#f7f7f5] hover:bg-[#efefed] text-[#37352f] border-[#e9e9e7]'
+                            ? 'bg-[#f7f7f5] hover:bg-[#efefed] text-[#37352f] border-[#cbd5e1]'
                             : 'bg-[#282828] hover:bg-[#333333] text-slate-300 border-slate-700'
                         }`}
                       >
@@ -7285,7 +7588,7 @@ export function NotionDatabaseTable({
                                 isSelected
                                   ? 'bg-[#37352f] text-white border-[#37352f] dark:bg-teal-600 dark:border-teal-500 shadow-2xs'
                                   : isNotionLight
-                                  ? 'bg-[#f7f7f5] hover:bg-[#efefed] text-[#37352f] border-[#e9e9e7]'
+                                  ? 'bg-[#f7f7f5] hover:bg-[#efefed] text-[#37352f] border-[#cbd5e1]'
                                   : 'bg-[#282828] hover:bg-[#333333] text-slate-300 border-slate-700'
                               }`}
                             >
@@ -7333,7 +7636,7 @@ export function NotionDatabaseTable({
               {isSortPopoverOpen && (
                 <div 
                   className={`absolute right-0 top-full mt-1.5 w-64 rounded-xl shadow-2xl border p-3 z-50 transition-all text-left ${
-                    isNotionLight ? 'bg-white border-[#e9e9e8] text-slate-800' : 'bg-[#202020] border-[#333333] text-slate-100'
+                    isNotionLight ? 'bg-white border-[#cbd5e1] text-slate-800' : 'bg-[#202020] border-[#333333] text-slate-100'
                   }`}
                   onClick={(e) => e.stopPropagation()}
                 >
@@ -8053,7 +8356,7 @@ export function NotionDatabaseTable({
         <div 
           ref={tableScrollRef}
           onScroll={handleTableScroll}
-          className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-210px)] w-full transition-all notion-table-scroll-freeze rounded-b-xl border border-[#e9e9e8] dark:border-[#2d2d2d]"
+          className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-210px)] w-full transition-all notion-table-scroll-freeze rounded-b-xl border border-[#cbd5e1] dark:border-[#2d2d2d]"
           style={{ zoom: zoomPercent !== 100 ? `${zoomPercent}%` : undefined }}
         >
           <style>{`
@@ -8121,6 +8424,14 @@ export function NotionDatabaseTable({
             .notion-font-scope textarea {
               font-size: inherit;
             }
+            /* High-contrast crisp border rules for all screens, DPI scalings (125%, 150%) & laptop panels */
+            .notion-font-scope th,
+            .notion-font-scope td {
+              border-color: ${isNotionLight ? '#cbd5e1' : '#3f3f46'} !important;
+            }
+            .notion-font-scope tr {
+              border-color: ${isNotionLight ? '#cbd5e1' : '#3f3f46'} !important;
+            }
           `}</style>
           <table 
             className={`w-full ${fitPageMode ? 'table-fixed max-w-full leading-normal' : 'min-w-max table-auto leading-relaxed'} text-left border-collapse notion-font-scope`}
@@ -8135,14 +8446,14 @@ export function NotionDatabaseTable({
             <thead>
               <tr 
                 className={`border-b select-none transition-colors ${
-                  isNotionLight ? 'border-[#e9e9e8]' : 'border-[#303030]'
+                  isNotionLight ? 'border-[#cbd5e1]' : 'border-[#303030]'
                 }`}
               >
                 {/* 0. Dedicated Action Gutter (+, ::, [ ]) Column Header ala Notion */}
                 <th 
                   className={`sticky top-0 z-20 text-center shadow-2xs border-b border-r select-none ${
-                    isNotionLight ? 'bg-[#fbfbfa] text-[#37352f] border-[#e9e9e8]' : 'bg-[#202020] text-slate-300 border-[#303030]'
-                  } ${fitPageMode ? 'w-14 min-w-[56px] max-w-[56px] px-1 py-2.5' : 'w-16 min-w-[62px] max-w-[62px] px-1.5 py-3'}`}
+                    isNotionLight ? 'bg-[#fbfbfa] text-[#37352f] border-[#cbd5e1]' : 'bg-[#202020] text-slate-300 border-[#303030]'
+                  } ${fitPageMode ? 'w-16 min-w-[64px] max-w-[64px] px-1 py-2.5' : 'w-20 min-w-[76px] max-w-[76px] px-1.5 py-3'}`}
                 >
                   <div className="flex items-center justify-center">
                     <input
@@ -8194,7 +8505,7 @@ export function NotionDatabaseTable({
                       key={colHeader}
                       style={getColStyle(colHeader)}
                       className={`sticky top-0 z-20 shadow-2xs font-semibold hover:opacity-90 transition-opacity group/th relative border-b border-r text-[13px] ${
-                        isNotionLight ? 'bg-[#fbfbfa] text-[#37352f] border-[#e9e9e8]' : 'bg-[#202020] text-slate-200 border-[#303030]'
+                        isNotionLight ? 'bg-[#fbfbfa] text-[#37352f] border-[#cbd5e1]' : 'bg-[#202020] text-slate-200 border-[#303030]'
                       } ${widthClass}`}
                     >
                       <div className={`flex items-center justify-between gap-1.5 ${isNum ? 'justify-center' : ''}`}>
@@ -8321,7 +8632,7 @@ export function NotionDatabaseTable({
                 {/* Add Column Header Button (+) */}
                 <th 
                   className={`sticky top-0 z-20 w-10 text-center px-1.5 py-2.5 relative shadow-2xs border-b border-r ${
-                    isNotionLight ? 'bg-[#fbfbfa] border-[#e9e9e8]' : 'bg-[#202020] border-[#303030]'
+                    isNotionLight ? 'bg-[#fbfbfa] border-[#cbd5e1]' : 'bg-[#202020] border-[#303030]'
                   }`} 
                   ref={addColumnRef}
                 >
@@ -8490,7 +8801,7 @@ export function NotionDatabaseTable({
 
                 <th 
                   className={`sticky top-0 z-20 text-center shadow-2xs border-b text-[13px] ${fitPageMode ? 'w-[5%] px-1.5 py-2.5' : 'w-24 px-3 py-3'} ${
-                    isNotionLight ? 'bg-[#fbfbfa] text-slate-700 font-semibold border-[#e9e9e8]' : 'bg-[#202020] text-slate-300 font-bold border-[#303030]'
+                    isNotionLight ? 'bg-[#fbfbfa] text-slate-700 font-semibold border-[#cbd5e1]' : 'bg-[#202020] text-slate-300 font-bold border-[#303030]'
                   }`}
                 >
                   Actions
@@ -8554,7 +8865,7 @@ export function NotionDatabaseTable({
                           </div>
                           <button
                             type="button"
-                            onClick={handleOpenAddModal}
+                            onClick={() => handleInsertBlankRow(true)}
                             className="mt-2 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-semibold text-xs shadow-md transition-all cursor-pointer active:scale-95"
                           >
                             <Plus className="w-4 h-4" />
@@ -8579,7 +8890,7 @@ export function NotionDatabaseTable({
                         onClick={() => toggleGroup(groupName)}
                         className={`cursor-pointer select-none transition-colors border-b font-medium text-xs ${
                           isNotionLight
-                            ? 'bg-[#fbfbfa] hover:bg-[#f3f3f1] text-slate-800 border-[#e9e9e8]'
+                            ? 'bg-[#fbfbfa] hover:bg-[#f3f3f1] text-slate-800 border-[#cbd5e1]'
                             : 'bg-[#202020] hover:bg-[#282828] text-slate-200 border-[#303030]'
                         }`}
                       >
@@ -8695,13 +9006,12 @@ export function NotionDatabaseTable({
                           if (aPin && !bPin) return -1;
                           if (!aPin && bPin) return 1;
                           if (aPin && bPin) {
-                            const aKey = a.parentRow.id ? String(a.parentRow.id) : (a.parentRow['Jenis kegiatan'] || '').replace(/^↳\s*/, '').trim();
-                            const bKey = b.parentRow.id ? String(b.parentRow.id) : (b.parentRow['Jenis kegiatan'] || '').replace(/^↳\s*/, '').trim();
-                            const aIdx = pinnedRowKeys.indexOf(aKey);
-                            const bIdx = pinnedRowKeys.indexOf(bKey);
+                            const aIdx = getRowPinIndex(a.parentRow);
+                            const bIdx = getRowPinIndex(b.parentRow);
                             if (aIdx !== -1 && bIdx !== -1) return aIdx - bIdx;
                             if (aIdx !== -1) return -1;
                             if (bIdx !== -1) return 1;
+                            return a.parentIndex - b.parentIndex;
                           }
 
                           if (sortColumn) {
@@ -8769,7 +9079,7 @@ export function NotionDatabaseTable({
                             row['Jenis Kegiatan'] || 
                             row['Name'] || 
                             row['= Name'] || 
-                            `Baris ${actualRowIndex + 1}`
+                            ''
                           ).trim();
                           const displayTitle = getDisplayTitle(rawTitle);
                           const topicKey = displayTitle.toLowerCase().trim();
@@ -8784,7 +9094,19 @@ export function NotionDatabaseTable({
                           return (
                             <tr
                               key={isSubItem ? `sub-${actualRowIndex}-${row.id || ''}` : `row-${actualRowIndex}-${row.id || ''}`}
+                              onDragOver={(e) => handleRowDragOver(e, actualRowIndex)}
+                              onDrop={(e) => handleRowDrop(e, actualRowIndex)}
                               className={`transition-all group border-b ${
+                                dragOverRowIndex === actualRowIndex
+                                  ? dropPosition === 'top'
+                                    ? '!border-t-2 !border-t-teal-500 bg-teal-500/10'
+                                    : '!border-b-2 !border-b-teal-500 bg-teal-500/10'
+                                  : ''
+                              } ${
+                                draggedRowIndex === actualRowIndex
+                                  ? 'opacity-40 bg-slate-200/50 dark:bg-slate-800/50'
+                                  : ''
+                              } ${
                                 isSelected 
                                   ? 'bg-teal-500/10 hover:bg-teal-500/15' 
                                   : isDirty 
@@ -8795,7 +9117,7 @@ export function NotionDatabaseTable({
                                       ? 'hover:bg-[#fbfbfa] bg-white'
                                       : 'hover:bg-slate-800/40 bg-transparent'
                               } ${
-                                isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
+                                isNotionLight ? 'border-[#cbd5e1]' : 'border-[#2d2d2d]'
                               }`}
                               style={{ 
                                 borderBottomColor: isSelected 
@@ -8803,19 +9125,34 @@ export function NotionDatabaseTable({
                                   : isDirty 
                                     ? 'rgba(245, 158, 11, 0.4)' 
                                     : isNotionLight
-                                    ? '#e9e9e8'
-                                    : 'var(--border-main, #334155)' 
+                                    ? '#cbd5e1'
+                                    : 'var(--border-main, #3f3f46)' 
                               }}
                             >
                               {/* 0. Dedicated Action Gutter (+, ::, [ ]) Column ala Notion */}
                               <td 
                                 className={`border-r select-none transition-colors ${
-                                  isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
-                                } ${fitPageMode ? 'w-14 min-w-[56px] max-w-[56px] px-0.5 py-1' : 'w-16 min-w-[62px] max-w-[62px] px-1 py-1'}`}
+                                  isNotionLight ? 'border-[#cbd5e1]' : 'border-[#2d2d2d]'
+                                } ${fitPageMode ? 'w-16 min-w-[64px] max-w-[64px] px-0.5 py-1' : 'w-20 min-w-[76px] max-w-[76px] px-1 py-1'}`}
                                 onClick={(e) => e.stopPropagation()}
                               >
-                                <div className="flex items-center justify-center gap-1.5">
-                                  {/* Pin Button: Menggantikan logo drag handle GripVertical */}
+                                <div className="flex items-center justify-center gap-1">
+                                  {/* Drag Handle ala Notion */}
+                                  {!isSubItem ? (
+                                    <div
+                                      draggable
+                                      onDragStart={(e) => handleRowDragStart(e, actualRowIndex)}
+                                      onDragEnd={handleRowDragEnd}
+                                      className="cursor-grab active:cursor-grabbing p-0.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 opacity-40 hover:opacity-100 group-hover:opacity-80 transition-opacity shrink-0"
+                                      title="Geser untuk mengubah urutan baris (Tarik ke atas/bawah)"
+                                    >
+                                      <GripVertical className="w-3.5 h-3.5" />
+                                    </div>
+                                  ) : (
+                                    <div className="w-3.5 h-3.5 shrink-0" />
+                                  )}
+
+                                  {/* Pin Button */}
                                   {!isSubItem ? (
                                     <button
                                       type="button"
@@ -8823,17 +9160,17 @@ export function NotionDatabaseTable({
                                         e.stopPropagation();
                                         handleTogglePinRow(row);
                                       }}
-                                      className={`p-0.5 rounded transition-all cursor-pointer ${
+                                      className={`p-0.5 rounded transition-all cursor-pointer shrink-0 ${
                                         isRowPinned(row)
                                           ? 'text-amber-500 hover:text-amber-600 bg-amber-50 dark:bg-amber-950/50 opacity-100 shadow-2xs'
-                                          : 'text-slate-400 hover:text-amber-500 opacity-0 group-hover:opacity-100 hover:bg-slate-200 dark:hover:bg-slate-700'
+                                          : 'text-slate-400 hover:text-amber-500 opacity-40 hover:opacity-100 group-hover:opacity-80 hover:bg-slate-200 dark:hover:bg-slate-700'
                                       }`}
                                       title={isRowPinned(row) ? 'Lepas Pin Task (Unpin)' : 'Pin Task ke Atas (Maks. 10 task)'}
                                     >
                                       <Pin className={`w-3.5 h-3.5 ${isRowPinned(row) ? 'fill-amber-500 rotate-45 text-amber-500' : ''}`} />
                                     </button>
                                   ) : (
-                                    <div className="w-3.5 h-3.5" />
+                                    <div className="w-3.5 h-3.5 shrink-0" />
                                   )}
 
                                   {/* [ ] Select Checkbox */}
@@ -8842,7 +9179,7 @@ export function NotionDatabaseTable({
                                     checked={isSelected}
                                     onChange={(e) => handleToggleSelectRow(actualRowIndex, e as any)}
                                     className={`w-3.5 h-3.5 rounded cursor-pointer accent-teal-600 transition-opacity ${
-                                      isSelected ? 'opacity-100' : 'opacity-50 sm:opacity-0 group-hover:opacity-100 hover:opacity-100'
+                                      isSelected ? 'opacity-100' : 'opacity-60 hover:opacity-100'
                                     } ${
                                       isNotionLight ? 'border-slate-300' : 'bg-slate-800 border-slate-600'
                                     }`}
@@ -8873,7 +9210,7 @@ export function NotionDatabaseTable({
                                       key={colName} 
                                       style={{ ...getColStyle(colName), color: isDirty ? '#f59e0b' : isNotionLight ? '#64748b' : 'var(--text-muted, #64748b)' }} 
                                       className={`text-center font-mono border-r ${
-                                        isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
+                                        isNotionLight ? 'border-[#cbd5e1]' : 'border-[#2d2d2d]'
                                       } ${
                                         fitPageMode ? 'px-1.5 py-2.5 text-xs' : 'px-3 py-3 text-[13px]'
                                       }`}
@@ -8897,7 +9234,7 @@ export function NotionDatabaseTable({
                                       key={colName} 
                                       style={{ ...getColStyle(colName), fontSize: `${labNoteFontSize}px`, color: isNotionLight ? '#0f172a' : 'var(--text-main, #f8fafc)' }} 
                                       className={`font-medium transition-colors border-r ${
-                                        isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
+                                        isNotionLight ? 'border-[#cbd5e1]' : 'border-[#2d2d2d]'
                                       } ${
                                         fitPageMode ? 'px-2.5 py-2.5 overflow-hidden' : 'px-4 py-3'
                                       } ${!isEditingThis && onToggleExpand ? 'cursor-pointer hover:bg-slate-100/50 dark:hover:bg-slate-800/20' : ''}`}
@@ -9106,7 +9443,7 @@ export function NotionDatabaseTable({
                                                       setSelectedRow(row);
                                                       setModalTab('details');
                                                     }}
-                                                    className={`ml-1 opacity-0 group-hover/cell:opacity-100 px-1.5 py-0.5 rounded text-[9.5px] font-bold border transition-all uppercase tracking-wider cursor-pointer shadow-2xs shrink-0 ${
+                                                    className={`ml-1.5 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9.5px] font-bold border transition-all uppercase tracking-wider cursor-pointer shadow-2xs shrink-0 select-none ${
                                                       isNotionLight
                                                         ? 'bg-white hover:bg-slate-100 border-slate-300 text-slate-700'
                                                         : 'bg-slate-800 hover:bg-slate-700 border-slate-600 text-slate-300'
@@ -9269,25 +9606,23 @@ export function NotionDatabaseTable({
                                                       </button>
                                                     )}
 
-                                                  {/* Open Badge / Button (Only displayed when NO shortcut exists) */}
-                                                  {!hasModuleShortcut && (
-                                                    <button
-                                                      type="button"
-                                                      onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        setSelectedRow(row);
-                                                        setModalTab('details');
-                                                      }}
-                                                      className={`ml-1 opacity-0 group-hover/cell:opacity-100 px-1.5 py-0.5 rounded text-[9.5px] font-bold border transition-all uppercase tracking-wider cursor-pointer shadow-2xs shrink-0 ${
-                                                        isNotionLight
-                                                          ? 'bg-white hover:bg-slate-100 border-slate-300 text-slate-700'
-                                                          : 'bg-slate-800 hover:bg-slate-700 border-slate-600 text-slate-300'
-                                                      }`}
-                                                      title="Buka dokumen / detail halaman"
-                                                    >
-                                                      OPEN
-                                                    </button>
-                                                  )}
+                                                  {/* Open Badge / Button (Selalu tersedia untuk semua baris agar bisa membuka detail & diskusi) */}
+                                                  <button
+                                                    type="button"
+                                                    onClick={(e) => {
+                                                      e.stopPropagation();
+                                                      setSelectedRow(row);
+                                                      setModalTab('details');
+                                                    }}
+                                                    className={`ml-1.5 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9.5px] font-bold border transition-all uppercase tracking-wider cursor-pointer shadow-2xs shrink-0 select-none ${
+                                                      isNotionLight
+                                                        ? 'bg-white hover:bg-slate-100 border-slate-300 text-slate-700'
+                                                        : 'bg-slate-800 hover:bg-slate-700 border-slate-600 text-slate-300'
+                                                    }`}
+                                                    title="Buka dokumen / detail halaman"
+                                                  >
+                                                    OPEN
+                                                  </button>
                                                 </>
                                               );
                                             })()}
@@ -9327,7 +9662,7 @@ export function NotionDatabaseTable({
                                                 });
                                               }}
                                               title="Tautkan baris ini ke Tiket K3/SAP, WO, atau Modul Lain"
-                                              className={`opacity-0 group-hover/cell:opacity-100 p-1 rounded transition-all cursor-pointer ${
+                                              className={`opacity-40 hover:opacity-100 group-hover:opacity-90 p-1 rounded transition-all cursor-pointer ${
                                                 extractRowLinkInfo(row)
                                                   ? 'text-sky-500 hover:bg-sky-50 dark:hover:bg-sky-950/50'
                                                   : 'text-slate-400 hover:text-sky-500 hover:bg-slate-200 dark:hover:bg-slate-700'
@@ -9343,7 +9678,7 @@ export function NotionDatabaseTable({
                                                 setActiveInlineEditor({ rowIndex: actualRowIndex, colName, initialValue: displayTitle || val, multiline: false });
                                               }}
                                               title="Edit judul langsung"
-                                              className="opacity-0 group-hover/cell:opacity-100 p-1 rounded hover:bg-teal-500/15 text-slate-400 hover:text-teal-400 transition-all cursor-pointer"
+                                              className="opacity-40 hover:opacity-100 group-hover:opacity-90 p-1 rounded hover:bg-teal-500/15 text-slate-400 hover:text-teal-400 transition-all cursor-pointer"
                                             >
                                               <Edit2 className="w-3 h-3" />
                                             </button>
@@ -9371,7 +9706,7 @@ export function NotionDatabaseTable({
                                       key={colName} 
                                       style={{ ...getColStyle(colName), color: isNotionLight ? '#475569' : 'var(--text-muted, #94a3b8)' }} 
                                       className={`font-sans border-r ${
-                                        isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
+                                        isNotionLight ? 'border-[#cbd5e1]' : 'border-[#2d2d2d]'
                                       } ${
                                         fitPageMode ? 'px-2 py-2 text-xs overflow-hidden' : 'px-3.5 py-2.5 w-[360px] min-w-[280px] max-w-[450px] overflow-hidden text-[13px]'
                                       }`}
@@ -9430,7 +9765,7 @@ export function NotionDatabaseTable({
                                               setActiveInlineEditor({ rowIndex: actualRowIndex, colName, initialValue: cleanInitial, multiline: true });
                                             }}
                                             title="Edit keterangan langsung"
-                                            className="opacity-0 group-hover/cell:opacity-100 p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-400 hover:text-teal-400 transition-all shrink-0 cursor-pointer"
+                                            className="opacity-40 hover:opacity-100 group-hover:opacity-90 p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-400 hover:text-teal-400 transition-all shrink-0 cursor-pointer"
                                           >
                                             <Edit2 className="w-3 h-3" />
                                           </button>
@@ -9475,7 +9810,7 @@ export function NotionDatabaseTable({
                                       key={colName} 
                                       style={{ ...getColStyle(colName), color: isNotionLight ? '#047857' : '#34d399' }} 
                                       className={`font-sans border-r cursor-pointer ${
-                                        isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
+                                        isNotionLight ? 'border-[#cbd5e1]' : 'border-[#2d2d2d]'
                                       } ${
                                         fitPageMode ? 'px-2 py-2 text-xs truncate' : 'px-3.5 py-2.5 whitespace-nowrap text-[13px]'
                                       }`}
@@ -9570,7 +9905,7 @@ export function NotionDatabaseTable({
                                       key={colName} 
                                       style={getColStyle(colName)} 
                                       className={`font-sans border-r ${
-                                        isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
+                                        isNotionLight ? 'border-[#cbd5e1]' : 'border-[#2d2d2d]'
                                       } ${
                                         fitPageMode ? 'px-2 py-2 text-xs truncate' : 'px-3.5 py-2.5 whitespace-nowrap text-[13px]'
                                       }`}
@@ -9608,7 +9943,7 @@ export function NotionDatabaseTable({
                                       key={colName} 
                                       style={getColStyle(colName)} 
                                       className={`font-sans border-r cursor-pointer ${
-                                        isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
+                                        isNotionLight ? 'border-[#cbd5e1]' : 'border-[#2d2d2d]'
                                       } ${
                                         fitPageMode ? 'px-2 py-2 truncate' : 'px-3.5 py-2.5 whitespace-nowrap'
                                       }`}
@@ -9675,7 +10010,7 @@ export function NotionDatabaseTable({
                                       key={colName} 
                                       style={getColStyle(colName)} 
                                       className={`relative border-r cursor-pointer select-none transition-colors ${
-                                        isNotionLight ? 'border-[#e9e9e8] hover:bg-slate-100/60' : 'border-[#2d2d2d] hover:bg-slate-800/40'
+                                        isNotionLight ? 'border-[#cbd5e1] hover:bg-slate-100/60' : 'border-[#2d2d2d] hover:bg-slate-800/40'
                                       } ${fitPageMode ? 'px-2 py-1.5 overflow-visible' : 'px-3.5 py-2 whitespace-nowrap overflow-visible'}`}
                                       onClick={(e) => {
                                         e.stopPropagation();
@@ -9842,7 +10177,7 @@ export function NotionDatabaseTable({
                                       key={colName} 
                                       style={getColStyle(colName)} 
                                       className={`border-r cursor-pointer ${
-                                        isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
+                                        isNotionLight ? 'border-[#cbd5e1]' : 'border-[#2d2d2d]'
                                       } ${fitPageMode ? 'px-2 py-2 overflow-hidden' : 'px-3.5 py-2.5 whitespace-nowrap'}`}
                                       onDoubleClick={startInlineEdit}
                                       title="Klik untuk memilih opsi prioritas, atau klik 2x (double-click) untuk edit langsung"
@@ -9893,7 +10228,7 @@ export function NotionDatabaseTable({
                                       key={colName} 
                                       style={getColStyle(colName)} 
                                       className={`border-r cursor-pointer ${
-                                        isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
+                                        isNotionLight ? 'border-[#cbd5e1]' : 'border-[#2d2d2d]'
                                       } ${fitPageMode ? 'px-2 py-2 overflow-hidden' : 'px-4 py-2.5 whitespace-nowrap'}`}
                                       onDoubleClick={startInlineEdit}
                                       title="Klik untuk memilih status, atau klik 2x (double-click) untuk edit langsung"
@@ -10023,7 +10358,7 @@ export function NotionDatabaseTable({
                                       key={colName} 
                                       style={{ ...getColStyle(colName), color: isNotionLight ? '#475569' : 'var(--text-muted, #94a3b8)' }} 
                                       className={`font-sans border-r cursor-pointer ${
-                                        isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
+                                        isNotionLight ? 'border-[#cbd5e1]' : 'border-[#2d2d2d]'
                                       } ${
                                         fitPageMode ? 'px-2 py-2 text-xs truncate' : 'px-3.5 py-2.5 whitespace-nowrap text-[13px]'
                                       }`}
@@ -10055,7 +10390,7 @@ export function NotionDatabaseTable({
                                   if (isSubItem) {
                                     return (
                                       <td key={colName} style={getColStyle(colName)} className={`text-center font-mono border-r ${
-                                        isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
+                                        isNotionLight ? 'border-[#cbd5e1]' : 'border-[#2d2d2d]'
                                       } ${fitPageMode ? 'px-1.5 py-2 text-xs' : 'px-3.5 py-2 text-[13px]'}`}>
                                         <span className="text-slate-400 font-mono">-</span>
                                       </td>
@@ -10064,7 +10399,7 @@ export function NotionDatabaseTable({
 
                                   return (
                                     <td key={colName} style={getColStyle(colName)} className={`border-r ${
-                                      isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
+                                      isNotionLight ? 'border-[#cbd5e1]' : 'border-[#2d2d2d]'
                                     } ${fitPageMode ? 'px-2 py-2 truncate' : 'px-3.5 py-2.5 whitespace-nowrap'}`}>
                                       {val && val !== '-' ? (
                                         <span 
@@ -10091,7 +10426,7 @@ export function NotionDatabaseTable({
                                       key={colName} 
                                       style={getColStyle(colName)} 
                                       className={`border-r cursor-pointer ${
-                                        isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
+                                        isNotionLight ? 'border-[#cbd5e1]' : 'border-[#2d2d2d]'
                                       } ${fitPageMode ? 'px-2 py-2 truncate' : 'px-3.5 py-2.5 whitespace-nowrap'}`}
                                       onDoubleClick={startInlineEdit}
                                       title="Klik untuk memilih aktivitas, atau klik 2x (double-click) untuk edit langsung"
@@ -10132,7 +10467,7 @@ export function NotionDatabaseTable({
                                       key={colName} 
                                       style={getColStyle(colName)} 
                                       className={`border-r cursor-pointer ${
-                                        isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
+                                        isNotionLight ? 'border-[#cbd5e1]' : 'border-[#2d2d2d]'
                                       } ${fitPageMode ? 'px-2 py-2 truncate' : 'px-3.5 py-2.5 whitespace-nowrap'}`}
                                       onDoubleClick={startInlineEdit}
                                       title="Klik untuk memilih periode, atau klik 2x (double-click) untuk edit langsung"
@@ -10167,7 +10502,7 @@ export function NotionDatabaseTable({
                                   if (isSubItem) {
                                     return (
                                       <td key={colName} style={getColStyle(colName)} className={`text-center font-mono border-r ${
-                                        isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
+                                        isNotionLight ? 'border-[#cbd5e1]' : 'border-[#2d2d2d]'
                                       } ${fitPageMode ? 'px-1.5 py-2 text-xs' : 'px-3.5 py-2 text-[13px]'}`}>
                                         <span className="text-slate-400 font-mono">-</span>
                                       </td>
@@ -10176,7 +10511,7 @@ export function NotionDatabaseTable({
 
                                   return (
                                     <td key={colName} style={{ ...getColStyle(colName), color: isNotionLight ? '#334155' : 'var(--text-main, #cbd5e1)' }} className={`whitespace-nowrap border-r ${
-                                      isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
+                                      isNotionLight ? 'border-[#cbd5e1]' : 'border-[#2d2d2d]'
                                     } ${
                                       fitPageMode ? 'px-2 py-2 text-xs' : 'px-3.5 py-2.5 text-[13px]'
                                     }`}>
@@ -10190,7 +10525,7 @@ export function NotionDatabaseTable({
                                   const asalVal = val || row['Asal Halaman'] || row._originPostTitle || '';
                                   return (
                                     <td key={colName} style={getColStyle(colName)} className={`border-r ${
-                                      isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
+                                      isNotionLight ? 'border-[#cbd5e1]' : 'border-[#2d2d2d]'
                                     } ${fitPageMode ? 'px-2 py-2 text-xs truncate' : 'px-3.5 py-2.5 whitespace-nowrap text-[13px]'}`}>
                                       {asalVal && asalVal !== '-' ? (
                                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200/60 dark:border-slate-700/60">
@@ -10217,7 +10552,7 @@ export function NotionDatabaseTable({
                                     key={colName} 
                                     style={{ ...getColStyle(colName), color: isNotionLight ? '#334155' : 'var(--text-main, #cbd5e1)' }} 
                                     className={`whitespace-nowrap border-r cursor-pointer ${
-                                      isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
+                                      isNotionLight ? 'border-[#cbd5e1]' : 'border-[#2d2d2d]'
                                     } ${
                                       fitPageMode ? 'px-2 py-2 text-xs' : 'px-3.5 py-2.5 text-[13px]'
                                     }`}
@@ -10253,7 +10588,7 @@ export function NotionDatabaseTable({
 
                               {/* Spacer cell for Add Column (+) header */}
                               <td className={`w-10 px-1 py-2 text-center border-r ${
-                                isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
+                                isNotionLight ? 'border-[#cbd5e1]' : 'border-[#2d2d2d]'
                               }`} />
 
                                {/* Row Action Buttons - Menu Titik Tiga */}
@@ -10294,6 +10629,22 @@ export function NotionDatabaseTable({
                                        }`}
                                        onClick={(e) => e.stopPropagation()}
                                      >
+                                       {/* Buka Halaman / Detail (OPEN) Shortcut in Action Menu */}
+                                       <button
+                                         type="button"
+                                         onClick={(e) => {
+                                           e.stopPropagation();
+                                           setSelectedRow(row);
+                                           setModalTab('details');
+                                           setActiveActionMenuRowIndex(null);
+                                         }}
+                                         className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs rounded-lg hover:bg-teal-50 dark:hover:bg-teal-950/40 text-teal-700 dark:text-teal-300 font-bold transition-colors cursor-pointer border-b border-slate-100 dark:border-slate-800 mb-0.5"
+                                         title="Buka dokumen / detail halaman (OPEN)"
+                                       >
+                                         <FileText className="w-3.5 h-3.5 shrink-0 text-teal-600 dark:text-teal-400" />
+                                         <span>Buka Halaman (OPEN)</span>
+                                       </button>
+
                                        {!isSubItem && (
                                          <button
                                            type="button"
@@ -10474,7 +10825,7 @@ export function NotionDatabaseTable({
                                         key={`toggle-completed-${parentKey}`}
                                         className={`border-b text-xs transition-colors cursor-pointer select-none ${
                                           isNotionLight
-                                            ? 'hover:bg-slate-100/80 bg-slate-50/60 text-slate-500 border-[#e9e9e8]'
+                                            ? 'hover:bg-slate-100/80 bg-slate-50/60 text-slate-500 border-[#cbd5e1]'
                                             : 'hover:bg-slate-800/60 bg-slate-900/40 text-slate-400 border-[#2d2d2d]'
                                         }`}
                                         onClick={(e) => {
@@ -10487,9 +10838,9 @@ export function NotionDatabaseTable({
                                         title={isCompletedCollapsed ? "Klik untuk melihat subtask yang sudah selesai" : "Klik untuk meringkas subtask selesai"}
                                       >
                                         {(isSelectionModeActive || selectedRowIndices.size > 0) && (
-                                          <td className={`px-2 py-1 text-center border-r ${isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'}`} />
+                                          <td className={`px-2 py-1 text-center border-r ${isNotionLight ? 'border-[#cbd5e1]' : 'border-[#2d2d2d]'}`} />
                                         )}
-                                        <td className={`px-3 py-1 text-center font-mono text-slate-400 text-xs border-r ${isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'}`} />
+                                        <td className={`px-3 py-1 text-center font-mono text-slate-400 text-xs border-r ${isNotionLight ? 'border-[#cbd5e1]' : 'border-[#2d2d2d]'}`} />
                                         <td colSpan={displayHeaders.length + 1} className="px-6 py-1.5">
                                           <div className="flex items-center gap-2 text-[11px] font-medium">
                                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 font-semibold shadow-2xs">
@@ -10543,14 +10894,14 @@ export function NotionDatabaseTable({
                                   key={`new-sub-row-${parentKey}`}
                                   className={`transition-colors border-b select-none ${
                                     isNotionLight
-                                      ? 'hover:bg-[#fbfbfa]/80 bg-white/40 border-[#e9e9e8]'
+                                      ? 'hover:bg-[#fbfbfa]/80 bg-white/40 border-[#cbd5e1]'
                                       : 'hover:bg-slate-800/30 bg-transparent border-[#2d2d2d]'
                                   }`}
                                 >
                                   {(isSelectionModeActive || selectedRowIndices.size > 0) && (
-                                    <td className={`px-2 py-1 text-center border-r ${isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'}`} />
+                                    <td className={`px-2 py-1 text-center border-r ${isNotionLight ? 'border-[#cbd5e1]' : 'border-[#2d2d2d]'}`} />
                                   )}
-                                  <td className={`px-3 py-1 text-center font-mono text-slate-400 text-xs border-r ${isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'}`} />
+                                  <td className={`px-3 py-1 text-center font-mono text-slate-400 text-xs border-r ${isNotionLight ? 'border-[#cbd5e1]' : 'border-[#2d2d2d]'}`} />
                                   <td colSpan={displayHeaders.length + 1} className="px-4 py-2">
                                     {creatingSubItemForParent === parentIndex ? (
                                       <div className="flex items-center gap-2 pl-6" onClick={(e) => e.stopPropagation()}>
@@ -10628,19 +10979,19 @@ export function NotionDatabaseTable({
           {/* Bottom Table Add Row Shortcut & Select All (Natural at end of table) */}
           <div 
             className={`p-3 border-t flex items-center justify-between transition-colors ${
-              isNotionLight ? 'bg-[#fafafa] border-[#e9e9e8] text-slate-700' : 'bg-[#181818] border-[#2d2d2d] text-slate-400'
+              isNotionLight ? 'bg-[#fafafa] border-[#cbd5e1] text-slate-700' : 'bg-[#181818] border-[#2d2d2d] text-slate-400'
             }`}
           >
             <div className="flex items-center gap-3">
               <button
                 type="button"
-                onClick={handleOpenAddModal}
+                onClick={() => handleInsertBlankRow(true)}
                 className={`text-xs font-semibold flex items-center gap-1.5 py-1 px-2.5 rounded-lg transition-all cursor-pointer ${
                   isNotionLight
                     ? 'text-teal-700 bg-teal-50 hover:bg-teal-100 border border-teal-200'
                     : 'text-teal-400 bg-teal-950/40 hover:bg-teal-900/60 border border-teal-800/60'
                 }`}
-                title="Tambah Baris Kegiatan Baru"
+                title="Tambah Baris Kegiatan Baru (Di Paling Bawah)"
               >
                 <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
                 <span>+ Tambah Baris Kegiatan</span>

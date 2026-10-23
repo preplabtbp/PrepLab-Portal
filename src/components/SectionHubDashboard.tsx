@@ -213,9 +213,15 @@ export function SectionHubDashboard({
     return '#0f172a';
   };
 
-  const [displayedTitle, setDisplayedTitle] = useState<string>(post?.title || '');
+  const [displayedTitle, setDisplayedTitle] = useState<string>(() => {
+    const raw = post?.title || '';
+    return translateDisplayText(raw.toUpperCase().trim()) || raw;
+  });
   const [isEditingTitle, setIsEditingTitle] = useState<boolean>(false);
-  const [titleInput, setTitleInput] = useState<string>(post?.title || '');
+  const [titleInput, setTitleInput] = useState<string>(() => {
+    const raw = post?.title || '';
+    return translateDisplayText(raw.toUpperCase().trim()) || raw;
+  });
   const [isSavingTitle, setIsSavingTitle] = useState<boolean>(false);
   const [titleColor, setTitleColor] = useState<string>(getInitialTitleColor);
   const [editingTitleColor, setEditingTitleColor] = useState<string>(getInitialTitleColor);
@@ -223,15 +229,19 @@ export function SectionHubDashboard({
 
   // Sync title & color when post changes
   React.useEffect(() => {
-    setDisplayedTitle(post?.title || '');
-    setTitleInput(post?.title || '');
+    const raw = post?.title || '';
+    const translated = translateDisplayText(raw.toUpperCase().trim()) || raw;
+    setDisplayedTitle(translated);
+    setTitleInput(translated);
     const col = getInitialTitleColor();
     setTitleColor(col);
     setEditingTitleColor(col);
   }, [post?.title, post?.tags]);
 
   const handleStartEditTitle = () => {
-    setTitleInput(displayedTitle || post?.title || '');
+    const raw = displayedTitle || post?.title || sectionTitle || '';
+    const translated = translateDisplayText(raw.toUpperCase().trim()) || raw;
+    setTitleInput(translated);
     setEditingTitleColor(titleColor);
     setIsEditingTitle(true);
     setShowColorPicker(false);
@@ -944,7 +954,58 @@ export function SectionHubDashboard({
     setRulesItems(loadOrderedHubItems(sectionTitle, 'rules', config.rulesItems || []));
     setIsReorderingInfo(false);
     setIsReorderingRules(false);
+    setInlineEditing(null);
   }, [sectionTitle]);
+
+  // Inline rename state on double-click
+  const [inlineEditing, setInlineEditing] = useState<{
+    type: 'info' | 'rules';
+    index: number;
+    value: string;
+  } | null>(null);
+
+  const handleStartInlineEdit = (type: 'info' | 'rules', index: number, currentTitle: string, e?: React.MouseEvent) => {
+    if (e) {
+      e.stopPropagation();
+    }
+    setInlineEditing({
+      type,
+      index,
+      value: currentTitle
+    });
+  };
+
+  const handleSaveInlineEdit = () => {
+    if (!inlineEditing) return;
+    const newTitle = inlineEditing.value.trim();
+    if (!newTitle) {
+      toast.error('Judul menu tidak boleh kosong');
+      setInlineEditing(null);
+      return;
+    }
+
+    const currentList = inlineEditing.type === 'info' ? [...infoItems] : [...rulesItems];
+    if (inlineEditing.index >= 0 && inlineEditing.index < currentList.length) {
+      const oldTitle = currentList[inlineEditing.index].title;
+      if (oldTitle !== newTitle) {
+        const prevKeywords = currentList[inlineEditing.index].searchKeywords || [];
+        currentList[inlineEditing.index] = {
+          ...currentList[inlineEditing.index],
+          title: newTitle,
+          searchKeywords: Array.from(new Set([newTitle, ...prevKeywords]))
+        };
+        if (inlineEditing.type === 'info') {
+          setInfoItems(currentList);
+          saveOrderedHubItems(sectionTitle, 'info', currentList);
+        } else {
+          setRulesItems(currentList);
+          saveOrderedHubItems(sectionTitle, 'rules', currentList);
+        }
+        toast.success(`Berhasil mengubah nama menjadi "${newTitle}"`);
+      }
+    }
+    setInlineEditing(null);
+  };
 
   const handleDragStartInfo = (idx: number, e: React.DragEvent) => {
     setDraggedInfoIdx(idx);
@@ -1044,12 +1105,13 @@ export function SectionHubDashboard({
       return;
     }
     const currentList = editingModal.type === 'info' ? [...infoItems] : [...rulesItems];
+    const prevKeywords = editingModal.index !== null ? (currentList[editingModal.index]?.searchKeywords || []) : [];
     const newItem: HubItem = {
       title: editingModal.title.trim(),
       icon: editingModal.icon.trim() || '📘',
       linkUrl: editingModal.linkUrl.trim() || undefined,
       isLogbook: editingModal.isLogbook || undefined,
-      searchKeywords: [editingModal.title.trim()]
+      searchKeywords: Array.from(new Set([editingModal.title.trim(), ...prevKeywords]))
     };
 
     if (editingModal.index === null) {
@@ -1450,7 +1512,8 @@ export function SectionHubDashboard({
                   e.preventDefault();
                   setIsEditingTitle(false);
                   setShowColorPicker(false);
-                  setTitleInput(displayedTitle);
+                  const rawCancel = displayedTitle || post?.title || sectionTitle || '';
+                  setTitleInput(translateDisplayText(rawCancel.toUpperCase().trim()) || rawCancel);
                   setEditingTitleColor(titleColor);
                 }}
                 disabled={isSavingTitle}
@@ -1585,6 +1648,7 @@ export function SectionHubDashboard({
                         onDragOver={(e) => handleDragOverInfo(idx, e)}
                         onDrop={(e) => handleDropInfo(idx, e)}
                         onDragEnd={handleDragEndInfo}
+                        onDoubleClick={(e) => handleStartInlineEdit('info', idx, item.title, e)}
                         className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl border transition-all select-none ${
                           draggedInfoIdx === idx
                             ? 'opacity-40 border-dashed border-blue-400 bg-blue-50/50'
@@ -1601,9 +1665,49 @@ export function SectionHubDashboard({
                             {idx + 1}
                           </span>
                           <span className="text-base shrink-0">{item.icon || '📘'}</span>
-                          <span className="text-sm font-medium text-slate-800 truncate">
-                            {translateDisplayText(item.title)}
-                          </span>
+                          {inlineEditing?.type === 'info' && inlineEditing?.index === idx ? (
+                            <div className="flex items-center gap-1.5 flex-1 min-w-0" onClick={(e) => e.stopPropagation()}>
+                              <input
+                                type="text"
+                                autoFocus
+                                value={inlineEditing.value}
+                                onChange={(e) => setInlineEditing({ ...inlineEditing, value: e.target.value })}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') handleSaveInlineEdit();
+                                  if (e.key === 'Escape') setInlineEditing(null);
+                                }}
+                                onBlur={handleSaveInlineEdit}
+                                className="px-2 py-1 text-sm font-semibold rounded-lg border-2 border-blue-500 bg-white text-slate-800 shadow-xs outline-none w-full max-w-xs ring-2 ring-blue-100"
+                                placeholder="Ketik nama baru lalu tekan Enter..."
+                              />
+                              <button
+                                type="button"
+                                onMouseDown={(e) => e.preventDefault()}
+                                onClick={handleSaveInlineEdit}
+                                className="p-1 rounded-md bg-emerald-600 text-white hover:bg-emerald-700 transition-colors shadow-2xs cursor-pointer shrink-0"
+                                title="Simpan (Enter)"
+                              >
+                                <Check className="w-3.5 h-3.5 stroke-[3]" />
+                              </button>
+                              <button
+                                type="button"
+                                onMouseDown={(e) => e.preventDefault()}
+                                onClick={() => setInlineEditing(null)}
+                                className="p-1 rounded-md bg-slate-200 text-slate-700 hover:bg-slate-300 transition-colors shadow-2xs cursor-pointer shrink-0"
+                                title="Batal (Esc)"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          ) : (
+                            <span 
+                              onDoubleClick={(e) => handleStartInlineEdit('info', idx, item.title, e)}
+                              className="text-sm font-medium text-slate-800 truncate cursor-text hover:text-blue-700 hover:underline underline-offset-2 transition-colors select-none"
+                              title="Klik 2x (double-click) untuk rename langsung"
+                            >
+                              {translateDisplayText(item.title)}
+                            </span>
+                          )}
                           {item.isLogbook && (
                             <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-300">
                               LOGBOOK
@@ -1777,6 +1881,7 @@ export function SectionHubDashboard({
                         onDragOver={(e) => handleDragOverRules(idx, e)}
                         onDrop={(e) => handleDropRules(idx, e)}
                         onDragEnd={handleDragEndRules}
+                        onDoubleClick={(e) => handleStartInlineEdit('rules', idx, item.title, e)}
                         className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl border transition-all select-none ${
                           draggedRulesIdx === idx
                             ? 'opacity-40 border-dashed border-amber-400 bg-amber-50/50'
@@ -1793,9 +1898,49 @@ export function SectionHubDashboard({
                             {idx + 1}
                           </span>
                           <span className="text-base shrink-0">{item.icon || '📋'}</span>
-                          <span className="text-sm font-medium text-slate-800 truncate">
-                            {translateDisplayText(item.title)}
-                          </span>
+                          {inlineEditing?.type === 'rules' && inlineEditing?.index === idx ? (
+                            <div className="flex items-center gap-1.5 flex-1 min-w-0" onClick={(e) => e.stopPropagation()}>
+                              <input
+                                type="text"
+                                autoFocus
+                                value={inlineEditing.value}
+                                onChange={(e) => setInlineEditing({ ...inlineEditing, value: e.target.value })}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') handleSaveInlineEdit();
+                                  if (e.key === 'Escape') setInlineEditing(null);
+                                }}
+                                onBlur={handleSaveInlineEdit}
+                                className="px-2 py-1 text-sm font-semibold rounded-lg border-2 border-amber-500 bg-white text-slate-800 shadow-xs outline-none w-full max-w-xs ring-2 ring-amber-100"
+                                placeholder="Ketik nama baru lalu tekan Enter..."
+                              />
+                              <button
+                                type="button"
+                                onMouseDown={(e) => e.preventDefault()}
+                                onClick={handleSaveInlineEdit}
+                                className="p-1 rounded-md bg-emerald-600 text-white hover:bg-emerald-700 transition-colors shadow-2xs cursor-pointer shrink-0"
+                                title="Simpan (Enter)"
+                              >
+                                <Check className="w-3.5 h-3.5 stroke-[3]" />
+                              </button>
+                              <button
+                                type="button"
+                                onMouseDown={(e) => e.preventDefault()}
+                                onClick={() => setInlineEditing(null)}
+                                className="p-1 rounded-md bg-slate-200 text-slate-700 hover:bg-slate-300 transition-colors shadow-2xs cursor-pointer shrink-0"
+                                title="Batal (Esc)"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          ) : (
+                            <span 
+                              onDoubleClick={(e) => handleStartInlineEdit('rules', idx, item.title, e)}
+                              className="text-sm font-medium text-slate-800 truncate cursor-text hover:text-amber-700 hover:underline underline-offset-2 transition-colors select-none"
+                              title="Klik 2x (double-click) untuk rename langsung"
+                            >
+                              {translateDisplayText(item.title)}
+                            </span>
+                          )}
                           {item.linkUrl && (
                             <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 flex items-center gap-0.5">
                               <ExternalLink className="w-2.5 h-2.5" /> Link
@@ -1936,6 +2081,7 @@ export function SectionHubDashboard({
                       onDragOver={(e) => handleDragOverInfo(idx, e)}
                       onDrop={(e) => handleDropInfo(idx, e)}
                       onDragEnd={handleDragEndInfo}
+                      onDoubleClick={(e) => handleStartInlineEdit('info', idx, item.title, e)}
                       className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border transition-all select-none ${
                         draggedInfoIdx === idx
                           ? 'opacity-40 border-dashed border-blue-400 bg-blue-50/50'
@@ -1954,9 +2100,49 @@ export function SectionHubDashboard({
                         <span className="text-lg shrink-0">{item.icon || '📘'}</span>
                         <div className="truncate flex-1">
                           <div className="flex items-center gap-2">
-                            <span className="text-sm font-semibold text-slate-800 truncate">
-                              {translateDisplayText(item.title)}
-                            </span>
+                            {inlineEditing?.type === 'info' && inlineEditing?.index === idx ? (
+                              <div className="flex items-center gap-1.5 flex-1 min-w-0" onClick={(e) => e.stopPropagation()}>
+                                <input
+                                  type="text"
+                                  autoFocus
+                                  value={inlineEditing.value}
+                                  onChange={(e) => setInlineEditing({ ...inlineEditing, value: e.target.value })}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') handleSaveInlineEdit();
+                                    if (e.key === 'Escape') setInlineEditing(null);
+                                  }}
+                                  onBlur={handleSaveInlineEdit}
+                                  className="px-2.5 py-1 text-sm font-semibold rounded-lg border-2 border-blue-500 bg-white text-slate-800 shadow-xs outline-none w-full max-w-sm ring-2 ring-blue-100"
+                                  placeholder="Ketik nama baru lalu tekan Enter..."
+                                />
+                                <button
+                                  type="button"
+                                  onMouseDown={(e) => e.preventDefault()}
+                                  onClick={handleSaveInlineEdit}
+                                  className="p-1 rounded-md bg-emerald-600 text-white hover:bg-emerald-700 transition-colors shadow-2xs cursor-pointer shrink-0"
+                                  title="Simpan (Enter)"
+                                >
+                                  <Check className="w-3.5 h-3.5 stroke-[3]" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onMouseDown={(e) => e.preventDefault()}
+                                  onClick={() => setInlineEditing(null)}
+                                  className="p-1 rounded-md bg-slate-200 text-slate-700 hover:bg-slate-300 transition-colors shadow-2xs cursor-pointer shrink-0"
+                                  title="Batal (Esc)"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            ) : (
+                              <span 
+                                onDoubleClick={(e) => handleStartInlineEdit('info', idx, item.title, e)}
+                                className="text-sm font-semibold text-slate-800 truncate cursor-text hover:text-blue-700 hover:underline underline-offset-2 transition-colors select-none"
+                                title="Klik 2x (double-click) untuk rename langsung"
+                              >
+                                {translateDisplayText(item.title)}
+                              </span>
+                            )}
                             {item.isLogbook && (
                               <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
                                 LOGBOOK
