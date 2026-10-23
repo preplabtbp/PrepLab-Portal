@@ -1122,6 +1122,8 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
       {/* 3. PRINTABLE OFFICIAL DOCUMENT (FIT EXACTLY 1 A4 LANDSCAPE)   */}
       {/* ------------------------------------------------------------- */}
       {(() => {
+        const TBP_LOGO_URI = "data:image/png;base64,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";
+
         // Helper function to format numbers with comma as decimal separator
         const formatIndoNum = (val: string | number | undefined | null, decimals: number = 2) => {
           if (val === undefined || val === null || val === '' || val === '-') return '-';
@@ -1153,7 +1155,7 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
           return `${dmy} ${t}`.trim();
         };
 
-        // All 14 elements matching the example template
+        // 14 standard elements in exact order of the reference example
         const targetElements: Array<{ key: string; label: string; is3Dec: boolean; field?: keyof StandardRowInput }> = [
           { key: 'Ni', label: 'Ni', is3Dec: true, field: 'ni' },
           { key: 'Co', label: 'Co', is3Dec: true, field: 'co' },
@@ -1213,26 +1215,67 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
           return ((actual - expected) / expected) * 100;
         };
 
+        // Non-blank CRM standards list for comparison section
+        const crmStandardsList = rows.filter(r => {
+          const codeLower = (r.standardCode || '').toLowerCase();
+          const labelLower = (r.sampleLabel || '').toLowerCase();
+          return !codeLower.includes('blank') && !labelLower.includes('blank');
+        });
+
+        // Dynamic compact styles if many standards (e.g. 8+ rows)
+        const isDense = crmStandardsList.length >= 7;
+        const mainRowPad = isDense ? '1.5px 1px' : '2px 1px';
+        const fontSizeMain = isDense ? '7pt' : '7.5pt';
+        const compMarginBottom = isDense ? '4px' : '8px';
+        const signBoxHeight = isDense ? '48px' : '58px';
+
         const renderOfficialContent = () => (
-          <div className="xrf-official-doc-root" style={{ width: '100%', maxWidth: '100%', margin: '0 auto', fontFamily: 'Arial, Helvetica, sans-serif', color: '#000000', backgroundColor: '#ffffff', boxSizing: 'border-box' }}>
+          <div
+            className="xrf-official-doc-root"
+            style={{
+              width: '100%',
+              maxWidth: '100%',
+              margin: '0 auto',
+              fontFamily: 'Arial, Helvetica, sans-serif',
+              color: '#000000',
+              backgroundColor: '#ffffff',
+              boxSizing: 'border-box'
+            }}
+          >
             {/* 1. Header with TBP Logo and Centered Document Title */}
-            <div style={{ position: 'relative', width: '100%', marginBottom: '14px', minHeight: '44px', display: 'flex', alignItems: 'center' }}>
-              <div style={{ position: 'absolute', left: 0, top: '50%', transform: 'translateY(-50%)' }}>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                width: '100%',
+                marginBottom: isDense ? '10px' : '14px',
+                minHeight: '38px'
+              }}
+            >
+              <div style={{ width: '140px', flexShrink: 0 }}>
                 <img
-                  src="/tbp-header-logo-opt.png"
-                  alt="TBP"
-                  style={{ height: '38px', width: 'auto', objectFit: 'contain' }}
-                  onError={(e) => {
-                    // Fallback text if logo fails to load
-                    (e.currentTarget as HTMLElement).style.display = 'none';
-                  }}
+                  src={TBP_LOGO_URI}
+                  alt="TBP Logo"
+                  style={{ height: isDense ? '32px' : '36px', width: 'auto', objectFit: 'contain', display: 'block' }}
                 />
               </div>
-              <div style={{ width: '100%', textAlign: 'center' }}>
-                <h1 style={{ fontSize: '15pt', fontWeight: 'bold', textTransform: 'uppercase', margin: 0, letterSpacing: '0.5px', color: '#000000' }}>
+              <div style={{ flex: 1, textAlign: 'center' }}>
+                <h1
+                  style={{
+                    fontSize: isDense ? '13pt' : '14pt',
+                    fontWeight: 'bold',
+                    textTransform: 'uppercase',
+                    margin: 0,
+                    letterSpacing: '0.5px',
+                    color: '#000000',
+                    fontFamily: 'Arial, sans-serif'
+                  }}
+                >
                   DAILY VERIFIKASI SAMPLE STANDARD
                 </h1>
               </div>
+              <div style={{ width: '140px', flexShrink: 0 }} />
             </div>
 
             {/* 2. Main Daily Results Table */}
@@ -1242,14 +1285,14 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
                 borderCollapse: 'collapse',
                 border: '1.5px solid #000000',
                 tableLayout: 'fixed',
-                marginBottom: '16px'
+                marginBottom: isDense ? '10px' : '14px'
               }}
             >
               <colgroup>
-                <col style={{ width: '3.2%' }} />
+                <col style={{ width: '3%' }} />
                 <col style={{ width: '4.8%' }} />
                 <col style={{ width: '10.5%' }} />
-                <col style={{ width: '18.5%' }} />
+                <col style={{ width: '18.7%' }} />
                 {targetElements.map(el => (
                   <col key={`col-${el.key}`} style={{ width: `${63 / targetElements.length}%` }} />
                 ))}
@@ -1257,20 +1300,20 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
               <thead>
                 {/* Header Row 1 */}
                 <tr style={{ backgroundColor: '#a6a6a6', color: '#000000' }}>
-                  <th rowSpan={2} style={{ border: '1px solid #000000', padding: '3px 1px', fontSize: '7.5pt', fontWeight: 'bold', textAlign: 'center' }}>
+                  <th rowSpan={2} style={{ border: '1px solid #000000', padding: '2px 1px', fontSize: fontSizeMain, fontWeight: 'bold', textAlign: 'center' }}>
                     NO.
                   </th>
-                  <th rowSpan={2} style={{ border: '1px solid #000000', padding: '3px 1px', fontSize: '7.5pt', fontWeight: 'bold', textAlign: 'center' }}>
+                  <th rowSpan={2} style={{ border: '1px solid #000000', padding: '2px 1px', fontSize: fontSizeMain, fontWeight: 'bold', textAlign: 'center' }}>
                     XRF
                   </th>
-                  <th rowSpan={2} style={{ border: '1px solid #000000', padding: '3px 2px', fontSize: '7.5pt', fontWeight: 'bold', textAlign: 'center' }}>
+                  <th rowSpan={2} style={{ border: '1px solid #000000', padding: '2px 1px', fontSize: fontSizeMain, fontWeight: 'bold', textAlign: 'center' }}>
                     Date Of Analyzed
                   </th>
-                  <th rowSpan={2} style={{ border: '1px solid #000000', padding: '3px 4px', fontSize: '7.5pt', fontWeight: 'bold', textAlign: 'center' }}>
+                  <th rowSpan={2} style={{ border: '1px solid #000000', padding: '2px 4px', fontSize: fontSizeMain, fontWeight: 'bold', textAlign: 'center' }}>
                     Standard Sample Code
                   </th>
                   {targetElements.map(el => (
-                    <th key={`th1-${el.key}`} style={{ border: '1px solid #000000', padding: '2px 1px', fontSize: '7pt', fontWeight: 'bold', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                    <th key={`th1-${el.key}`} style={{ border: '1px solid #000000', padding: '2px 1px', fontSize: isDense ? '6.5pt' : '7pt', fontWeight: 'bold', textAlign: 'center', whiteSpace: 'nowrap' }}>
                       {el.label}
                     </th>
                   ))}
@@ -1278,7 +1321,7 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
                 {/* Header Row 2: Percentage Units */}
                 <tr style={{ backgroundColor: '#a6a6a6', color: '#000000' }}>
                   {targetElements.map(el => (
-                    <th key={`th2-${el.key}`} style={{ border: '1px solid #000000', padding: '2px 1px', fontSize: '7pt', fontWeight: 'bold', textAlign: 'center' }}>
+                    <th key={`th2-${el.key}`} style={{ border: '1px solid #000000', padding: '1px', fontSize: isDense ? '6.5pt' : '7pt', fontWeight: 'bold', textAlign: 'center' }}>
                       %
                     </th>
                   ))}
@@ -1289,9 +1332,9 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
                   const isFirstRow = idx === 0;
 
                   return (
-                    <tr key={`print-main-row-${idx}`} style={{ height: '22px' }}>
+                    <tr key={`print-main-row-${idx}`}>
                       {/* Column 1: NO. */}
-                      <td style={{ border: '1px solid #000000', textAlign: 'center', fontSize: '7.5pt', padding: '2px 1px' }}>
+                      <td style={{ border: '1px solid #000000', textAlign: 'center', fontSize: fontSizeMain, padding: mainRowPad }}>
                         {idx + 1}
                       </td>
 
@@ -1304,7 +1347,7 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
                             backgroundColor: '#ffffff',
                             textAlign: 'center',
                             verticalAlign: 'middle',
-                            padding: '4px 1px'
+                            padding: '2px 1px'
                           }}
                         >
                           <div
@@ -1313,17 +1356,17 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
                               transform: 'rotate(180deg)',
                               margin: 'auto',
                               fontWeight: 'bold',
-                              fontSize: '7pt',
+                              fontSize: isDense ? '6.5pt' : '7pt',
                               letterSpacing: '0.4px',
                               whiteSpace: 'nowrap',
-                              lineHeight: 1.25,
+                              lineHeight: 1.2,
                               color: '#000000'
                             }}
                           >
                             <span style={{ display: 'inline-block', marginBottom: '2px' }}>
-                              {selectedInstrument || 'EPSILON H'}
+                              {selectedInstrument ? selectedInstrument.replace('_', ' ') : 'EPSILON H'}
                             </span>
-                            <span style={{ display: 'inline-block', fontSize: '6.5pt', opacity: 0.9 }}>
+                            <span style={{ display: 'inline-block', fontSize: isDense ? '6pt' : '6.5pt', opacity: 0.9 }}>
                               {selectedMatrix || 'LIMONITE - MYLAR (2) 2026'}
                             </span>
                           </div>
@@ -1331,19 +1374,18 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
                       )}
 
                       {/* Column 3: Date Of Analyzed */}
-                      <td style={{ border: '1px solid #000000', textAlign: 'center', fontSize: '7pt', padding: '2px 2px', whiteSpace: 'nowrap' }}>
+                      <td style={{ border: '1px solid #000000', textAlign: 'center', fontSize: isDense ? '6.5pt' : '7pt', padding: '1px', whiteSpace: 'nowrap' }}>
                         {formatDateOfAnalyzed(verificationDate, r.analyzedAt, idx)}
                       </td>
 
                       {/* Column 4: Standard Sample Code */}
-                      <td style={{ border: '1px solid #000000', textAlign: 'left', fontSize: '7.5pt', padding: '2px 6px', fontWeight: 'bold', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <td style={{ border: '1px solid #000000', textAlign: 'left', fontSize: fontSizeMain, padding: '1px 6px', fontWeight: 'bold', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {r.sampleLabel || r.standardCode}
                       </td>
 
                       {/* Columns 5-18: 14 Results Columns */}
                       {targetElements.map(el => {
                         const valNum = getRowColValue(r, el.key);
-                        const isBlank = (r.standardCode || '').toLowerCase().includes('blank') || (r.sampleLabel || '').toLowerCase().includes('blank');
                         const evalResult = el.field ? evaluateCell(r.standardCode, el.key, valNum) : { status: 'NORMAL' };
                         
                         // Pink highlight if value is negative (typical in blanks) or action alert
@@ -1355,8 +1397,8 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
                             style={{
                               border: '1px solid #000000',
                               textAlign: 'center',
-                              fontSize: '7.5pt',
-                              padding: '2px 1px',
+                              fontSize: fontSizeMain,
+                              padding: mainRowPad,
                               backgroundColor: isAlert ? '#ffc7ce' : '#ffffff',
                               color: isAlert ? '#9c0006' : '#000000',
                               fontWeight: 'normal',
@@ -1374,130 +1416,134 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
             </table>
 
             {/* 3. Detailed Standards Comparison Breakdown (Expected Value & Diff. %) */}
-            <div style={{ width: '100%', marginBottom: '22px' }}>
-              {rows
-                .filter(r => {
-                  const codeLower = (r.standardCode || '').toLowerCase();
-                  const labelLower = (r.sampleLabel || '').toLowerCase();
-                  return !codeLower.includes('blank') && !labelLower.includes('blank');
-                })
-                .map((r, sIdx) => {
-                  return (
-                    <div key={`std-comp-${sIdx}`} style={{ width: '100%', marginBottom: '10px' }}>
-                      <table
-                        style={{
-                          width: '100%',
-                          borderCollapse: 'collapse',
-                          border: 'none',
-                          tableLayout: 'fixed',
-                          fontSize: '7.5pt'
-                        }}
-                      >
-                        <colgroup>
-                          <col style={{ width: '3.2%' }} />
-                          <col style={{ width: '4.8%' }} />
-                          <col style={{ width: '10.5%' }} />
-                          <col style={{ width: '18.5%' }} />
-                          {targetElements.map(el => (
-                            <col key={`comp-col-${el.key}`} style={{ width: `${63 / targetElements.length}%` }} />
-                          ))}
-                        </colgroup>
-                        <tbody>
-                          {/* Row 1: Standard Name + Actual Values */}
-                          <tr style={{ height: '20px' }}>
-                            <td colSpan={4} style={{ padding: '2px 4px', textAlign: 'left', fontWeight: 'bold', fontSize: '7.5pt', border: 'none' }}>
-                              <span style={{ display: 'inline-block', width: '28px', height: '10px', backgroundColor: '#64748b', marginRight: '6px', verticalAlign: 'middle' }} />
-                              <span style={{ verticalAlign: 'middle' }}>{r.sampleLabel || r.standardCode}</span>
-                            </td>
-                            {targetElements.map(el => {
-                              const valNum = getRowColValue(r, el.key);
-                              return (
-                                <td key={`act-val-${el.key}`} style={{ textAlign: 'center', fontWeight: 'bold', fontSize: '7.5pt', padding: '1px', border: 'none' }}>
-                                  {formatIndoNum(valNum, el.is3Dec ? 3 : 2)}
-                                </td>
-                              );
-                            })}
-                          </tr>
+            {/* Exactly aligned with the main table columns */}
+            <div style={{ width: '100%', marginBottom: isDense ? '12px' : '18px' }}>
+              {crmStandardsList.map((r, sIdx) => {
+                return (
+                  <div key={`std-comp-${sIdx}`} style={{ width: '100%', marginBottom: compMarginBottom }}>
+                    <table
+                      style={{
+                        width: '100%',
+                        borderCollapse: 'collapse',
+                        border: 'none',
+                        tableLayout: 'fixed',
+                        fontSize: isDense ? '6.5pt' : '7pt'
+                      }}
+                    >
+                      <colgroup>
+                        <col style={{ width: '3%' }} />
+                        <col style={{ width: '4.8%' }} />
+                        <col style={{ width: '10.5%' }} />
+                        <col style={{ width: '18.7%' }} />
+                        {targetElements.map(el => (
+                          <col key={`comp-col-${el.key}`} style={{ width: `${63 / targetElements.length}%` }} />
+                        ))}
+                      </colgroup>
+                      <tbody>
+                        {/* Row 1: Standard Name + Actual Values */}
+                        <tr style={{ height: isDense ? '16px' : '18px' }}>
+                          <td style={{ border: 'none', padding: '1px' }}></td>
+                          <td style={{ border: 'none', padding: '1px' }}></td>
+                          <td style={{ border: 'none', padding: '1px' }}></td>
+                          <td style={{ padding: '1px 4px', textAlign: 'left', fontWeight: 'bold', fontSize: isDense ? '7pt' : '7.5pt', border: 'none', whiteSpace: 'nowrap', overflow: 'hidden' }}>
+                            <span style={{ display: 'inline-block', width: '24px', height: '9px', backgroundColor: '#64748b', marginRight: '6px', verticalAlign: 'middle' }} />
+                            <span style={{ verticalAlign: 'middle' }}>{r.sampleLabel || r.standardCode}</span>
+                          </td>
+                          {targetElements.map(el => {
+                            const valNum = getRowColValue(r, el.key);
+                            return (
+                              <td key={`act-val-${el.key}`} style={{ textAlign: 'center', fontWeight: 'bold', fontSize: isDense ? '7pt' : '7.5pt', padding: '1px', border: 'none' }}>
+                                {formatIndoNum(valNum, el.is3Dec ? 3 : 2)}
+                              </td>
+                            );
+                          })}
+                        </tr>
 
-                          {/* Row 2: Expected Value */}
-                          <tr style={{ height: '18px' }}>
-                            <td colSpan={4} style={{ padding: '1px 4px', textAlign: 'center', border: 'none' }}>
-                              <div style={{ backgroundColor: '#e2e8f0', borderRadius: '3px', padding: '1px 8px', fontStyle: 'italic', display: 'inline-block', fontSize: '7pt', color: '#1e293b' }}>
-                                Expected Value
-                              </div>
-                            </td>
-                            {targetElements.map(el => {
-                              const expVal = getExpectedColValue(r.standardCode, el.key);
-                              return (
-                                <td key={`exp-val-${el.key}`} style={{ textAlign: 'center', fontStyle: 'normal', fontSize: '7.5pt', padding: '1px', color: '#334155', border: 'none' }}>
-                                  {expVal > 0 ? formatIndoNum(expVal, el.is3Dec ? 3 : 2) : '-'}
-                                </td>
-                              );
-                            })}
-                          </tr>
+                        {/* Row 2: Expected Value */}
+                        <tr style={{ height: isDense ? '15px' : '17px' }}>
+                          <td style={{ border: 'none', padding: '1px' }}></td>
+                          <td style={{ border: 'none', padding: '1px' }}></td>
+                          <td style={{ border: 'none', padding: '1px' }}></td>
+                          <td style={{ padding: '1px 4px', textAlign: 'center', border: 'none' }}>
+                            <div style={{ backgroundColor: '#e2e8f0', borderRadius: '3px', padding: '1px 6px', fontStyle: 'italic', display: 'inline-block', fontSize: isDense ? '6.5pt' : '7pt', color: '#1e293b' }}>
+                              Expected Value
+                            </div>
+                          </td>
+                          {targetElements.map(el => {
+                            const expVal = getExpectedColValue(r.standardCode, el.key);
+                            return (
+                              <td key={`exp-val-${el.key}`} style={{ textAlign: 'center', fontStyle: 'normal', fontSize: isDense ? '6.5pt' : '7pt', padding: '1px', color: '#334155', border: 'none' }}>
+                                {expVal > 0 ? formatIndoNum(expVal, el.is3Dec ? 3 : 2) : '-'}
+                              </td>
+                            );
+                          })}
+                        </tr>
 
-                          {/* Row 3: Diff. % with Up/Down Indicator */}
-                          <tr style={{ height: '18px' }}>
-                            <td colSpan={4} style={{ padding: '1px 4px', textAlign: 'center', border: 'none' }}>
-                              <div style={{ fontStyle: 'italic', display: 'inline-block', fontSize: '7pt', color: '#475569' }}>
-                                Diff. %
-                              </div>
-                            </td>
-                            {targetElements.map(el => {
-                              const actVal = getRowColValue(r, el.key);
-                              const expVal = getExpectedColValue(r.standardCode, el.key);
-                              const diffPct = getDiffPercentage(actVal, expVal);
-                              const isPositive = diffPct !== null && diffPct >= 0;
+                        {/* Row 3: Diff. % with Up/Down Indicator */}
+                        <tr style={{ height: isDense ? '15px' : '17px' }}>
+                          <td style={{ border: 'none', padding: '1px' }}></td>
+                          <td style={{ border: 'none', padding: '1px' }}></td>
+                          <td style={{ border: 'none', padding: '1px' }}></td>
+                          <td style={{ padding: '1px 4px', textAlign: 'center', border: 'none' }}>
+                            <div style={{ fontStyle: 'italic', display: 'inline-block', fontSize: isDense ? '6.5pt' : '7pt', color: '#475569' }}>
+                              Diff. %
+                            </div>
+                          </td>
+                          {targetElements.map(el => {
+                            const actVal = getRowColValue(r, el.key);
+                            const expVal = getExpectedColValue(r.standardCode, el.key);
+                            const diffPct = getDiffPercentage(actVal, expVal);
+                            const isPositive = diffPct !== null && diffPct >= 0;
 
-                              return (
-                                <td key={`diff-val-${el.key}`} style={{ textAlign: 'center', fontSize: '7pt', padding: '1px', border: 'none', whiteSpace: 'nowrap' }}>
-                                  {diffPct !== null ? (
-                                    <span>
-                                      <span style={{ color: isPositive ? '#15803d' : '#b91c1c', marginRight: '2px', fontSize: '8pt', verticalAlign: 'middle' }}>
-                                        {isPositive ? '▲' : '▼'}
-                                      </span>
-                                      <span style={{ color: '#000000', fontWeight: 'bold' }}>
-                                        {formatIndoNum(diffPct, el.is3Dec ? 3 : 2)}
-                                      </span>
+                            return (
+                              <td key={`diff-val-${el.key}`} style={{ textAlign: 'center', fontSize: isDense ? '6.5pt' : '7pt', padding: '1px', border: 'none', whiteSpace: 'nowrap' }}>
+                                {diffPct !== null ? (
+                                  <span>
+                                    <span style={{ color: isPositive ? '#15803d' : '#b91c1c', marginRight: '2px', fontSize: '7pt', verticalAlign: 'middle' }}>
+                                      {isPositive ? '▲' : '▼'}
                                     </span>
-                                  ) : (
-                                    '-'
-                                  )}
-                                </td>
-                              );
-                            })}
-                          </tr>
-                        </tbody>
-                      </table>
-                    </div>
-                  );
-                })}
+                                    <span style={{ color: '#000000', fontWeight: 'bold' }}>
+                                      {formatIndoNum(diffPct, el.is3Dec ? 3 : 2)}
+                                    </span>
+                                  </span>
+                                ) : (
+                                  '-'
+                                )}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                );
+              })}
             </div>
 
             {/* 4. Bottom Signatures Block: Left 2 Boxes & Right 2 Boxes */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', width: '100%', marginTop: '16px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', width: '100%', marginTop: isDense ? '12px' : '16px' }}>
               {/* Left Signature Table (Dilaksanakan oleh & Diperiksa oleh) */}
               <table style={{ width: '42%', borderCollapse: 'collapse', border: '1.5px solid #000000' }}>
                 <thead>
                   <tr>
-                    <th style={{ width: '50%', border: '1px solid #000000', padding: '4px', fontStyle: 'italic', fontSize: '7.5pt', fontWeight: 'normal', textAlign: 'center' }}>
+                    <th style={{ width: '50%', border: '1px solid #000000', padding: '3px', fontStyle: 'italic', fontSize: '7pt', fontWeight: 'normal', textAlign: 'center' }}>
                       Dilaksanakan oleh,
                     </th>
-                    <th style={{ width: '50%', border: '1px solid #000000', padding: '4px', fontStyle: 'italic', fontSize: '7.5pt', fontWeight: 'normal', textAlign: 'center' }}>
+                    <th style={{ width: '50%', border: '1px solid #000000', padding: '3px', fontStyle: 'italic', fontSize: '7pt', fontWeight: 'normal', textAlign: 'center' }}>
                       Diperiksa oleh,
                     </th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr>
-                    <td style={{ border: '1px solid #000000', height: '62px', verticalAlign: 'bottom', textAlign: 'center', paddingBottom: '4px' }}></td>
-                    <td style={{ border: '1px solid #000000', height: '62px', verticalAlign: 'bottom', textAlign: 'center', paddingBottom: '4px' }}></td>
+                    <td style={{ border: '1px solid #000000', height: signBoxHeight, verticalAlign: 'bottom', textAlign: 'center', paddingBottom: '3px' }}></td>
+                    <td style={{ border: '1px solid #000000', height: signBoxHeight, verticalAlign: 'bottom', textAlign: 'center', paddingBottom: '3px' }}></td>
                   </tr>
                   <tr>
-                    <td style={{ border: '1px solid #000000', padding: '4px', fontSize: '7pt', textAlign: 'center', color: '#000000' }}>
+                    <td style={{ border: '1px solid #000000', padding: '3px', fontSize: '6.5pt', textAlign: 'center', color: '#000000' }}>
                       Foreman Laboratorium
                     </td>
-                    <td style={{ border: '1px solid #000000', padding: '4px', fontSize: '7pt', textAlign: 'center', color: '#000000' }}>
+                    <td style={{ border: '1px solid #000000', padding: '3px', fontSize: '6.5pt', textAlign: 'center', color: '#000000' }}>
                       SPV Laboratorium
                     </td>
                   </tr>
@@ -1508,28 +1554,28 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
               <table style={{ width: '42%', borderCollapse: 'collapse', border: '1.5px solid #000000' }}>
                 <thead>
                   <tr>
-                    <th style={{ width: '50%', border: '1px solid #000000', padding: '4px', fontStyle: 'italic', fontSize: '7.5pt', fontWeight: 'normal', textAlign: 'center' }}>
+                    <th style={{ width: '50%', border: '1px solid #000000', padding: '3px', fontStyle: 'italic', fontSize: '7pt', fontWeight: 'normal', textAlign: 'center' }}>
                       Disetujui oleh,
                     </th>
-                    <th style={{ width: '50%', border: '1px solid #000000', padding: '4px', fontStyle: 'italic', fontSize: '7.5pt', fontWeight: 'normal', textAlign: 'center' }}>
+                    <th style={{ width: '50%', border: '1px solid #000000', padding: '3px', fontStyle: 'italic', fontSize: '7pt', fontWeight: 'normal', textAlign: 'center' }}>
                       Diketahui oleh,
                     </th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr>
-                    <td style={{ border: '1px solid #000000', height: '62px', verticalAlign: 'bottom', textAlign: 'center', paddingBottom: '4px', fontWeight: 'bold', fontSize: '7.5pt', color: '#000000' }}>
+                    <td style={{ border: '1px solid #000000', height: signBoxHeight, verticalAlign: 'bottom', textAlign: 'center', paddingBottom: '3px', fontWeight: 'bold', fontSize: '7.5pt', color: '#000000' }}>
                       Tigwa Anggawikara
                     </td>
-                    <td style={{ border: '1px solid #000000', height: '62px', verticalAlign: 'bottom', textAlign: 'center', paddingBottom: '4px', fontWeight: 'bold', fontSize: '7.5pt', color: '#000000' }}>
+                    <td style={{ border: '1px solid #000000', height: signBoxHeight, verticalAlign: 'bottom', textAlign: 'center', paddingBottom: '3px', fontWeight: 'bold', fontSize: '7.5pt', color: '#000000' }}>
                       Deni Nugraha Perdiana
                     </td>
                   </tr>
                   <tr>
-                    <td style={{ border: '1px solid #000000', padding: '4px', fontSize: '7pt', textAlign: 'center', color: '#000000' }}>
+                    <td style={{ border: '1px solid #000000', padding: '3px', fontSize: '6.5pt', textAlign: 'center', color: '#000000' }}>
                       Sptd. Laboratorium
                     </td>
-                    <td style={{ border: '1px solid #000000', padding: '4px', fontSize: '7pt', textAlign: 'center', color: '#000000' }}>
+                    <td style={{ border: '1px solid #000000', padding: '3px', fontSize: '6.5pt', textAlign: 'center', color: '#000000' }}>
                       Preparation & Laboratorium Manager
                     </td>
                   </tr>
@@ -1541,12 +1587,12 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
 
         return (
           <>
-            {/* Native Print Stylesheet & Container */}
+            {/* Absolute Native Print Stylesheet & Container (100% isolates print document) */}
             <div className="xrf-print-only-container">
               <style dangerouslySetInnerHTML={{ __html: `
                 @media screen {
                   .xrf-print-only-container {
-                    display: none;
+                    display: none !important;
                   }
                 }
                 @media print {
@@ -1554,22 +1600,38 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
                     size: A4 landscape;
                     margin: 8mm 10mm;
                   }
-                  body {
-                    font-family: Arial, Helvetica, sans-serif !important;
-                    color: #000000 !important;
+                  html, body {
+                    margin: 0 !important;
+                    padding: 0 !important;
                     background: #ffffff !important;
                     -webkit-print-color-adjust: exact !important;
                     print-color-adjust: exact !important;
                   }
-                  .no-print-area, header, aside, nav, button, .lucide {
+                  /* Strictly hide EVERYTHING else on the body */
+                  body > *:not(#root):not(.xrf-print-portal) {
                     display: none !important;
                   }
+                  #root > *:not(.min-h-screen) {
+                    display: none !important;
+                  }
+                  .no-print-area, header, aside, nav, button, input, select, .lucide {
+                    display: none !important;
+                  }
+                  /* Force official doc to be the only thing visible and positioned at top */
                   .xrf-print-only-container {
                     display: block !important;
+                    visibility: visible !important;
+                    position: absolute !important;
+                    left: 0 !important;
+                    top: 0 !important;
                     width: 100% !important;
                     max-width: 100% !important;
                     margin: 0 auto !important;
-                    page-break-inside: avoid !important;
+                    background: #ffffff !important;
+                    z-index: 999999 !important;
+                  }
+                  .xrf-print-only-container * {
+                    visibility: visible !important;
                   }
                 }
               ` }} />
@@ -1579,17 +1641,17 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
 
             {/* Interactive On-Screen Print Preview Modal */}
             {showPrintPreviewModal && (
-              <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto no-print-area">
-                <div className="bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-2xl max-w-6xl w-full max-h-[92vh] flex flex-col shadow-2xl overflow-hidden">
+              <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 overflow-y-auto no-print-area">
+                <div className="bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-2xl max-w-6xl w-full max-h-[94vh] flex flex-col shadow-2xl overflow-hidden">
                   {/* Modal Header */}
-                  <div className="flex items-center justify-between px-6 py-4 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
+                  <div className="flex items-center justify-between px-6 py-3.5 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 shrink-0">
                     <div className="flex items-center gap-2.5">
                       <div className="p-2 bg-teal-50 dark:bg-teal-950/40 text-teal-600 rounded-xl">
                         <Printer className="w-5 h-5" />
                       </div>
                       <div>
                         <h3 className="text-sm font-bold text-slate-900 dark:text-white">
-                          Pratinjau Format Cetak A4 Landscape
+                          Pratinjau Resmi Lembar Cetak A4 Landscape
                         </h3>
                         <p className="text-[11px] text-slate-500">
                           Template Resmi: DAILY VERIFIKASI SAMPLE STANDARD (TBP / GPS)
@@ -1618,8 +1680,8 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
                   </div>
 
                   {/* Modal Body: A4 Paper Preview */}
-                  <div className="p-6 overflow-y-auto flex justify-center bg-slate-200/70 dark:bg-slate-950">
-                    <div className="bg-white text-slate-900 p-8 rounded-sm shadow-xl border border-slate-300 w-full max-w-5xl">
+                  <div className="p-4 sm:p-8 overflow-y-auto flex-1 flex justify-center bg-slate-300/80 dark:bg-slate-950">
+                    <div className="bg-white text-slate-900 p-6 sm:p-8 rounded-sm shadow-2xl border border-slate-400 w-full max-w-[1050px] min-h-[500px]">
                       {renderOfficialContent()}
                     </div>
                   </div>
@@ -1630,7 +1692,7 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
         );
       })()}
 
-            {/* Modal Quick Paste from Excel */}
+      {/* Modal Quick Paste from Excel */}
       {showPasteModal && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 no-print-area">
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 max-w-2xl w-full shadow-2xl space-y-4">
