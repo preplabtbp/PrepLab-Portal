@@ -16,6 +16,7 @@ import { DailyPerformanceStationCards } from './DailyPerformanceStationCards';
 import { DailyPerformanceTable } from './DailyPerformanceTable';
 import { DailyPerformanceInputModal } from './DailyPerformanceInputModal';
 import { DailyPerformanceStructuredPresentation } from './DailyPerformanceStructuredPresentation';
+import { DailyPerformanceComparisonCharts } from './DailyPerformanceComparisonCharts';
 import { Presentation } from 'lucide-react';
 
 interface DailyPerformanceScreenProps {
@@ -191,6 +192,18 @@ export const DailyPerformanceScreen: React.FC<DailyPerformanceScreenProps> = ({
                 <span className="hidden sm:inline">Tabel Logbook</span>
                 <span className="sm:hidden">Tabel</span>
               </button>
+              <button
+                onClick={() => setViewMode('comparison_chart')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-semibold transition-all cursor-pointer ${
+                  viewMode === 'comparison_chart'
+                    ? 'bg-teal-600 text-white shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                <BarChart3 className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Mode Chart (5 Babak)</span>
+                <span className="sm:hidden">Chart</span>
+              </button>
             </div>
 
             {/* Presentation Mode Toggle */}
@@ -261,6 +274,15 @@ export const DailyPerformanceScreen: React.FC<DailyPerformanceScreenProps> = ({
           <DailyPerformanceTable records={records} />
         )}
 
+        {viewMode === 'comparison_chart' && (
+          <DailyPerformanceComparisonCharts 
+            records={records}
+            onSelectDate={d => {
+              setSelectedDate(d);
+              setViewMode('presentation');
+            }}
+          />
+        )}
       </div>
 
       {/* Input Shift Modal */}
