@@ -274,18 +274,30 @@ router.get("/api/search/omni", async (req, res) => {
     const commentConditions: any[] = [];
     if (ptParam !== "ALL") {
       if (isGts) {
-        commentConditions.push(or(
-          eq(bulletinComments.universe, "GTS"),
-          eq(bulletinPosts.pt, "GTS")
-        ));
+        // Universe GTS: HANYA komentar pada dokumen GTS
+        commentConditions.push(
+          or(
+            eq(bulletinPosts.pt, "GTS"),
+            eq(bulletinComments.universe, "GTS")
+          )
+        );
       } else {
-        commentConditions.push(or(
-          eq(bulletinComments.universe, "TBP_GPS"),
-          eq(bulletinComments.universe, "TBP"),
-          isNull(bulletinComments.universe),
-          eq(bulletinPosts.pt, "TBP"),
-          isNull(bulletinPosts.pt)
-        ));
+        // Universe TBP / GPS: STRICTLY NON-GTS
+        commentConditions.push(
+          and(
+            or(
+              eq(bulletinPosts.pt, "TBP"),
+              eq(bulletinPosts.pt, "GPS"),
+              eq(bulletinPosts.pt, "TBP_GPS"),
+              isNull(bulletinPosts.pt)
+            ),
+            or(
+              eq(bulletinComments.universe, "TBP_GPS"),
+              eq(bulletinComments.universe, "TBP"),
+              isNull(bulletinComments.universe)
+            )
+          )
+        );
       }
     }
 
@@ -529,10 +541,12 @@ router.get("/api/bulletin/:id(\\d+)", async (req, res) => {
 
 router.post("/api/bulletin", async (req, res) => {
     try {
-      const newPostData = req.body;
-      if (!newPostData.pt) newPostData.pt = 'TBP';
+      const sanitized = sanitizePayload(bulletinPosts, req.body) || {};
+      delete sanitized.id;
+      if (!sanitized.pt) sanitized.pt = 'TBP';
+      sanitized.universe = sanitized.pt === 'GTS' ? 'GTS' : 'TBP_GPS';
       
-      const result = await db.insert(bulletinPosts).values(newPostData).returning();
+      const result = await db.insert(bulletinPosts).values(sanitized).returning();
       const post = result[0];
       clearBulletinCache();
       
@@ -690,6 +704,19 @@ router.post("/api/bulletin/:id/comments", async (req, res) => {
         return res.status(400).json({ status: "error", message: "Komentar tidak boleh kosong" });
       }
 
+      // Pastikan dokumen target ada dan warisi universe dari post induk
+      const postArray = await db.select().from(bulletinPosts).where(eq(bulletinPosts.id, postId)).limit(1);
+      const post = postArray[0];
+      if (!post) {
+        return res.status(404).json({ 
+          status: "error", 
+          message: "Dokumen Labnote tidak ditemukan di database." 
+        });
+      }
+
+      const postUniverse = (post.pt || pt || 'TBP').toUpperCase().includes('GTS') ? 'GTS' : 'TBP';
+      const commentUniverse = postUniverse === 'GTS' ? 'GTS' : 'TBP_GPS';
+
       const inserted = await db.insert(bulletinComments).values({
         postId,
         topicTitle: topicTitle || null,
@@ -706,16 +733,13 @@ router.post("/api/bulletin/:id/comments", async (req, res) => {
         replyToNik: replyToNik || null,
         replyToName: replyToName || null,
         replyToContent: replyToContent || null,
-        universe: pt || 'TBP_GPS',
+        universe: commentUniverse,
       }).returning();
 
       const comment = inserted[0];
 
       // Notification calculation by Section, PIC, and Reply Target
-      const postArray = await db.select().from(bulletinPosts).where(eq(bulletinPosts.id, postId)).limit(1);
-      const post = postArray[0];
       const postSection = section || post?.category || post?.department || 'Prep & Lab';
-      const postUniverse = (pt || post?.pt || 'TBP').toUpperCase().includes('GTS') ? 'GTS' : 'TBP';
 
       const topicLabel = topicTitle ? `"${topicTitle.length > 35 ? topicTitle.substring(0, 35) + '...' : topicTitle}"` : (post?.title || 'Topik');
       const notifLink = `/bulletin/${postUniverse}?postId=${postId}&topic=${encodeURIComponent(topicTitle || '')}`;
@@ -1239,6 +1263,7 @@ export async function syncBulletinToLogbook(post: any) {
             targetDate: defaultTargetDate,
             targetTime: '23:59',
             pt: post.pt || 'TBP',
+            universe: (post.pt || 'TBP').toUpperCase().includes('GTS') ? 'GTS' : 'TBP_GPS',
             bulletinPostId: post.id,
             bulletinTopicTitle: rTitle
           }).returning();
@@ -1255,7 +1280,16 @@ export async function syncBulletinToLogbook(post: any) {
 
 router.put("/api/bulletin/:id", async (req, res) => {
     try {
-      const result = await db.update(bulletinPosts).set(req.body).where(eq(bulletinPosts.id, parseInt(req.params.id))).returning();
+      const postId = parseInt(req.params.id);
+      if (isNaN(postId)) {
+        return res.status(400).json({ status: "error", message: "ID dokumen tidak valid." });
+      }
+      const sanitized = sanitizePayload(bulletinPosts, req.body) || {};
+      delete sanitized.id;
+      if (sanitized.pt) {
+        sanitized.universe = sanitized.pt === 'GTS' ? 'GTS' : 'TBP_GPS';
+      }
+      const result = await db.update(bulletinPosts).set(sanitized).where(eq(bulletinPosts.id, postId)).returning();
       const post = result[0];
       clearBulletinCache();
       if (post) {
@@ -1263,7 +1297,7 @@ router.put("/api/bulletin/:id", async (req, res) => {
         await syncBulletinToLogbook(post);
       }
       res.json({ status: "success", data: post });
-    } catch (error) {
+    } catch (error: any) {
       res.status(500).json({ status: "error", message: error.message });
     }
   });
@@ -1350,11 +1384,17 @@ router.post("/api/bulletin/move-topic", async (req, res) => {
 router.delete("/api/bulletin/:id", async (req, res) => {
     try {
       const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ status: "error", message: "ID dokumen tidak valid." });
+      }
+      // Hapus data dependen terlebih dahulu untuk mencegah pelanggaran foreign key constraint
       await db.delete(agendaEvents).where(eq(agendaEvents.bulletinPostId, id));
+      await db.delete(bulletinComments).where(eq(bulletinComments.postId, id));
+      await db.delete(logbookTasks).where(eq(logbookTasks.bulletinPostId, id));
       await db.delete(bulletinPosts).where(eq(bulletinPosts.id, id));
       clearBulletinCache();
       res.json({ status: "success" });
-    } catch (error) {
+    } catch (error: any) {
       res.status(500).json({ status: "error", message: error.message });
     }
   });
