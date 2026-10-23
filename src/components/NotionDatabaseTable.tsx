@@ -3114,6 +3114,67 @@ export function NotionDatabaseTable({
     fetchComments();
   }, [fetchComments]);
 
+  // Auto-migrate topic comments in database and local state when a task title is renamed
+  const handleRenameTopicComments = useCallback(async (oldTitle: string, newTitle: string, rowId?: string) => {
+    const targetPostId = getEffectivePostId();
+    if (!oldTitle || !newTitle) return;
+    const cleanOld = getDisplayTitle(oldTitle).trim();
+    const cleanNew = getDisplayTitle(newTitle).trim();
+    if (!cleanOld || !cleanNew || cleanOld.toLowerCase() === cleanNew.toLowerCase()) return;
+
+    // 1. Optimistic update in allComments local state
+    setAllComments(prev => prev.map(c => {
+      const cTitle = (c.topicTitle || '').trim();
+      const cClean = getDisplayTitle(cTitle).trim();
+      if (cClean.toLowerCase() === cleanOld.toLowerCase() || cTitle.toLowerCase() === cleanOld.toLowerCase()) {
+        return { ...c, topicTitle: cleanNew };
+      }
+      if (cClean.toLowerCase().startsWith(`${cleanOld.toLowerCase()} - `)) {
+        const suffix = cClean.slice(`${cleanOld} - `.length);
+        return { ...c, topicTitle: `${cleanNew} - ${suffix}` };
+      }
+      return c;
+    }));
+
+    // 2. Also keep pinnedRowKeys updated if this row was pinned
+    setPinnedRowKeys(prev => {
+      let changed = false;
+      const next = prev.map(k => {
+        if (k === oldTitle || k === cleanOld) {
+          changed = true;
+          return cleanNew;
+        }
+        return k;
+      });
+      if (changed) {
+        try { localStorage.setItem(tablePinStorageKey, JSON.stringify(next)); } catch {}
+        return next;
+      }
+      return prev;
+    });
+
+    // 3. Call backend endpoint to update database records
+    try {
+      const res = await fetch('/api/bulletin/rename-topic', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          postId: targetPostId,
+          oldTopicTitle: cleanOld,
+          newTopicTitle: cleanNew,
+          topicId: rowId
+        })
+      });
+      const data = await res.json();
+      if (data.status === 'success' && data.updatedCount > 0) {
+        toast.info(`Riwayat komentar otomatis diperbarui ke "${cleanNew}".`);
+        fetchComments(targetPostId);
+      }
+    } catch (err) {
+      console.warn('[RenameTopic] Failed to migrate comments in backend:', err);
+    }
+  }, [getEffectivePostId, fetchComments, tablePinStorageKey]);
+
   // Comment counts per topic title, task ID, and clean title (aggregates sub-periods to base topic as well)
   const topicCommentCounts = useMemo(() => {
     const map: Record<string, number> = {};
@@ -3483,6 +3544,12 @@ export function NotionDatabaseTable({
         if (cTopicId.includes(rowId)) return true;
         const taskMatch = (c.topicTitle || '').match(/<!--task-id:([^>]+)-->/);
         if (taskMatch && taskMatch[1].toLowerCase().trim() === rowId) return true;
+      }
+      const taskCode = (selectedRow?.taskCode || selectedRow?.['Task ID'] || selectedRow?.['ID Task'] || selectedRow?.number || '').toLowerCase().trim();
+      if (taskCode && taskCode !== '-') {
+        if (cTopicId === taskCode || cTopicId.includes(taskCode)) return true;
+        const taskMatch = (c.topicTitle || '').match(/<!--task-id:([^>]+)-->/);
+        if (taskMatch && taskMatch[1].toLowerCase().trim() === taskCode) return true;
       }
 
       // 2. Clean Title match (resilient against checkbox toggle [ ] <-> [x], ↳ prefix, and <!--last-modified:...--> changes)
@@ -4238,9 +4305,17 @@ export function NotionDatabaseTable({
       }
 
       if (colLower === 'jenis kegiatan' || colLower === 'judul' || colLower === 'task' || colLower === 'nama kegiatan' || colLower === 'activity name') {
+        const oldRowTitle = getRowVal(copy[targetRowIndex], 'Jenis kegiatan') || 
+                            getRowVal(copy[targetRowIndex], 'Activity Name') || 
+                            copy[targetRowIndex]['Jenis kegiatan'] || 
+                            copy[targetRowIndex]['Activity Name'] || '';
         targetRow['Jenis kegiatan'] = newValue;
         targetRow['Jenis Kegiatan'] = newValue;
         if (targetRow['Activity Name'] !== undefined) targetRow['Activity Name'] = newValue;
+
+        if (oldRowTitle && newValue && oldRowTitle.trim() !== newValue.trim()) {
+          handleRenameTopicComments(oldRowTitle, newValue, targetRow.id);
+        }
       }
 
       // Smart Tasklist Auto-progress:
@@ -4370,6 +4445,8 @@ export function NotionDatabaseTable({
         const curSelectedTitle = getRowVal(selectedRow, 'Jenis kegiatan');
         const updatedTitle = getRowVal(targetRow, 'Jenis kegiatan');
         if (curSelectedTitle && curSelectedTitle === updatedTitle) {
+          setSelectedRow(targetRow);
+        } else if (selectedRow === copy[targetRowIndex] || (selectedRow.id && selectedRow.id === targetRow.id)) {
           setSelectedRow(targetRow);
         }
       }
@@ -5438,7 +5515,12 @@ export function NotionDatabaseTable({
             targetIndex = foundIdx;
           }
         }
+        const oldRow = localRows[targetIndex];
+        const oldRowTitle = oldRow ? (getRowVal(oldRow, 'Jenis kegiatan') || oldRow['Activity Name'] || '') : '';
         updatedRows = localRows.map((r, i) => i === targetIndex ? { ...r, ...cleanedRow } : r);
+        if (oldRowTitle && title && oldRowTitle.trim() !== title.trim()) {
+          handleRenameTopicComments(oldRowTitle, title, cleanedRow.id);
+        }
         toast.success(`Perubahan data kegiatan (${finalTaskCode}) berhasil disimpan!`);
       }
 

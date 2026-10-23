@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db, isDbCircuitBroken } from "../../src/db/index.js";
-import { eq, desc, or, inArray, isNull, and, gte, lte, sql, like } from "drizzle-orm";
+import { eq, desc, or, inArray, isNull, and, gte, lte, sql, like, ilike } from "drizzle-orm";
 import { 
   chatMessages, employees, equipments, workOrders, users, tickets, downtime, 
   spareparts, apdSettings, apdHistory, apdDocuments, roster, inspections, 
@@ -1057,6 +1057,97 @@ router.post("/api/bulletin/move-topic", async (req, res) => {
     } catch (err: any) {
       console.error("[MoveTopic] Error migrating comments:", err);
       res.status(500).json({ status: "error", message: err.message || "Failed to move topic comments" });
+    }
+  });
+
+router.post("/api/bulletin/rename-topic", async (req, res) => {
+    try {
+      const { postId, oldTopicTitle, newTopicTitle, topicId } = req.body;
+      if (!oldTopicTitle || !newTopicTitle) {
+        return res.status(400).json({ status: "error", message: "Missing oldTopicTitle or newTopicTitle" });
+      }
+
+      const cleanOld = String(oldTopicTitle).trim();
+      const cleanNew = String(newTopicTitle).trim();
+      if (cleanOld.toLowerCase() === cleanNew.toLowerCase()) {
+        return res.json({ status: "success", message: "Titles are identical, no update needed", updatedCount: 0 });
+      }
+
+      const pId = postId ? parseInt(String(postId), 10) : null;
+      const cleanOldBase = cleanOld.replace(/^↳\s*/, '').replace(/<!--[^>]+-->/g, '').replace(/\[[ xX]\]\s*/, '').trim();
+      const cleanNewBase = cleanNew.replace(/^↳\s*/, '').replace(/<!--[^>]+-->/g, '').replace(/\[[ xX]\]\s*/, '').trim();
+
+      const titleOrFilters = [
+        eq(bulletinComments.topicTitle, cleanOld),
+        eq(bulletinComments.topicTitle, cleanOldBase),
+        like(bulletinComments.topicTitle, `${cleanOld} - %`),
+        like(bulletinComments.topicTitle, `${cleanOldBase} - %`),
+        ilike(bulletinComments.topicTitle, cleanOldBase)
+      ];
+      if (topicId) {
+        titleOrFilters.push(eq(bulletinComments.topicId, String(topicId).trim()));
+      }
+
+      const whereClause = pId && !isNaN(pId)
+        ? and(eq(bulletinComments.postId, pId), or(...titleOrFilters))
+        : or(...titleOrFilters);
+
+      const commentsToUpdate = await db
+        .select()
+        .from(bulletinComments)
+        .where(whereClause);
+
+      for (const c of commentsToUpdate) {
+        let updatedTitle = c.topicTitle || '';
+        const cLower = updatedTitle.toLowerCase();
+        if (cLower === cleanOld.toLowerCase() || cLower === cleanOldBase.toLowerCase()) {
+          updatedTitle = cleanNewBase;
+        } else if (cLower.startsWith(`${cleanOldBase.toLowerCase()} - `)) {
+          const suffix = updatedTitle.slice(`${cleanOldBase} - `.length);
+          updatedTitle = `${cleanNewBase} - ${suffix}`;
+        } else {
+          updatedTitle = cleanNewBase;
+        }
+
+        await db
+          .update(bulletinComments)
+          .set({
+            topicTitle: updatedTitle,
+            topicId: topicId ? String(topicId).trim() : cleanNewBase.toLowerCase().replace(/\s+/g, '-')
+          })
+          .where(eq(bulletinComments.id, c.id));
+      }
+
+      // Repoint connected Logbook tasks
+      try {
+        const logbookConditions = [
+          eq(logbookTasks.bulletinTopicTitle, cleanOld),
+          eq(logbookTasks.bulletinTopicTitle, cleanOldBase),
+          eq(logbookTasks.title, cleanOldBase)
+        ];
+        const logbookWhere = pId && !isNaN(pId)
+          ? and(eq(logbookTasks.bulletinPostId, pId), or(...logbookConditions))
+          : or(...logbookConditions);
+
+        await db
+          .update(logbookTasks)
+          .set({
+            bulletinTopicTitle: cleanNewBase,
+            title: cleanNewBase
+          })
+          .where(logbookWhere);
+      } catch (lErr) {
+        console.warn("[RenameTopic] Error updating logbook tasks:", lErr);
+      }
+
+      res.json({
+        status: "success",
+        message: `Successfully migrated ${commentsToUpdate.length} comments from "${cleanOldBase}" to "${cleanNewBase}"`,
+        updatedCount: commentsToUpdate.length
+      });
+    } catch (err: any) {
+      console.error("[RenameTopic] Error migrating comments:", err);
+      res.status(500).json({ status: "error", message: err.message || "Failed to rename topic comments" });
     }
   });
 
