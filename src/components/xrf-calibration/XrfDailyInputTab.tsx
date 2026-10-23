@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { extractSmartStandardCode, isWdxrfInstrument, getWdxrfProfile } from '../../utils/xrfStandardDetector';
+import { cleanSignatureForPrint } from '../../utils/signatureProcessing';
 import { VerifiedSignaturePad } from '../VerifiedSignaturePad';
 import { getEmployees } from '../../sheets-api';
 import { TimeInput24 } from '../ui/TimeInput24';
@@ -163,6 +164,7 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
   const [foremanName, setForemanName] = useState<string>(() => inspectorName || '');
   const [foremanNik, setForemanNik] = useState<string>(() => inspectorNik || '');
   const [foremanSignature, setForemanSignature] = useState<string>('');
+  const [cleanForemanSignature, setCleanForemanSignature] = useState<string>('');
   const [foremanSearch, setForemanSearch] = useState<string>('');
   const [isChangingForeman, setIsChangingForeman] = useState(false);
 
@@ -170,8 +172,26 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
   const [spvName, setSpvName] = useState<string>('');
   const [spvNik, setSpvNik] = useState<string>('');
   const [spvSignature, setSpvSignature] = useState<string>('');
+  const [cleanSpvSignature, setCleanSpvSignature] = useState<string>('');
   const [spvSearch, setSpvSearch] = useState<string>('');
   const [isChangingSpv, setIsChangingSpv] = useState(false);
+
+  // Automatically clean watermark for PDF / official print output (Option A)
+  useEffect(() => {
+    if (foremanSignature) {
+      cleanSignatureForPrint(foremanSignature).then(setCleanForemanSignature);
+    } else {
+      setCleanForemanSignature('');
+    }
+  }, [foremanSignature]);
+
+  useEffect(() => {
+    if (spvSignature) {
+      cleanSignatureForPrint(spvSignature).then(setCleanSpvSignature);
+    } else {
+      setCleanSpvSignature('');
+    }
+  }, [spvSignature]);
 
   // Fetch employees & init names
   useEffect(() => {
@@ -1320,6 +1340,40 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
           return !codeLower.includes('blank') && !labelLower.includes('blank');
         });
 
+        // Dynamic table header background color based on Epsilon instrument
+        const getInstrumentTableColor = (instrumentCode?: string): string => {
+          const code = (instrumentCode || selectedInstrument || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+          if (code.includes('EPSILONC') || code.includes('EPSC')) {
+            return '#00b0f0'; // Biru (Cyan / Sky Blue)
+          }
+          if (code.includes('EPSILONH') || code.includes('EPSH')) {
+            return '#a6a6a6'; // Abu-abu
+          }
+          if (code.includes('EPSILONF') || code.includes('EPSF')) {
+            return '#92d050'; // Hijau Muda
+          }
+          if (code.includes('EPSILONE') || code.includes('EPSE')) {
+            return '#ffff00'; // Kuning
+          }
+          if (code.includes('EPSILONG') || code.includes('EPSG')) {
+            return '#f8cbad'; // Krem (Peach Tan)
+          }
+          if (code.includes('EPSILOND') || code.includes('EPSD')) {
+            return '#ff97e4'; // Pink / Ungu Muda
+          }
+          if (code.includes('EPSILONA') || code.includes('EPSA')) {
+            return '#00b0f0'; // Biru
+          }
+          if (code.includes('EPSILONB') || code.includes('EPSB')) {
+            return '#92d050'; // Hijau Muda
+          }
+          if (code.includes('ZETIUM') || code.includes('PUMA')) {
+            return '#bdd7ee'; // Soft Steel Blue
+          }
+          return '#a6a6a6'; // Default Abu-abu
+        };
+        const tableHeaderBgColor = getInstrumentTableColor(selectedInstrument);
+
         const renderOfficialContent = () => (
           <div
             className="xrf-official-doc-root"
@@ -1391,29 +1445,29 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
               </colgroup>
               <thead>
                 {/* Header Row 1 */}
-                <tr style={{ backgroundColor: '#a6a6a6', color: '#000000' }}>
-                  <th rowSpan={2} style={{ border: '1px solid #000000', padding: '1.5px 1px', fontSize: '6.5pt', fontWeight: 'bold', textAlign: 'center' }}>
+                <tr style={{ backgroundColor: tableHeaderBgColor, color: '#000000' }}>
+                  <th rowSpan={2} style={{ border: '1px solid #000000', backgroundColor: tableHeaderBgColor, padding: '1.5px 1px', fontSize: '6.5pt', fontWeight: 'bold', textAlign: 'center' }}>
                     NO.
                   </th>
-                  <th rowSpan={2} style={{ border: '1px solid #000000', padding: '1.5px 1px', fontSize: '6.5pt', fontWeight: 'bold', textAlign: 'center' }}>
+                  <th rowSpan={2} style={{ border: '1px solid #000000', backgroundColor: tableHeaderBgColor, padding: '1.5px 1px', fontSize: '6.5pt', fontWeight: 'bold', textAlign: 'center' }}>
                     XRF
                   </th>
-                  <th rowSpan={2} style={{ border: '1px solid #000000', padding: '1.5px 1px', fontSize: '6.5pt', fontWeight: 'bold', textAlign: 'center' }}>
+                  <th rowSpan={2} style={{ border: '1px solid #000000', backgroundColor: tableHeaderBgColor, padding: '1.5px 1px', fontSize: '6.5pt', fontWeight: 'bold', textAlign: 'center' }}>
                     Date Of Analyzed
                   </th>
-                  <th rowSpan={2} style={{ border: '1px solid #000000', padding: '1.5px 3px', fontSize: '6.5pt', fontWeight: 'bold', textAlign: 'center' }}>
+                  <th rowSpan={2} style={{ border: '1px solid #000000', backgroundColor: tableHeaderBgColor, padding: '1.5px 3px', fontSize: '6.5pt', fontWeight: 'bold', textAlign: 'center' }}>
                     Standard Sample Code
                   </th>
                   {targetElements.map(el => (
-                    <th key={`th1-${el.key}`} style={{ border: '1px solid #000000', padding: '1.5px 1px', fontSize: '6.5pt', fontWeight: 'bold', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                    <th key={`th1-${el.key}`} style={{ border: '1px solid #000000', backgroundColor: tableHeaderBgColor, padding: '1.5px 1px', fontSize: '6.5pt', fontWeight: 'bold', textAlign: 'center', whiteSpace: 'nowrap' }}>
                       {el.label}
                     </th>
                   ))}
                 </tr>
                 {/* Header Row 2: Percentage Units */}
-                <tr style={{ backgroundColor: '#a6a6a6', color: '#000000' }}>
+                <tr style={{ backgroundColor: tableHeaderBgColor, color: '#000000' }}>
                   {targetElements.map(el => (
-                    <th key={`th2-${el.key}`} style={{ border: '1px solid #000000', padding: '1px', fontSize: '6pt', fontWeight: 'bold', textAlign: 'center' }}>
+                    <th key={`th2-${el.key}`} style={{ border: '1px solid #000000', backgroundColor: tableHeaderBgColor, padding: '1px', fontSize: '6pt', fontWeight: 'bold', textAlign: 'center' }}>
                       %
                     </th>
                   ))}
@@ -1645,7 +1699,7 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
                     <td style={{ border: '1px solid #000000', height: '40px', verticalAlign: 'middle', textAlign: 'center', padding: '1px' }}>
                       {foremanSignature ? (
                         <img
-                          src={foremanSignature}
+                          src={cleanForemanSignature || foremanSignature}
                           alt="TTD Foreman"
                           style={{ maxHeight: '38px', maxWidth: '95%', objectFit: 'contain', margin: 'auto', display: 'block' }}
                         />
@@ -1656,7 +1710,7 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
                     <td style={{ border: '1px solid #000000', height: '40px', verticalAlign: 'middle', textAlign: 'center', padding: '1px' }}>
                       {spvSignature ? (
                         <img
-                          src={spvSignature}
+                          src={cleanSpvSignature || spvSignature}
                           alt="TTD SPV"
                           style={{ maxHeight: '38px', maxWidth: '95%', objectFit: 'contain', margin: 'auto', display: 'block' }}
                         />

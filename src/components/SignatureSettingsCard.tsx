@@ -139,17 +139,9 @@ export function SignatureSettingsCard({ inspectorNik, inspectorName }: Signature
         return toast.error('Silakan goreskan tanda tangan Anda di canvas terlebih dahulu');
       }
       if (drawWatermarkEnabled) {
-        sigData = await stampWatermarkOnDataUrl(rawSig, {
-          enabled: true,
-          text: drawWatermarkText,
-          subText: drawWatermarkSubText,
-          opacity: drawWatermarkOpacity,
-          style: drawWatermarkStyle,
-          size: drawWatermarkSize,
-          scale: drawWatermarkScale,
-          color: drawWatermarkColor,
-          layer: 'behind'
-        });
+        // Option A: Save clean raw signature to DB so PDF / print is always 100% clean,
+        // while watermark acts as screen security overlay
+        sigData = rawSig;
       } else {
         sigData = rawSig;
       }
@@ -599,7 +591,7 @@ export function SignatureSettingsCard({ inspectorNik, inspectorName }: Signature
                       <div className="p-2.5 rounded-xl bg-teal-50/70 dark:bg-teal-950/40 border border-teal-200/60 dark:border-teal-800/50 text-[11px] text-teal-900 dark:text-teal-200 flex items-start gap-2">
                         <ShieldCheck className="w-4 h-4 text-teal-600 shrink-0 mt-0.5" />
                         <div className="space-y-0.5">
-                          <p className="font-bold text-teal-950 dark:text-teal-100">Mode Polos Aktif (Rekomendasi)</p>
+                          <p className="font-bold text-teal-950 dark:text-teal-100">Mode Polos Aktif (Bersih di Layar & PDF)</p>
                           <p className="leading-relaxed opacity-90 text-[10.5px]">
                             Tanda tangan disimpan bersih tanpa teks cap tambahan di dalam gambar. Cocok untuk dokumen yang membutuhkan tanda tangan polos dan profesional.
                           </p>

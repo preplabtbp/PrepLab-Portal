@@ -129,7 +129,7 @@ export function estimateBackgroundLightness(ctx: CanvasRenderingContext2D, width
 export async function processSignatureImage(
   source: File | Blob | string,
   userOptions: Partial<ProcessSignatureOptions> = {}
-): Promise<{ dataUrl: string; width: number; height: number; estimatedBg: number }> {
+): Promise<{ dataUrl: string; cleanDataUrl?: string; width: number; height: number; estimatedBg: number }> {
   const options: ProcessSignatureOptions = {
     ...DEFAULT_SIGNATURE_OPTIONS,
     ...userOptions,
@@ -383,8 +383,22 @@ export async function processSignatureImage(
     applyWatermarkToCanvas(finalCtx, finalCanvasW, finalCanvasH, watermarkOptions);
   }
 
+  // Render pure clean canvas (no watermark) for official documents & PDF exports
+  const cleanCanvas = document.createElement('canvas');
+  cleanCanvas.width = finalCanvasW;
+  cleanCanvas.height = finalCanvasH;
+  const cleanCtx = cleanCanvas.getContext('2d');
+  if (cleanCtx) {
+    cleanCtx.drawImage(
+      inkBuffer, 
+      0, 0, rawTrimmedW, rawTrimmedH, 
+      drawX, drawY, scaledInkW, scaledInkH
+    );
+  }
+
   return {
     dataUrl: finalCanvas.toDataURL('image/png'),
+    cleanDataUrl: cleanCtx ? cleanCanvas.toDataURL('image/png') : finalCanvas.toDataURL('image/png'),
     width: finalCanvasW,
     height: finalCanvasH,
     estimatedBg
@@ -530,4 +544,55 @@ export async function stampWatermarkOnDataUrl(
     watermark
   });
   return result.dataUrl;
+}
+
+/**
+ * Strips away faint / transparent watermark text pixels from a signature data URL
+ * so that the signature printed to PDF or paper is 100% clean and pristine,
+ * preserving only the solid signature ink (Option A: Watermark on screen, clean on PDF).
+ */
+export async function cleanSignatureForPrint(sourceDataUrl: string): Promise<string> {
+  if (!sourceDataUrl || !sourceDataUrl.startsWith('data:image/')) return sourceDataUrl;
+
+  try {
+    const img = await loadImage(sourceDataUrl);
+    const canvas = document.createElement('canvas');
+    const w = img.naturalWidth || img.width || 400;
+    const h = img.naturalHeight || img.height || 200;
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return sourceDataUrl;
+
+    ctx.drawImage(img, 0, 0, w, h);
+    const imgData = ctx.getImageData(0, 0, w, h);
+    const data = imgData.data;
+
+    let hasModifications = false;
+    for (let i = 0; i < data.length; i += 4) {
+      const a = data[i + 3];
+      if (a === 0) continue;
+
+      const r = data[i];
+      const g = data[i + 1];
+      const b = data[i + 2];
+      const lightness = 0.299 * r + 0.587 * g + 0.114 * b;
+
+      // Detect faint watermark pixels:
+      // In digital signature watermarks, watermark is either low alpha (< 100) or high lightness (> 160)
+      // while black ink strokes are solid dark (alpha > 120 and lightness < 140).
+      if (a < 100 || (a < 210 && lightness > 160) || lightness > 210) {
+        data[i + 3] = 0; // Make watermark pixel 100% transparent
+        hasModifications = true;
+      }
+    }
+
+    if (!hasModifications) return sourceDataUrl;
+
+    ctx.putImageData(imgData, 0, 0);
+    return canvas.toDataURL('image/png');
+  } catch (err) {
+    console.warn('cleanSignatureForPrint fallback:', err);
+    return sourceDataUrl;
+  }
 }
