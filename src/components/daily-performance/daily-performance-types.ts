@@ -141,4 +141,4 @@ export interface DailyPerformanceRecord {
   updatedAt?: string;
 }
 
-export type ViewMode = 'presentation' | 'pipeline' | 'station' | 'table';
+export type ViewMode = 'presentation' | 'pipeline' | 'station' | 'table' | 'comparison_chart';

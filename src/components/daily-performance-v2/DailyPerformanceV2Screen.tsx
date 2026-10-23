@@ -22,6 +22,7 @@ import { DailyPerformanceV2BottleneckRadar } from './DailyPerformanceV2Bottlenec
 import { DailyPerformanceV2Handover } from './DailyPerformanceV2Handover';
 import { DailyPerformanceV2SummarySheet } from './DailyPerformanceV2SummarySheet';
 import { DailyPerformanceV2ForemanRekapTable } from './DailyPerformanceV2ForemanRekapTable';
+import { DailyPerformanceComparisonCharts } from '../daily-performance/DailyPerformanceComparisonCharts';
 import { Table } from 'lucide-react';
 
 interface DailyPerformanceV2ScreenProps {
@@ -237,6 +238,18 @@ export const DailyPerformanceV2Screen: React.FC<DailyPerformanceV2ScreenProps> =
                 <Printer className="w-3.5 h-3.5" />
                 <span>Cetak 1-Lembar</span>
               </button>
+
+              <button
+                onClick={() => setViewMode('comparison_chart')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-semibold transition-all cursor-pointer whitespace-nowrap ${
+                  viewMode === 'comparison_chart'
+                    ? 'bg-teal-600 text-white shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                <BarChart3 className="w-3.5 h-3.5" />
+                <span>Mode Chart & Komparasi</span>
+              </button>
             </div>
 
             {/* Presentation Mode Toggle */}
@@ -339,6 +352,15 @@ export const DailyPerformanceV2Screen: React.FC<DailyPerformanceV2ScreenProps> =
           />
         )}
 
+        {viewMode === 'comparison_chart' && (
+          <DailyPerformanceComparisonCharts 
+            records={records}
+            onSelectDate={d => {
+              setSelectedDate(d);
+              setViewMode('briefing');
+            }}
+          />
+        )}
       </div>
 
       {/* Input Modal */}

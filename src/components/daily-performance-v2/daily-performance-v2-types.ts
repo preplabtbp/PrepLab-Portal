@@ -32,7 +32,7 @@ export type {
   DailyReport
 };
 
-export type V2ViewMode = 'briefing' | 'matrix' | 'bottleneck' | 'handover' | 'summary_sheet' | 'foreman_rekap';
+export type V2ViewMode = 'briefing' | 'matrix' | 'bottleneck' | 'handover' | 'summary_sheet' | 'foreman_rekap' | 'comparison_chart';
 
 export interface MonthlyPeakRecords {
   monthKey: string; // e.g. "2026-09" or "2026-10"
