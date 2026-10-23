@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db, isDbCircuitBroken } from "../../src/db/index.js";
-import { eq, desc, or, inArray, isNull, and, gte, lte, sql, like } from "drizzle-orm";
+import { eq, desc, or, inArray, isNull, and, gte, lte, sql, like, ilike } from "drizzle-orm";
 import { 
   chatMessages, employees, equipments, workOrders, users, tickets, downtime, 
   spareparts, apdSettings, apdHistory, apdDocuments, roster, inspections, 
@@ -212,6 +212,290 @@ router.get("/api/bulletin/search", async (req, res) => {
       res.status(500).json({ status: "error", message: error.message });
     }
   });
+
+// GET /api/search/omni - Global Enterprise Omnisearch for Topics, Attachments, and Tasks
+router.get("/api/search/omni", async (req, res) => {
+  try {
+    const rawQ = String(req.query.q || "").trim();
+    if (!rawQ || rawQ.length < 2) {
+      return res.json({
+        status: "success",
+        query: rawQ,
+        data: { topics: [], attachments: [], tasks: [] }
+      });
+    }
+
+    const qLower = rawQ.toLowerCase();
+    const ptParam = String(req.query.pt || "TBP").toUpperCase();
+    const isGts = ptParam === "GTS";
+
+    // 1. Universe filter conditions for posts
+    const postConditions: any[] = [];
+    if (ptParam !== "ALL") {
+      if (isGts) {
+        postConditions.push(eq(bulletinPosts.pt, "GTS"));
+      } else {
+        postConditions.push(or(
+          eq(bulletinPosts.pt, "TBP"),
+          eq(bulletinPosts.pt, "GPS"),
+          eq(bulletinPosts.pt, "TBP_GPS"),
+          isNull(bulletinPosts.pt)
+        ));
+      }
+    }
+
+    const postSearchFilter = or(
+      ilike(bulletinPosts.title, `%${rawQ}%`),
+      ilike(bulletinPosts.category, `%${rawQ}%`),
+      ilike(bulletinPosts.department, `%${rawQ}%`),
+      ilike(bulletinPosts.content, `%${rawQ}%`)
+    );
+
+    const fullPostQuery = postConditions.length > 0
+      ? and(...postConditions, postSearchFilter)
+      : postSearchFilter;
+
+    const matchedPosts = await db
+      .select({
+        id: bulletinPosts.id,
+        title: bulletinPosts.title,
+        department: bulletinPosts.department,
+        category: bulletinPosts.category,
+        content: bulletinPosts.content,
+        authorName: bulletinPosts.authorName,
+        pt: bulletinPosts.pt,
+        createdAt: bulletinPosts.createdAt
+      })
+      .from(bulletinPosts)
+      .where(fullPostQuery)
+      .limit(30);
+
+    // 2. Search attachments in bulletin comments
+    const commentConditions: any[] = [];
+    if (ptParam !== "ALL") {
+      if (isGts) {
+        commentConditions.push(or(
+          eq(bulletinComments.universe, "GTS"),
+          eq(bulletinPosts.pt, "GTS")
+        ));
+      } else {
+        commentConditions.push(or(
+          eq(bulletinComments.universe, "TBP_GPS"),
+          eq(bulletinComments.universe, "TBP"),
+          isNull(bulletinComments.universe),
+          eq(bulletinPosts.pt, "TBP"),
+          isNull(bulletinPosts.pt)
+        ));
+      }
+    }
+
+    const commentSearchFilter = or(
+      ilike(bulletinComments.fileName, `%${rawQ}%`),
+      ilike(bulletinComments.fileUrl, `%${rawQ}%`),
+      ilike(bulletinComments.topicTitle, `%${rawQ}%`),
+      ilike(bulletinComments.content, `%${rawQ}%`)
+    );
+
+    const fullCommentQuery = commentConditions.length > 0
+      ? and(...commentConditions, commentSearchFilter)
+      : commentSearchFilter;
+
+    const matchedComments = await db
+      .select({
+        id: bulletinComments.id,
+        postId: bulletinComments.postId,
+        topicTitle: bulletinComments.topicTitle,
+        section: bulletinComments.section,
+        authorName: bulletinComments.authorName,
+        content: bulletinComments.content,
+        fileUrl: bulletinComments.fileUrl,
+        fileName: bulletinComments.fileName,
+        createdAt: bulletinComments.createdAt,
+        postPt: bulletinPosts.pt,
+        postTitle: bulletinPosts.title
+      })
+      .from(bulletinComments)
+      .leftJoin(bulletinPosts, eq(bulletinComments.postId, bulletinPosts.id))
+      .where(fullCommentQuery)
+      .limit(30);
+
+    // Helper: Determine file type
+    const getFileType = (nameOrUrl: string) => {
+      const lower = nameOrUrl.toLowerCase();
+      if (lower.endsWith(".pdf") || lower.includes(".pdf?")) return "pdf";
+      if (lower.endsWith(".xlsx") || lower.endsWith(".xls") || lower.endsWith(".csv") || lower.includes("spreadsheet")) return "excel";
+      if (lower.endsWith(".docx") || lower.endsWith(".doc")) return "word";
+      if (lower.endsWith(".png") || lower.endsWith(".jpg") || lower.endsWith(".jpeg") || lower.endsWith(".webp") || lower.endsWith(".svg")) return "image";
+      if (lower.endsWith(".zip") || lower.endsWith(".rar")) return "archive";
+      if (lower.includes("drive.google.com")) return "drive";
+      return "file";
+    };
+
+    // Helper: Context snippet around query match
+    const makeSnippet = (text: string, query: string, maxLength = 130) => {
+      if (!text) return "";
+      const clean = text.replace(/<[^>]+>/g, " ").replace(/[#*`|_\-\[\]]/g, " ").replace(/\s+/g, " ").trim();
+      const idx = clean.toLowerCase().indexOf(query.toLowerCase());
+      if (idx === -1) return clean.slice(0, maxLength) + (clean.length > maxLength ? "..." : "");
+      const start = Math.max(0, idx - 35);
+      const end = Math.min(clean.length, idx + query.length + 75);
+      return (start > 0 ? "..." : "") + clean.slice(start, end) + (end < clean.length ? "..." : "");
+    };
+
+    const topicsResult: any[] = [];
+    const tasksResult: any[] = [];
+    const attachmentsResult: any[] = [];
+    const seenAttachmentUrls = new Set<string>();
+
+    for (const post of matchedPosts) {
+      const titleLower = (post.title || "").toLowerCase();
+      const isTitleMatch = titleLower.includes(qLower);
+      const postUniverse = (post.pt || "TBP").toUpperCase().includes("GTS") ? "GTS" : "TBP";
+
+      // Add to Topics list
+      topicsResult.push({
+        id: post.id,
+        title: post.title || "Untitled Document",
+        department: post.department,
+        category: post.category,
+        authorName: post.authorName,
+        pt: postUniverse,
+        createdAt: post.createdAt,
+        snippet: makeSnippet(post.content || "", rawQ),
+        isDirectTitleMatch: isTitleMatch,
+        link: `/bulletin/${postUniverse}?postId=${post.id}`
+      });
+
+      const contentStr = post.content || "";
+
+      // 2A. Scan content for individual tasks in Markdown tables
+      if (contentStr.includes("|")) {
+        const lines = contentStr.split("\n");
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i].trim();
+          if (!line.startsWith("|") || line.includes("---")) continue;
+          if (line.toLowerCase().includes(qLower)) {
+            const rawCells = line.split("|").map(c => c.trim());
+            const cells = rawCells.slice(1, rawCells.length - 1);
+            if (cells.length >= 2) {
+              const taskTitle = cells[1] || cells[0];
+              const desc = cells[2] || "";
+              const pic = cells.find(c => c.toLowerCase().includes("pic:") || (c.length > 2 && c.length < 25 && !c.includes("---"))) || cells[3] || "-";
+              const status = cells.find(c => ["done", "in progress", "pending", "open", "closed", "selesai"].includes(c.toLowerCase())) || cells[5] || "-";
+              const priority = cells.find(c => ["high", "medium", "low", "critical", "tinggi", "sedang"].includes(c.toLowerCase())) || cells[4] || "-";
+
+              const cleanTaskTitle = taskTitle.replace(/<!--.*?-->/g, "").replace(/^[↳\s*]+/, "").trim();
+              if (cleanTaskTitle && cleanTaskTitle.length > 2 && !cleanTaskTitle.toLowerCase().includes("jenis kegiatan")) {
+                tasksResult.push({
+                  id: `task-${post.id}-${i}`,
+                  postId: post.id,
+                  postTitle: post.title,
+                  section: post.category || post.department,
+                  pt: postUniverse,
+                  taskTitle: cleanTaskTitle,
+                  desc: desc.slice(0, 110),
+                  pic: pic.replace(/^pic:\s*/i, "").trim(),
+                  status,
+                  priority,
+                  link: `/bulletin/${postUniverse}?postId=${post.id}&topic=${encodeURIComponent(cleanTaskTitle)}`
+                });
+              }
+            }
+          }
+        }
+      }
+
+      // 2B. Scan content for embedded markdown attachment links [FileName](URL)
+      const linkRegex = /\[([^\]]+)\]\((https?:\/\/[^\s\)]+)\)/g;
+      let match;
+      while ((match = linkRegex.exec(contentStr)) !== null) {
+        const linkName = match[1].trim();
+        const linkUrl = match[2].trim();
+        const combined = `${linkName} ${linkUrl}`.toLowerCase();
+        if (combined.includes(qLower) || getFileType(linkUrl) !== "file") {
+          if (!seenAttachmentUrls.has(linkUrl) && (combined.includes(qLower) || linkName.toLowerCase().includes(qLower))) {
+            seenAttachmentUrls.add(linkUrl);
+            attachmentsResult.push({
+              id: `att-post-${post.id}-${attachmentsResult.length}`,
+              name: linkName,
+              url: linkUrl,
+              fileType: getFileType(linkName || linkUrl),
+              sourcePostId: post.id,
+              sourcePostTitle: post.title,
+              sourceSection: post.category || post.department,
+              uploader: post.authorName,
+              pt: postUniverse,
+              createdAt: post.createdAt,
+              link: `/bulletin/${postUniverse}?postId=${post.id}`
+            });
+          }
+        }
+      }
+
+      // 2C. Scan raw Google Drive Links
+      const driveRegex = /(https:\/\/drive\.google\.com\/[^\s\)\"\'\<\>]+)/g;
+      while ((match = driveRegex.exec(contentStr)) !== null) {
+        const driveUrl = match[1].trim();
+        if (!seenAttachmentUrls.has(driveUrl)) {
+          if (driveUrl.toLowerCase().includes(qLower) || post.title?.toLowerCase().includes(qLower)) {
+            seenAttachmentUrls.add(driveUrl);
+            attachmentsResult.push({
+              id: `att-drive-${post.id}-${attachmentsResult.length}`,
+              name: `Lampiran Dokumen Google Drive (${post.title || "Dokumen"})`,
+              url: driveUrl,
+              fileType: "drive",
+              sourcePostId: post.id,
+              sourcePostTitle: post.title,
+              sourceSection: post.category || post.department,
+              uploader: post.authorName,
+              pt: postUniverse,
+              createdAt: post.createdAt,
+              link: `/bulletin/${postUniverse}?postId=${post.id}`
+            });
+          }
+        }
+      }
+    }
+
+    // 3. Process Comment Attachments
+    for (const c of matchedComments) {
+      if (c.fileUrl && !seenAttachmentUrls.has(c.fileUrl)) {
+        seenAttachmentUrls.add(c.fileUrl);
+        const commentUniverse = (c.postPt || "TBP").toUpperCase().includes("GTS") ? "GTS" : "TBP";
+        attachmentsResult.push({
+          id: `att-comment-${c.id}`,
+          name: c.fileName || `Lampiran: ${c.topicTitle || c.postTitle || "Topik"}`,
+          url: c.fileUrl,
+          fileType: getFileType(c.fileName || c.fileUrl),
+          sourcePostId: c.postId,
+          sourcePostTitle: c.postTitle,
+          sourceTopic: c.topicTitle,
+          sourceSection: c.section,
+          uploader: c.authorName,
+          pt: commentUniverse,
+          createdAt: c.createdAt,
+          link: `/bulletin/${commentUniverse}?postId=${c.postId}&topic=${encodeURIComponent(c.topicTitle || "")}`
+        });
+      }
+    }
+
+    // Sort: direct title matches first
+    topicsResult.sort((a, b) => (b.isDirectTitleMatch ? 1 : 0) - (a.isDirectTitleMatch ? 1 : 0));
+
+    res.json({
+      status: "success",
+      query: rawQ,
+      data: {
+        topics: topicsResult.slice(0, 12),
+        attachments: attachmentsResult.slice(0, 12),
+        tasks: tasksResult.slice(0, 12)
+      }
+    });
+  } catch (err: any) {
+    console.error("[Omnisearch Error]:", err);
+    res.status(500).json({ status: "error", message: err.message });
+  }
+});
 
 // GET Single Post by ID for direct navigation and real-time device sync
 router.get("/api/bulletin/:id(\\d+)", async (req, res) => {

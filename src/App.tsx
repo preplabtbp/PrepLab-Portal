@@ -1976,6 +1976,7 @@ export default function App() {
           onOpenP5m={() => {
             window.dispatchEvent(new CustomEvent('open-simplified-p5m-modal'));
           }}
+          userPt={effectiveUniverse}
         />
 
         <div className="flex items-center gap-3">
