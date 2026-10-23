@@ -1052,6 +1052,88 @@ export function NotionDatabaseTable({
     multiline: boolean;
   } | null>(null);
 
+  // Drag and Drop Rows state & handlers (Notion-style row reordering)
+  const [draggedRowIndex, setDraggedRowIndex] = useState<number | null>(null);
+  const [dragOverRowIndex, setDragOverRowIndex] = useState<number | null>(null);
+  const [dropPosition, setDropPosition] = useState<'top' | 'bottom'>('bottom');
+
+  const handleRowDragStart = (e: React.DragEvent, rowIndex: number) => {
+    e.dataTransfer.setData('text/plain', String(rowIndex));
+    e.dataTransfer.effectAllowed = 'move';
+    setDraggedRowIndex(rowIndex);
+  };
+
+  const handleRowDragOver = (e: React.DragEvent, rowIndex: number) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (draggedRowIndex === null || draggedRowIndex === rowIndex) {
+      setDragOverRowIndex(null);
+      return;
+    }
+    const rect = e.currentTarget.getBoundingClientRect();
+    const midY = rect.top + rect.height / 2;
+    const isTop = e.clientY < midY;
+    setDropPosition(isTop ? 'top' : 'bottom');
+    setDragOverRowIndex(rowIndex);
+  };
+
+  const handleRowDragEnd = () => {
+    setDraggedRowIndex(null);
+    setDragOverRowIndex(null);
+  };
+
+  const handleRowDrop = (e: React.DragEvent, targetIndex: number) => {
+    e.preventDefault();
+    if (draggedRowIndex === null || draggedRowIndex === targetIndex) {
+      handleRowDragEnd();
+      return;
+    }
+
+    const currentRows = [...localRows];
+    if (
+      draggedRowIndex < 0 ||
+      draggedRowIndex >= currentRows.length ||
+      targetIndex < 0 ||
+      targetIndex >= currentRows.length
+    ) {
+      handleRowDragEnd();
+      return;
+    }
+
+    // Pindahkan baris induk beserta semua sub-kegiatan di bawahnya secara bersamaan
+    const sourceRow = currentRows[draggedRowIndex];
+    let bundleCount = 1;
+    while (
+      draggedRowIndex + bundleCount < currentRows.length &&
+      isSubItemRow(currentRows[draggedRowIndex + bundleCount])
+    ) {
+      bundleCount++;
+    }
+    const movingBundle = currentRows.splice(draggedRowIndex, bundleCount);
+
+    let adjustedTargetIdx = targetIndex;
+    if (draggedRowIndex < targetIndex) {
+      adjustedTargetIdx = targetIndex - bundleCount;
+    }
+    let insertionIdx = dropPosition === 'top' ? adjustedTargetIdx : adjustedTargetIdx + 1;
+    insertionIdx = Math.max(0, Math.min(currentRows.length, insertionIdx));
+
+    currentRows.splice(insertionIdx, 0, ...movingBundle);
+
+    setLocalRows(currentRows);
+    onRowsChange?.(currentRows);
+    saveTableToBackend(currentRows);
+
+    const titleMoved = getDisplayTitle(
+      getRowVal(sourceRow, 'Activity Name') ||
+      getRowVal(sourceRow, 'Jenis kegiatan') ||
+      'Kegiatan'
+    );
+    toast.success(`Urutan baris "${titleMoved}" berhasil dipindahkan!`);
+
+    handleRowDragEnd();
+  };
+
   // User Identity & Role Permissions for Deletion / Recycle Bin
   const effectiveNik = currentAuthorNik || localStorage.getItem('p2h_inspector_nik') || '';
   const effectiveName = currentAuthorName || localStorage.getItem('p2h_inspector_name') || 'User';
@@ -5166,9 +5248,9 @@ export function NotionDatabaseTable({
     try {
       let updatedRows: TableRowData[];
       if (editingRowIndex === null) {
-        // Adding new row -> place at TOP (#1, row 1)
-        updatedRows = [cleanedRow, ...localRows];
-        toast.success(`Data kegiatan baru (${finalTaskCode}) berhasil ditambahkan di Baris #1!`);
+        // Adding new row -> place at BOTTOM (ala Notion)
+        updatedRows = [...localRows, cleanedRow];
+        toast.success(`Data kegiatan baru (${finalTaskCode}) berhasil ditambahkan di Baris #${updatedRows.length}!`);
       } else {
         // Editing existing row: pastikan targetIndex cocok dengan id / referensi row yang diedit
         let targetIndex = editingRowIndex;
@@ -5197,8 +5279,9 @@ export function NotionDatabaseTable({
     }
   };
 
-  // Insert Blank Row Inline directly into table (starts manual inline editing immediately at row #1)
-  const handleInsertBlankRow = (_insertAtIndex: number = 0) => {
+  // Insert Blank Row Inline directly into table (starts manual inline editing at bottom ala Notion)
+  const handleInsertBlankRow = (insertOption: boolean | number = true) => {
+    const isBottom = typeof insertOption === 'boolean' ? insertOption : insertOption !== 0;
     const now = new Date();
     const createdStr = getTodayDDMMYYYY();
     const inheritedCadence = currentCadence || 'Non Routine';
@@ -5237,27 +5320,39 @@ export function NotionDatabaseTable({
       }
     });
 
-    // Sisipkan di posisi paling atas (#1)
-    const nextRows = [blankRow, ...localRows];
+    const targetIndex = isBottom ? localRows.length : 0;
+    const nextRows = isBottom ? [...localRows, blankRow] : [blankRow, ...localRows];
 
     setLocalRows(nextRows);
     onRowsChange?.(nextRows);
     saveTableToBackend(nextRows);
 
-    // Immediately activate inline editor on the new empty cell at row 0
+    // Immediately activate inline editor on the new empty cell
     const titleColHeader = displayHeaders.find(h => {
       const hl = h.toLowerCase().trim();
       return hl.includes('activity name') || hl.includes('jenis kegiatan') || hl === 'task' || hl === 'judul';
     }) || 'Activity Name';
 
     setActiveInlineEditor({
-      rowIndex: 0,
+      rowIndex: targetIndex,
       colName: titleColHeader,
       initialValue: '',
       multiline: false
     });
 
-    toast.success(`Kegiatan baru (${autoTaskCode}) ditambahkan di Baris #1! Silakan ketik nama kegiatan.`);
+    // Auto-scroll ke paling bawah tabel
+    if (isBottom) {
+      setTimeout(() => {
+        if (tableScrollRef.current) {
+          tableScrollRef.current.scrollTo({
+            top: tableScrollRef.current.scrollHeight,
+            behavior: 'smooth'
+          });
+        }
+      }, 80);
+    }
+
+    toast.success(`Kegiatan baru (${autoTaskCode}) ditambahkan di Baris #${targetIndex + 1}! Silakan ketik nama kegiatan.`);
   };
 
   // Map setiap baris sub-item ke baris parent-nya di localRows
@@ -8142,7 +8237,7 @@ export function NotionDatabaseTable({
                 <th 
                   className={`sticky top-0 z-20 text-center shadow-2xs border-b border-r select-none ${
                     isNotionLight ? 'bg-[#fbfbfa] text-[#37352f] border-[#e9e9e8]' : 'bg-[#202020] text-slate-300 border-[#303030]'
-                  } ${fitPageMode ? 'w-14 min-w-[56px] max-w-[56px] px-1 py-2.5' : 'w-16 min-w-[62px] max-w-[62px] px-1.5 py-3'}`}
+                  } ${fitPageMode ? 'w-16 min-w-[64px] max-w-[64px] px-1 py-2.5' : 'w-20 min-w-[76px] max-w-[76px] px-1.5 py-3'}`}
                 >
                   <div className="flex items-center justify-center">
                     <input
@@ -8554,7 +8649,7 @@ export function NotionDatabaseTable({
                           </div>
                           <button
                             type="button"
-                            onClick={handleOpenAddModal}
+                            onClick={() => handleInsertBlankRow(true)}
                             className="mt-2 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-semibold text-xs shadow-md transition-all cursor-pointer active:scale-95"
                           >
                             <Plus className="w-4 h-4" />
@@ -8784,7 +8879,19 @@ export function NotionDatabaseTable({
                           return (
                             <tr
                               key={isSubItem ? `sub-${actualRowIndex}-${row.id || ''}` : `row-${actualRowIndex}-${row.id || ''}`}
+                              onDragOver={(e) => handleRowDragOver(e, actualRowIndex)}
+                              onDrop={(e) => handleRowDrop(e, actualRowIndex)}
                               className={`transition-all group border-b ${
+                                dragOverRowIndex === actualRowIndex
+                                  ? dropPosition === 'top'
+                                    ? '!border-t-2 !border-t-teal-500 bg-teal-500/10'
+                                    : '!border-b-2 !border-b-teal-500 bg-teal-500/10'
+                                  : ''
+                              } ${
+                                draggedRowIndex === actualRowIndex
+                                  ? 'opacity-40 bg-slate-200/50 dark:bg-slate-800/50'
+                                  : ''
+                              } ${
                                 isSelected 
                                   ? 'bg-teal-500/10 hover:bg-teal-500/15' 
                                   : isDirty 
@@ -8811,11 +8918,26 @@ export function NotionDatabaseTable({
                               <td 
                                 className={`border-r select-none transition-colors ${
                                   isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
-                                } ${fitPageMode ? 'w-14 min-w-[56px] max-w-[56px] px-0.5 py-1' : 'w-16 min-w-[62px] max-w-[62px] px-1 py-1'}`}
+                                } ${fitPageMode ? 'w-16 min-w-[64px] max-w-[64px] px-0.5 py-1' : 'w-20 min-w-[76px] max-w-[76px] px-1 py-1'}`}
                                 onClick={(e) => e.stopPropagation()}
                               >
-                                <div className="flex items-center justify-center gap-1.5">
-                                  {/* Pin Button: Menggantikan logo drag handle GripVertical */}
+                                <div className="flex items-center justify-center gap-1">
+                                  {/* Drag Handle ala Notion */}
+                                  {!isSubItem ? (
+                                    <div
+                                      draggable
+                                      onDragStart={(e) => handleRowDragStart(e, actualRowIndex)}
+                                      onDragEnd={handleRowDragEnd}
+                                      className="cursor-grab active:cursor-grabbing p-0.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                                      title="Geser untuk mengubah urutan baris (Tarik ke atas/bawah)"
+                                    >
+                                      <GripVertical className="w-3.5 h-3.5" />
+                                    </div>
+                                  ) : (
+                                    <div className="w-3.5 h-3.5 shrink-0" />
+                                  )}
+
+                                  {/* Pin Button */}
                                   {!isSubItem ? (
                                     <button
                                       type="button"
@@ -8823,7 +8945,7 @@ export function NotionDatabaseTable({
                                         e.stopPropagation();
                                         handleTogglePinRow(row);
                                       }}
-                                      className={`p-0.5 rounded transition-all cursor-pointer ${
+                                      className={`p-0.5 rounded transition-all cursor-pointer shrink-0 ${
                                         isRowPinned(row)
                                           ? 'text-amber-500 hover:text-amber-600 bg-amber-50 dark:bg-amber-950/50 opacity-100 shadow-2xs'
                                           : 'text-slate-400 hover:text-amber-500 opacity-0 group-hover:opacity-100 hover:bg-slate-200 dark:hover:bg-slate-700'
@@ -8833,7 +8955,7 @@ export function NotionDatabaseTable({
                                       <Pin className={`w-3.5 h-3.5 ${isRowPinned(row) ? 'fill-amber-500 rotate-45 text-amber-500' : ''}`} />
                                     </button>
                                   ) : (
-                                    <div className="w-3.5 h-3.5" />
+                                    <div className="w-3.5 h-3.5 shrink-0" />
                                   )}
 
                                   {/* [ ] Select Checkbox */}
@@ -10634,13 +10756,13 @@ export function NotionDatabaseTable({
             <div className="flex items-center gap-3">
               <button
                 type="button"
-                onClick={handleOpenAddModal}
+                onClick={() => handleInsertBlankRow(true)}
                 className={`text-xs font-semibold flex items-center gap-1.5 py-1 px-2.5 rounded-lg transition-all cursor-pointer ${
                   isNotionLight
                     ? 'text-teal-700 bg-teal-50 hover:bg-teal-100 border border-teal-200'
                     : 'text-teal-400 bg-teal-950/40 hover:bg-teal-900/60 border border-teal-800/60'
                 }`}
-                title="Tambah Baris Kegiatan Baru"
+                title="Tambah Baris Kegiatan Baru (Di Paling Bawah)"
               >
                 <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
                 <span>+ Tambah Baris Kegiatan</span>
