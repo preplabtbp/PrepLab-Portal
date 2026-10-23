@@ -538,6 +538,11 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
             }
           }
 
+          // Skip instrument / application cell so it doesn't contaminate sampleLabel
+          if (/^(EPSILON|SUPERMINI|ZETIUM)/i.test(val) || val.includes('\n') || /MYLAR/i.test(val)) {
+            continue;
+          }
+
           // 3. Bangun Label Sampel lengkap
           if (/VER-|OREAS|LIM|SAP|BLANK|STD|CRM/i.test(val)) {
             labelParts.push(val);
@@ -1251,13 +1256,6 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
           return !codeLower.includes('blank') && !labelLower.includes('blank');
         });
 
-        // Dynamic compact styles if many standards (e.g. 8+ rows)
-        const isDense = crmStandardsList.length >= 7;
-        const mainRowPad = isDense ? '1.5px 1px' : '2px 1px';
-        const fontSizeMain = isDense ? '7pt' : '7.5pt';
-        const compMarginBottom = isDense ? '4px' : '8px';
-        const signBoxHeight = isDense ? '48px' : '58px';
-
         const renderOfficialContent = () => (
           <div
             className="xrf-official-doc-root"
@@ -1278,33 +1276,34 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
                 alignItems: 'center',
                 justifyContent: 'space-between',
                 width: '100%',
-                marginBottom: isDense ? '10px' : '14px',
-                minHeight: '38px'
+                marginBottom: '8px',
+                minHeight: '32px'
               }}
             >
-              <div style={{ width: '140px', flexShrink: 0 }}>
+              <div style={{ width: '130px', flexShrink: 0 }}>
                 <img
                   src={TBP_LOGO_URI}
                   alt="TBP Logo"
-                  style={{ height: isDense ? '32px' : '36px', width: 'auto', objectFit: 'contain', display: 'block' }}
+                  style={{ height: '28px', width: 'auto', objectFit: 'contain', display: 'block' }}
                 />
               </div>
               <div style={{ flex: 1, textAlign: 'center' }}>
                 <h1
                   style={{
-                    fontSize: isDense ? '13pt' : '14pt',
+                    fontSize: '13pt',
                     fontWeight: 'bold',
                     textTransform: 'uppercase',
                     margin: 0,
                     letterSpacing: '0.5px',
                     color: '#000000',
-                    fontFamily: 'Arial, sans-serif'
+                    fontFamily: 'Arial, sans-serif',
+                    lineHeight: 1.1
                   }}
                 >
                   DAILY VERIFIKASI SAMPLE STANDARD
                 </h1>
               </div>
-              <div style={{ width: '140px', flexShrink: 0 }} />
+              <div style={{ width: '130px', flexShrink: 0 }} />
             </div>
 
             {/* 2. Main Daily Results Table */}
@@ -1314,35 +1313,35 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
                 borderCollapse: 'collapse',
                 border: '1.5px solid #000000',
                 tableLayout: 'fixed',
-                marginBottom: isDense ? '10px' : '14px'
+                marginBottom: '8px'
               }}
             >
               <colgroup>
-                <col style={{ width: '3%' }} />
+                <col style={{ width: '2.8%' }} />
                 <col style={{ width: '4.8%' }} />
-                <col style={{ width: '10.5%' }} />
-                <col style={{ width: '18.7%' }} />
+                <col style={{ width: '10.2%' }} />
+                <col style={{ width: '18.2%' }} />
                 {targetElements.map(el => (
-                  <col key={`col-${el.key}`} style={{ width: `${63 / targetElements.length}%` }} />
+                  <col key={`col-${el.key}`} style={{ width: `${64 / targetElements.length}%` }} />
                 ))}
               </colgroup>
               <thead>
                 {/* Header Row 1 */}
                 <tr style={{ backgroundColor: '#a6a6a6', color: '#000000' }}>
-                  <th rowSpan={2} style={{ border: '1px solid #000000', padding: '2px 1px', fontSize: fontSizeMain, fontWeight: 'bold', textAlign: 'center' }}>
+                  <th rowSpan={2} style={{ border: '1px solid #000000', padding: '1.5px 1px', fontSize: '6.5pt', fontWeight: 'bold', textAlign: 'center' }}>
                     NO.
                   </th>
-                  <th rowSpan={2} style={{ border: '1px solid #000000', padding: '2px 1px', fontSize: fontSizeMain, fontWeight: 'bold', textAlign: 'center' }}>
+                  <th rowSpan={2} style={{ border: '1px solid #000000', padding: '1.5px 1px', fontSize: '6.5pt', fontWeight: 'bold', textAlign: 'center' }}>
                     XRF
                   </th>
-                  <th rowSpan={2} style={{ border: '1px solid #000000', padding: '2px 1px', fontSize: fontSizeMain, fontWeight: 'bold', textAlign: 'center' }}>
+                  <th rowSpan={2} style={{ border: '1px solid #000000', padding: '1.5px 1px', fontSize: '6.5pt', fontWeight: 'bold', textAlign: 'center' }}>
                     Date Of Analyzed
                   </th>
-                  <th rowSpan={2} style={{ border: '1px solid #000000', padding: '2px 4px', fontSize: fontSizeMain, fontWeight: 'bold', textAlign: 'center' }}>
+                  <th rowSpan={2} style={{ border: '1px solid #000000', padding: '1.5px 3px', fontSize: '6.5pt', fontWeight: 'bold', textAlign: 'center' }}>
                     Standard Sample Code
                   </th>
                   {targetElements.map(el => (
-                    <th key={`th1-${el.key}`} style={{ border: '1px solid #000000', padding: '2px 1px', fontSize: isDense ? '6.5pt' : '7pt', fontWeight: 'bold', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                    <th key={`th1-${el.key}`} style={{ border: '1px solid #000000', padding: '1.5px 1px', fontSize: '6.5pt', fontWeight: 'bold', textAlign: 'center', whiteSpace: 'nowrap' }}>
                       {el.label}
                     </th>
                   ))}
@@ -1350,7 +1349,7 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
                 {/* Header Row 2: Percentage Units */}
                 <tr style={{ backgroundColor: '#a6a6a6', color: '#000000' }}>
                   {targetElements.map(el => (
-                    <th key={`th2-${el.key}`} style={{ border: '1px solid #000000', padding: '1px', fontSize: isDense ? '6.5pt' : '7pt', fontWeight: 'bold', textAlign: 'center' }}>
+                    <th key={`th2-${el.key}`} style={{ border: '1px solid #000000', padding: '1px', fontSize: '6pt', fontWeight: 'bold', textAlign: 'center' }}>
                       %
                     </th>
                   ))}
@@ -1361,9 +1360,9 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
                   const isFirstRow = idx === 0;
 
                   return (
-                    <tr key={`print-main-row-${idx}`}>
+                    <tr key={`print-main-row-${idx}`} style={{ height: '15px' }}>
                       {/* Column 1: NO. */}
-                      <td style={{ border: '1px solid #000000', textAlign: 'center', fontSize: fontSizeMain, padding: mainRowPad }}>
+                      <td style={{ border: '1px solid #000000', textAlign: 'center', fontSize: '6.5pt', padding: '1px' }}>
                         {idx + 1}
                       </td>
 
@@ -1376,7 +1375,7 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
                             backgroundColor: '#d4d4d4',
                             textAlign: 'center',
                             verticalAlign: 'middle',
-                            padding: '4px 2px'
+                            padding: '2px 1px'
                           }}
                         >
                           <div
@@ -1385,10 +1384,10 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
                               transform: 'rotate(180deg)',
                               margin: 'auto',
                               fontWeight: 'bold',
-                              fontSize: isDense ? '7pt' : '7.5pt',
+                              fontSize: '6.5pt',
                               letterSpacing: '0.4px',
                               whiteSpace: 'nowrap',
-                              lineHeight: 1.35,
+                              lineHeight: 1.25,
                               color: '#002060',
                               textAlign: 'center'
                             }}
@@ -1404,12 +1403,12 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
                       )}
 
                       {/* Column 3: Date Of Analyzed */}
-                      <td style={{ border: '1px solid #000000', textAlign: 'center', fontSize: isDense ? '6.5pt' : '7pt', padding: '1px', whiteSpace: 'nowrap' }}>
+                      <td style={{ border: '1px solid #000000', textAlign: 'center', fontSize: '6.5pt', padding: '1px', whiteSpace: 'nowrap' }}>
                         {formatDateOfAnalyzed(verificationDate, r.analyzedAt, idx)}
                       </td>
 
                       {/* Column 4: Standard Sample Code */}
-                      <td style={{ border: '1px solid #000000', textAlign: 'left', fontSize: fontSizeMain, padding: '1px 6px', fontWeight: 'bold', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <td style={{ border: '1px solid #000000', textAlign: 'left', fontSize: '6.5pt', padding: '1px 4px', fontWeight: 'bold', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {r.sampleLabel || r.standardCode}
                       </td>
 
@@ -1418,7 +1417,7 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
                         const valNum = getRowColValue(r, el.key);
                         const evalResult = el.field ? evaluateCell(r.standardCode, el.key, valNum) : { status: 'NORMAL' };
                         
-                        // Pink highlight if value is negative (typical in blanks) or action alert
+                        // Pink highlight if value is negative or action alert
                         const isAlert = (valNum !== null && valNum < 0) || evalResult.status === 'ACTION';
 
                         return (
@@ -1427,8 +1426,8 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
                             style={{
                               border: '1px solid #000000',
                               textAlign: 'center',
-                              fontSize: fontSizeMain,
-                              padding: mainRowPad,
+                              fontSize: '6.5pt',
+                              padding: '1px',
                               backgroundColor: isAlert ? '#ffc7ce' : '#ffffff',
                               color: isAlert ? '#9c0006' : '#000000',
                               fontWeight: 'normal',
@@ -1446,43 +1445,42 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
             </table>
 
             {/* 3. Detailed Standards Comparison Breakdown (Expected Value & Diff. %) */}
-            {/* Exactly aligned with the main table columns */}
-            <div style={{ width: '100%', marginBottom: isDense ? '12px' : '18px' }}>
+            <div style={{ width: '100%', marginBottom: '8px' }}>
               {crmStandardsList.map((r, sIdx) => {
                 return (
-                  <div key={`std-comp-${sIdx}`} style={{ width: '100%', marginBottom: compMarginBottom }}>
+                  <div key={`std-comp-${sIdx}`} style={{ width: '100%', marginBottom: '2.5px' }}>
                     <table
                       style={{
                         width: '100%',
                         borderCollapse: 'collapse',
                         border: 'none',
                         tableLayout: 'fixed',
-                        fontSize: isDense ? '6.5pt' : '7pt'
+                        fontSize: '6.5pt'
                       }}
                     >
                       <colgroup>
-                        <col style={{ width: '3%' }} />
+                        <col style={{ width: '2.8%' }} />
                         <col style={{ width: '4.8%' }} />
-                        <col style={{ width: '10.5%' }} />
-                        <col style={{ width: '18.7%' }} />
+                        <col style={{ width: '10.2%' }} />
+                        <col style={{ width: '18.2%' }} />
                         {targetElements.map(el => (
-                          <col key={`comp-col-${el.key}`} style={{ width: `${63 / targetElements.length}%` }} />
+                          <col key={`comp-col-${el.key}`} style={{ width: `${64 / targetElements.length}%` }} />
                         ))}
                       </colgroup>
                       <tbody>
                         {/* Row 1: Standard Name + Actual Values */}
-                        <tr style={{ height: isDense ? '16px' : '18px' }}>
-                          <td style={{ border: 'none', padding: '1px' }}></td>
-                          <td style={{ border: 'none', padding: '1px' }}></td>
-                          <td style={{ border: 'none', padding: '1px' }}></td>
-                          <td style={{ padding: '1px 4px', textAlign: 'left', fontWeight: 'bold', fontSize: isDense ? '7pt' : '7.5pt', border: 'none', whiteSpace: 'nowrap', overflow: 'hidden' }}>
-                            <span style={{ display: 'inline-block', width: '24px', height: '9px', backgroundColor: '#64748b', marginRight: '6px', verticalAlign: 'middle' }} />
+                        <tr style={{ height: '14px' }}>
+                          <td style={{ border: 'none', padding: '0px' }}></td>
+                          <td style={{ border: 'none', padding: '0px' }}></td>
+                          <td style={{ border: 'none', padding: '0px' }}></td>
+                          <td style={{ padding: '0px 3px', textAlign: 'left', fontWeight: 'bold', fontSize: '6.5pt', border: 'none', whiteSpace: 'nowrap', overflow: 'hidden' }}>
+                            <span style={{ display: 'inline-block', width: '20px', height: '7.5px', backgroundColor: '#64748b', marginRight: '5px', verticalAlign: 'middle' }} />
                             <span style={{ verticalAlign: 'middle' }}>{r.sampleLabel || r.standardCode}</span>
                           </td>
                           {targetElements.map(el => {
                             const valNum = getRowColValue(r, el.key);
                             return (
-                              <td key={`act-val-${el.key}`} style={{ textAlign: 'center', fontWeight: 'bold', fontSize: isDense ? '7pt' : '7.5pt', padding: '1px', border: 'none' }}>
+                              <td key={`act-val-${el.key}`} style={{ textAlign: 'center', fontWeight: 'bold', fontSize: '6.5pt', padding: '0px', border: 'none' }}>
                                 {formatIndoNum(valNum, el.is3Dec ? 3 : 2)}
                               </td>
                             );
@@ -1490,19 +1488,19 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
                         </tr>
 
                         {/* Row 2: Expected Value */}
-                        <tr style={{ height: isDense ? '15px' : '17px' }}>
-                          <td style={{ border: 'none', padding: '1px' }}></td>
-                          <td style={{ border: 'none', padding: '1px' }}></td>
-                          <td style={{ border: 'none', padding: '1px' }}></td>
-                          <td style={{ padding: '1px 4px', textAlign: 'center', border: 'none' }}>
-                            <div style={{ backgroundColor: '#e2e8f0', borderRadius: '3px', padding: '1px 6px', fontStyle: 'italic', display: 'inline-block', fontSize: isDense ? '6.5pt' : '7pt', color: '#1e293b' }}>
+                        <tr style={{ height: '13px' }}>
+                          <td style={{ border: 'none', padding: '0px' }}></td>
+                          <td style={{ border: 'none', padding: '0px' }}></td>
+                          <td style={{ border: 'none', padding: '0px' }}></td>
+                          <td style={{ padding: '0px 3px', textAlign: 'center', border: 'none' }}>
+                            <div style={{ backgroundColor: '#e2e8f0', borderRadius: '2px', padding: '0.5px 5px', fontStyle: 'italic', display: 'inline-block', fontSize: '6pt', color: '#1e293b' }}>
                               Expected Value
                             </div>
                           </td>
                           {targetElements.map(el => {
                             const expVal = getExpectedColValue(r.standardCode, el.key);
                             return (
-                              <td key={`exp-val-${el.key}`} style={{ textAlign: 'center', fontStyle: 'normal', fontSize: isDense ? '6.5pt' : '7pt', padding: '1px', color: '#334155', border: 'none' }}>
+                              <td key={`exp-val-${el.key}`} style={{ textAlign: 'center', fontStyle: 'normal', fontSize: '6.5pt', padding: '0px', color: '#334155', border: 'none' }}>
                                 {expVal > 0 ? formatIndoNum(expVal, el.is3Dec ? 3 : 2) : '-'}
                               </td>
                             );
@@ -1510,12 +1508,12 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
                         </tr>
 
                         {/* Row 3: Diff. % with Up/Down Indicator */}
-                        <tr style={{ height: isDense ? '15px' : '17px' }}>
-                          <td style={{ border: 'none', padding: '1px' }}></td>
-                          <td style={{ border: 'none', padding: '1px' }}></td>
-                          <td style={{ border: 'none', padding: '1px' }}></td>
-                          <td style={{ padding: '1px 4px', textAlign: 'center', border: 'none' }}>
-                            <div style={{ fontStyle: 'italic', display: 'inline-block', fontSize: isDense ? '6.5pt' : '7pt', color: '#475569' }}>
+                        <tr style={{ height: '13px' }}>
+                          <td style={{ border: 'none', padding: '0px' }}></td>
+                          <td style={{ border: 'none', padding: '0px' }}></td>
+                          <td style={{ border: 'none', padding: '0px' }}></td>
+                          <td style={{ padding: '0px 3px', textAlign: 'center', border: 'none' }}>
+                            <div style={{ fontStyle: 'italic', display: 'inline-block', fontSize: '6pt', color: '#475569' }}>
                               Diff. %
                             </div>
                           </td>
@@ -1526,10 +1524,10 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
                             const isPositive = diffPct !== null && diffPct >= 0;
 
                             return (
-                              <td key={`diff-val-${el.key}`} style={{ textAlign: 'center', fontSize: isDense ? '6.5pt' : '7pt', padding: '1px', border: 'none', whiteSpace: 'nowrap' }}>
+                              <td key={`diff-val-${el.key}`} style={{ textAlign: 'center', fontSize: '6pt', padding: '0px', border: 'none', whiteSpace: 'nowrap' }}>
                                 {diffPct !== null ? (
                                   <span>
-                                    <span style={{ color: isPositive ? '#15803d' : '#b91c1c', marginRight: '2px', fontSize: '7pt', verticalAlign: 'middle' }}>
+                                    <span style={{ color: isPositive ? '#15803d' : '#b91c1c', marginRight: '1px', fontSize: '6pt', verticalAlign: 'middle' }}>
                                       {isPositive ? '▲' : '▼'}
                                     </span>
                                     <span style={{ color: '#000000', fontWeight: 'bold' }}>
@@ -1551,29 +1549,29 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
             </div>
 
             {/* 4. Bottom Signatures Block: Left 2 Boxes & Right 2 Boxes */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', width: '100%', marginTop: isDense ? '12px' : '16px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', width: '100%', marginTop: '8px' }}>
               {/* Left Signature Table (Dilaksanakan oleh & Diperiksa oleh) */}
               <table style={{ width: '42%', borderCollapse: 'collapse', border: '1.5px solid #000000' }}>
                 <thead>
                   <tr>
-                    <th style={{ width: '50%', border: '1px solid #000000', padding: '3px', fontStyle: 'italic', fontSize: '7pt', fontWeight: 'normal', textAlign: 'center' }}>
+                    <th style={{ width: '50%', border: '1px solid #000000', padding: '2px', fontStyle: 'italic', fontSize: '6.5pt', fontWeight: 'normal', textAlign: 'center' }}>
                       Dilaksanakan oleh,
                     </th>
-                    <th style={{ width: '50%', border: '1px solid #000000', padding: '3px', fontStyle: 'italic', fontSize: '7pt', fontWeight: 'normal', textAlign: 'center' }}>
+                    <th style={{ width: '50%', border: '1px solid #000000', padding: '2px', fontStyle: 'italic', fontSize: '6.5pt', fontWeight: 'normal', textAlign: 'center' }}>
                       Diperiksa oleh,
                     </th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr>
-                    <td style={{ border: '1px solid #000000', height: signBoxHeight, verticalAlign: 'bottom', textAlign: 'center', paddingBottom: '3px' }}></td>
-                    <td style={{ border: '1px solid #000000', height: signBoxHeight, verticalAlign: 'bottom', textAlign: 'center', paddingBottom: '3px' }}></td>
+                    <td style={{ border: '1px solid #000000', height: '40px', verticalAlign: 'bottom', textAlign: 'center', paddingBottom: '2px' }}></td>
+                    <td style={{ border: '1px solid #000000', height: '40px', verticalAlign: 'bottom', textAlign: 'center', paddingBottom: '2px' }}></td>
                   </tr>
                   <tr>
-                    <td style={{ border: '1px solid #000000', padding: '3px', fontSize: '6.5pt', textAlign: 'center', color: '#000000' }}>
+                    <td style={{ border: '1px solid #000000', padding: '2px', fontSize: '6pt', textAlign: 'center', color: '#000000' }}>
                       Foreman Laboratorium
                     </td>
-                    <td style={{ border: '1px solid #000000', padding: '3px', fontSize: '6.5pt', textAlign: 'center', color: '#000000' }}>
+                    <td style={{ border: '1px solid #000000', padding: '2px', fontSize: '6pt', textAlign: 'center', color: '#000000' }}>
                       SPV Laboratorium
                     </td>
                   </tr>
@@ -1584,28 +1582,28 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
               <table style={{ width: '42%', borderCollapse: 'collapse', border: '1.5px solid #000000' }}>
                 <thead>
                   <tr>
-                    <th style={{ width: '50%', border: '1px solid #000000', padding: '3px', fontStyle: 'italic', fontSize: '7pt', fontWeight: 'normal', textAlign: 'center' }}>
+                    <th style={{ width: '50%', border: '1px solid #000000', padding: '2px', fontStyle: 'italic', fontSize: '6.5pt', fontWeight: 'normal', textAlign: 'center' }}>
                       Disetujui oleh,
                     </th>
-                    <th style={{ width: '50%', border: '1px solid #000000', padding: '3px', fontStyle: 'italic', fontSize: '7pt', fontWeight: 'normal', textAlign: 'center' }}>
+                    <th style={{ width: '50%', border: '1px solid #000000', padding: '2px', fontStyle: 'italic', fontSize: '6.5pt', fontWeight: 'normal', textAlign: 'center' }}>
                       Diketahui oleh,
                     </th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr>
-                    <td style={{ border: '1px solid #000000', height: signBoxHeight, verticalAlign: 'bottom', textAlign: 'center', paddingBottom: '3px', fontWeight: 'bold', fontSize: '7.5pt', color: '#000000' }}>
+                    <td style={{ border: '1px solid #000000', height: '40px', verticalAlign: 'bottom', textAlign: 'center', paddingBottom: '2px', fontWeight: 'bold', fontSize: '7pt', color: '#000000' }}>
                       Tigwa Anggawikara
                     </td>
-                    <td style={{ border: '1px solid #000000', height: signBoxHeight, verticalAlign: 'bottom', textAlign: 'center', paddingBottom: '3px', fontWeight: 'bold', fontSize: '7.5pt', color: '#000000' }}>
+                    <td style={{ border: '1px solid #000000', height: '40px', verticalAlign: 'bottom', textAlign: 'center', paddingBottom: '2px', fontWeight: 'bold', fontSize: '7pt', color: '#000000' }}>
                       Deni Nugraha Perdiana
                     </td>
                   </tr>
                   <tr>
-                    <td style={{ border: '1px solid #000000', padding: '3px', fontSize: '6.5pt', textAlign: 'center', color: '#000000' }}>
+                    <td style={{ border: '1px solid #000000', padding: '2px', fontSize: '6pt', textAlign: 'center', color: '#000000' }}>
                       Sptd. Laboratorium
                     </td>
-                    <td style={{ border: '1px solid #000000', padding: '3px', fontSize: '6.5pt', textAlign: 'center', color: '#000000' }}>
+                    <td style={{ border: '1px solid #000000', padding: '2px', fontSize: '6pt', textAlign: 'center', color: '#000000' }}>
                       Preparation & Laboratorium Manager
                     </td>
                   </tr>
@@ -1617,7 +1615,7 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
 
         return (
           <>
-            {/* Absolute Native Print Stylesheet & Container (100% isolates print document) */}
+            {/* Absolute Native Print Stylesheet & Container */}
             <div className="xrf-print-only-container">
               <style dangerouslySetInnerHTML={{ __html: `
                 @media screen {
@@ -1628,26 +1626,27 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
                 @media print {
                   @page {
                     size: A4 landscape;
-                    margin: 8mm 10mm;
+                    margin: 6mm 8mm;
                   }
                   html, body {
                     margin: 0 !important;
                     padding: 0 !important;
                     background: #ffffff !important;
+                    height: 100% !important;
+                    max-height: 100% !important;
+                    overflow: hidden !important;
                     -webkit-print-color-adjust: exact !important;
                     print-color-adjust: exact !important;
                   }
-                  /* Remove height & overflow restrictions on SPA root containers so content flows naturally */
+                  /* Remove height & overflow restrictions on SPA root containers */
                   #root, #root > div, .min-h-screen, div {
-                    height: auto !important;
-                    min-height: auto !important;
                     overflow: visible !important;
                   }
                   /* Strictly hide UI controls, sidebar, modals, headers & buttons */
                   .no-print-area, header, aside, nav, button, input, select, .lucide, [role="dialog"], .backdrop-blur-xs {
                     display: none !important;
                   }
-                  /* Display the official document at 100% full width */
+                  /* Display the official document strictly on 1 A4 page */
                   .xrf-print-only-container {
                     display: block !important;
                     visibility: visible !important;
@@ -1657,6 +1656,13 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
                     padding: 0 !important;
                     background: #ffffff !important;
                     page-break-inside: avoid !important;
+                    page-break-after: avoid !important;
+                    break-inside: avoid !important;
+                  }
+                  .xrf-official-doc-root {
+                    page-break-inside: avoid !important;
+                    page-break-after: avoid !important;
+                    break-inside: avoid !important;
                   }
                   .xrf-print-only-container * {
                     visibility: visible !important;
@@ -1669,19 +1675,19 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
 
             {/* Interactive On-Screen Print Preview Modal */}
             {showPrintPreviewModal && (
-              <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 overflow-y-auto no-print-area">
-                <div className="bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-2xl max-w-6xl w-full max-h-[94vh] flex flex-col shadow-2xl overflow-hidden">
+              <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 overflow-y-auto no-print-area">
+                <div className="bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-2xl max-w-6xl w-full max-h-[96vh] flex flex-col shadow-2xl overflow-hidden">
                   {/* Modal Header */}
-                  <div className="flex items-center justify-between px-6 py-3.5 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 shrink-0">
+                  <div className="flex items-center justify-between px-6 py-3 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 shrink-0">
                     <div className="flex items-center gap-2.5">
-                      <div className="p-2 bg-teal-50 dark:bg-teal-950/40 text-teal-600 rounded-xl">
-                        <Printer className="w-5 h-5" />
+                      <div className="p-1.5 bg-teal-50 dark:bg-teal-950/40 text-teal-600 rounded-lg">
+                        <Printer className="w-4 h-4" />
                       </div>
                       <div>
-                        <h3 className="text-sm font-bold text-slate-900 dark:text-white">
-                          Pratinjau Resmi Lembar Cetak A4 Landscape
+                        <h3 className="text-xs font-bold text-slate-900 dark:text-white">
+                          Pratinjau Format Cetak (Fit 1 Halaman A4 Landscape)
                         </h3>
-                        <p className="text-[11px] text-slate-500">
+                        <p className="text-[10px] text-slate-500">
                           Template Resmi: DAILY VERIFIKASI SAMPLE STANDARD (TBP / GPS)
                         </p>
                       </div>
@@ -1692,24 +1698,24 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
                           setShowPrintPreviewModal(false);
                           setTimeout(() => window.print(), 150);
                         }}
-                        className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer shadow-sm active:scale-95"
+                        className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer shadow-sm active:scale-95"
                       >
-                        <Printer className="w-4 h-4" />
+                        <Printer className="w-3.5 h-3.5" />
                         Cetak Sekarang (A4 Landscape)
                       </button>
                       <button
                         onClick={() => setShowPrintPreviewModal(false)}
-                        className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors cursor-pointer"
+                        className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors cursor-pointer"
                         title="Tutup Pratinjau"
                       >
-                        <X className="w-5 h-5" />
+                        <X className="w-4 h-4" />
                       </button>
                     </div>
                   </div>
 
-                  {/* Modal Body: A4 Paper Preview */}
-                  <div className="p-4 sm:p-8 overflow-y-auto flex-1 flex justify-center bg-slate-300/80 dark:bg-slate-950">
-                    <div className="bg-white text-slate-900 p-6 sm:p-8 rounded-sm shadow-2xl border border-slate-400 w-full max-w-[1050px] min-h-[500px]">
+                  {/* Modal Body: Exact 1-Page A4 Landscape Sheet */}
+                  <div className="p-4 sm:p-6 overflow-y-auto flex-1 flex justify-center bg-slate-300/80 dark:bg-slate-950">
+                    <div className="bg-white text-slate-900 p-5 sm:p-6 rounded-sm shadow-2xl border border-slate-400 w-full max-w-[1020px] box-border">
                       {renderOfficialContent()}
                     </div>
                   </div>
