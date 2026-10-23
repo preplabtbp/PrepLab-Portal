@@ -33,12 +33,44 @@ export const HomeWidgetDashboard: React.FC<HomeWidgetDashboardProps> = ({
   userSection,
   userRole
 }) => {
-  const legacyStorageKey = `preplab_home_widgets_v2_${userNik}`;
+  // Dapatkan NIK aktif karyawan yang valid
+  const effectiveNik = String(
+    userNik && userNik !== 'default'
+      ? userNik
+      : (localStorage.getItem('p2h_inspector_nik') || localStorage.getItem('user_nik') || 'default')
+  ).trim();
+
+  // Storage key spesifik per masing-masing karyawan
+  const userStorageKey = `preplab_user_widgets_v4_${effectiveNik}`;
+  const legacyStorageKey = `preplab_home_widgets_v2_${effectiveNik}`;
   const syncTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  const [configs, setConfigs] = useState<WidgetItemConfig[]>(() => {
+  // Helper untuk memuat config lokal dari user atau fallback
+  const loadInitialConfigs = (targetNik: string): WidgetItemConfig[] => {
     try {
-      // 1. Shared configs across all users & devices
+      // 1. Cek penyimpanan lokal khusus karyawan ini
+      const savedUser = localStorage.getItem(`preplab_user_widgets_v4_${targetNik}`);
+      if (savedUser) {
+        const parsed = JSON.parse(savedUser);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const existingIds = new Set(parsed.map((p: any) => p.id));
+          const missing = DEFAULT_WIDGET_CONFIGS.filter(d => !existingIds.has(d.id));
+          return [...parsed, ...missing];
+        }
+      }
+
+      // 2. Cek legacy key karyawan ini
+      const savedLegacy = localStorage.getItem(`preplab_home_widgets_v2_${targetNik}`);
+      if (savedLegacy) {
+        const parsed = JSON.parse(savedLegacy);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const existingIds = new Set(parsed.map((p: any) => p.id));
+          const missing = DEFAULT_WIDGET_CONFIGS.filter(d => !existingIds.has(d.id));
+          return [...parsed, ...missing];
+        }
+      }
+
+      // 3. Fallback jika ada template awal
       const savedShared = localStorage.getItem(SHARED_STORAGE_KEY);
       if (savedShared) {
         const parsed = JSON.parse(savedShared);
@@ -48,20 +80,11 @@ export const HomeWidgetDashboard: React.FC<HomeWidgetDashboardProps> = ({
           return [...parsed, ...missing];
         }
       }
-
-      // 2. Fallback to previous local storage per user if shared not yet populated
-      const savedLegacy = localStorage.getItem(legacyStorageKey);
-      if (savedLegacy) {
-        const parsed = JSON.parse(savedLegacy);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          const existingIds = new Set(parsed.map((p: any) => p.id));
-          const missing = DEFAULT_WIDGET_CONFIGS.filter(d => !existingIds.has(d.id));
-          return [...parsed, ...missing];
-        }
-      }
     } catch {}
     return DEFAULT_WIDGET_CONFIGS;
-  });
+  };
+
+  const [configs, setConfigs] = useState<WidgetItemConfig[]>(() => loadInitialConfigs(effectiveNik));
 
   const [isEditMode, setIsEditMode] = useState<boolean>(false);
   const [showCatalogModal, setShowCatalogModal] = useState<boolean>(false);
@@ -77,13 +100,17 @@ export const HomeWidgetDashboard: React.FC<HomeWidgetDashboardProps> = ({
     }
   }, [enabledWidgets.length, isEditMode]);
 
-  // Sync with backend across devices and listen to realtime socket events
+  // Sync dengan backend khusus akun karyawan ini dan pasang listener realtime
   useEffect(() => {
     let isMounted = true;
 
+    // Saat NIK berubah atau pertama kali render, muat dulu dari localStorage karyawan
+    const local = loadInitialConfigs(effectiveNik);
+    setConfigs(local);
+
     const fetchRemoteConfigs = async () => {
       try {
-        const res = await fetch('/api/widgets/configs');
+        const res = await fetch(`/api/widgets/configs?userNik=${encodeURIComponent(effectiveNik)}`);
         if (!res.ok) return;
         const data = await res.json();
         if (!isMounted) return;
@@ -94,15 +121,15 @@ export const HomeWidgetDashboard: React.FC<HomeWidgetDashboardProps> = ({
           const merged = [...data.configs, ...missing];
           setConfigs(merged);
           try {
-            localStorage.setItem(SHARED_STORAGE_KEY, JSON.stringify(merged));
+            localStorage.setItem(userStorageKey, JSON.stringify(merged));
           } catch {}
         } else {
-          // If server has no records yet, seed server with our current configs
-          const currentConfigs = configs.length > 0 ? configs : DEFAULT_WIDGET_CONFIGS;
+          // Jika server belum punya data karyawan ini, inisialisasi dengan konfigurasi lokalnya
+          const currentConfigs = local.length > 0 ? local : DEFAULT_WIDGET_CONFIGS;
           fetch('/api/widgets/configs', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ configs: currentConfigs })
+            body: JSON.stringify({ configs: currentConfigs, userNik: effectiveNik })
           }).catch(() => {});
         }
       } catch (err) {
@@ -112,39 +139,53 @@ export const HomeWidgetDashboard: React.FC<HomeWidgetDashboardProps> = ({
 
     fetchRemoteConfigs();
 
-    // Socket realtime listener
+    // Socket realtime listener khusus karyawan ini
     const socket = getGlobalSocket();
-    const handleRemoteConfigUpdate = (remoteConfigs: WidgetItemConfig[]) => {
+    
+    // Listener 1: event khusus NIK karyawan (widgets:config_updated:NIK)
+    const handleUserConfigUpdate = (remoteConfigs: WidgetItemConfig[]) => {
       if (!isMounted) return;
       if (Array.isArray(remoteConfigs) && remoteConfigs.length > 0) {
         setConfigs((prev) => {
-          if (JSON.stringify(prev) === JSON.stringify(remoteConfigs)) {
-            return prev;
-          }
+          if (JSON.stringify(prev) === JSON.stringify(remoteConfigs)) return prev;
           const existingIds = new Set(remoteConfigs.map((p: any) => p.id));
           const missing = DEFAULT_WIDGET_CONFIGS.filter(d => !existingIds.has(d.id));
           const merged = [...remoteConfigs, ...missing];
           try {
-            localStorage.setItem(SHARED_STORAGE_KEY, JSON.stringify(merged));
+            localStorage.setItem(userStorageKey, JSON.stringify(merged));
           } catch {}
           return merged;
         });
       }
     };
 
-    socket.on('widgets:config_updated', handleRemoteConfigUpdate);
+    // Listener 2: fallback event umum
+    const handleGeneralConfigUpdate = (payload: any) => {
+      if (!isMounted) return;
+      if (payload && payload.userNik === effectiveNik && Array.isArray(payload.configs)) {
+        handleUserConfigUpdate(payload.configs);
+      }
+    };
+
+    if (effectiveNik && effectiveNik !== 'default') {
+      socket.on(`widgets:config_updated:${effectiveNik}`, handleUserConfigUpdate);
+    }
+    socket.on('widgets:config_updated', handleGeneralConfigUpdate);
 
     return () => {
       isMounted = false;
-      socket.off('widgets:config_updated', handleRemoteConfigUpdate);
+      if (effectiveNik && effectiveNik !== 'default') {
+        socket.off(`widgets:config_updated:${effectiveNik}`, handleUserConfigUpdate);
+      }
+      socket.off('widgets:config_updated', handleGeneralConfigUpdate);
     };
-  }, []);
+  }, [effectiveNik]);
 
-  // Save to localStorage & synchronize with server
+  // Simpan tataletak khusus untuk karyawan yang sedang aktif
   const saveConfigs = (newConfigs: WidgetItemConfig[], immediate = false) => {
     setConfigs(newConfigs);
     try {
-      localStorage.setItem(SHARED_STORAGE_KEY, JSON.stringify(newConfigs));
+      localStorage.setItem(userStorageKey, JSON.stringify(newConfigs));
       localStorage.setItem(legacyStorageKey, JSON.stringify(newConfigs));
     } catch {}
 
@@ -156,7 +197,7 @@ export const HomeWidgetDashboard: React.FC<HomeWidgetDashboardProps> = ({
       fetch('/api/widgets/configs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ configs: newConfigs })
+        body: JSON.stringify({ configs: newConfigs, userNik: effectiveNik })
       }).catch((err) => console.warn('Failed to sync widget configs to server:', err));
     };
 

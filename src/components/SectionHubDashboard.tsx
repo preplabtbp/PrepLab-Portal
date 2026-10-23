@@ -213,9 +213,15 @@ export function SectionHubDashboard({
     return '#0f172a';
   };
 
-  const [displayedTitle, setDisplayedTitle] = useState<string>(post?.title || '');
+  const [displayedTitle, setDisplayedTitle] = useState<string>(() => {
+    const raw = post?.title || '';
+    return translateDisplayText(raw.toUpperCase().trim()) || raw;
+  });
   const [isEditingTitle, setIsEditingTitle] = useState<boolean>(false);
-  const [titleInput, setTitleInput] = useState<string>(post?.title || '');
+  const [titleInput, setTitleInput] = useState<string>(() => {
+    const raw = post?.title || '';
+    return translateDisplayText(raw.toUpperCase().trim()) || raw;
+  });
   const [isSavingTitle, setIsSavingTitle] = useState<boolean>(false);
   const [titleColor, setTitleColor] = useState<string>(getInitialTitleColor);
   const [editingTitleColor, setEditingTitleColor] = useState<string>(getInitialTitleColor);
@@ -223,15 +229,19 @@ export function SectionHubDashboard({
 
   // Sync title & color when post changes
   React.useEffect(() => {
-    setDisplayedTitle(post?.title || '');
-    setTitleInput(post?.title || '');
+    const raw = post?.title || '';
+    const translated = translateDisplayText(raw.toUpperCase().trim()) || raw;
+    setDisplayedTitle(translated);
+    setTitleInput(translated);
     const col = getInitialTitleColor();
     setTitleColor(col);
     setEditingTitleColor(col);
   }, [post?.title, post?.tags]);
 
   const handleStartEditTitle = () => {
-    setTitleInput(displayedTitle || post?.title || '');
+    const raw = displayedTitle || post?.title || sectionTitle || '';
+    const translated = translateDisplayText(raw.toUpperCase().trim()) || raw;
+    setTitleInput(translated);
     setEditingTitleColor(titleColor);
     setIsEditingTitle(true);
     setShowColorPicker(false);
@@ -1450,7 +1460,8 @@ export function SectionHubDashboard({
                   e.preventDefault();
                   setIsEditingTitle(false);
                   setShowColorPicker(false);
-                  setTitleInput(displayedTitle);
+                  const rawCancel = displayedTitle || post?.title || sectionTitle || '';
+                  setTitleInput(translateDisplayText(rawCancel.toUpperCase().trim()) || rawCancel);
                   setEditingTitleColor(titleColor);
                 }}
                 disabled={isSavingTitle}

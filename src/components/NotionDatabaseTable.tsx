@@ -9113,7 +9113,7 @@ export function NotionDatabaseTable({
                                       draggable
                                       onDragStart={(e) => handleRowDragStart(e, actualRowIndex)}
                                       onDragEnd={handleRowDragEnd}
-                                      className="cursor-grab active:cursor-grabbing p-0.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                                      className="cursor-grab active:cursor-grabbing p-0.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 opacity-40 hover:opacity-100 group-hover:opacity-80 transition-opacity shrink-0"
                                       title="Geser untuk mengubah urutan baris (Tarik ke atas/bawah)"
                                     >
                                       <GripVertical className="w-3.5 h-3.5" />
@@ -9133,7 +9133,7 @@ export function NotionDatabaseTable({
                                       className={`p-0.5 rounded transition-all cursor-pointer shrink-0 ${
                                         isRowPinned(row)
                                           ? 'text-amber-500 hover:text-amber-600 bg-amber-50 dark:bg-amber-950/50 opacity-100 shadow-2xs'
-                                          : 'text-slate-400 hover:text-amber-500 opacity-0 group-hover:opacity-100 hover:bg-slate-200 dark:hover:bg-slate-700'
+                                          : 'text-slate-400 hover:text-amber-500 opacity-40 hover:opacity-100 group-hover:opacity-80 hover:bg-slate-200 dark:hover:bg-slate-700'
                                       }`}
                                       title={isRowPinned(row) ? 'Lepas Pin Task (Unpin)' : 'Pin Task ke Atas (Maks. 10 task)'}
                                     >
@@ -9149,7 +9149,7 @@ export function NotionDatabaseTable({
                                     checked={isSelected}
                                     onChange={(e) => handleToggleSelectRow(actualRowIndex, e as any)}
                                     className={`w-3.5 h-3.5 rounded cursor-pointer accent-teal-600 transition-opacity ${
-                                      isSelected ? 'opacity-100' : 'opacity-50 sm:opacity-0 group-hover:opacity-100 hover:opacity-100'
+                                      isSelected ? 'opacity-100' : 'opacity-60 hover:opacity-100'
                                     } ${
                                       isNotionLight ? 'border-slate-300' : 'bg-slate-800 border-slate-600'
                                     }`}
@@ -9413,7 +9413,7 @@ export function NotionDatabaseTable({
                                                       setSelectedRow(row);
                                                       setModalTab('details');
                                                     }}
-                                                    className={`ml-1 opacity-60 sm:opacity-0 group-hover:opacity-100 group-hover/cell:opacity-100 px-1.5 py-0.5 rounded text-[9.5px] font-bold border transition-all uppercase tracking-wider cursor-pointer shadow-2xs shrink-0 ${
+                                                    className={`ml-1.5 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9.5px] font-bold border transition-all uppercase tracking-wider cursor-pointer shadow-2xs shrink-0 select-none ${
                                                       isNotionLight
                                                         ? 'bg-white hover:bg-slate-100 border-slate-300 text-slate-700'
                                                         : 'bg-slate-800 hover:bg-slate-700 border-slate-600 text-slate-300'
@@ -9584,7 +9584,7 @@ export function NotionDatabaseTable({
                                                       setSelectedRow(row);
                                                       setModalTab('details');
                                                     }}
-                                                    className={`ml-1 opacity-60 sm:opacity-0 group-hover:opacity-100 group-hover/cell:opacity-100 px-1.5 py-0.5 rounded text-[9.5px] font-bold border transition-all uppercase tracking-wider cursor-pointer shadow-2xs shrink-0 ${
+                                                    className={`ml-1.5 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9.5px] font-bold border transition-all uppercase tracking-wider cursor-pointer shadow-2xs shrink-0 select-none ${
                                                       isNotionLight
                                                         ? 'bg-white hover:bg-slate-100 border-slate-300 text-slate-700'
                                                         : 'bg-slate-800 hover:bg-slate-700 border-slate-600 text-slate-300'
@@ -9632,7 +9632,7 @@ export function NotionDatabaseTable({
                                                 });
                                               }}
                                               title="Tautkan baris ini ke Tiket K3/SAP, WO, atau Modul Lain"
-                                              className={`opacity-0 group-hover:opacity-100 group-hover/cell:opacity-100 p-1 rounded transition-all cursor-pointer ${
+                                              className={`opacity-40 hover:opacity-100 group-hover:opacity-90 p-1 rounded transition-all cursor-pointer ${
                                                 extractRowLinkInfo(row)
                                                   ? 'text-sky-500 hover:bg-sky-50 dark:hover:bg-sky-950/50'
                                                   : 'text-slate-400 hover:text-sky-500 hover:bg-slate-200 dark:hover:bg-slate-700'
@@ -9648,7 +9648,7 @@ export function NotionDatabaseTable({
                                                 setActiveInlineEditor({ rowIndex: actualRowIndex, colName, initialValue: displayTitle || val, multiline: false });
                                               }}
                                               title="Edit judul langsung"
-                                              className="opacity-0 group-hover:opacity-100 group-hover/cell:opacity-100 p-1 rounded hover:bg-teal-500/15 text-slate-400 hover:text-teal-400 transition-all cursor-pointer"
+                                              className="opacity-40 hover:opacity-100 group-hover:opacity-90 p-1 rounded hover:bg-teal-500/15 text-slate-400 hover:text-teal-400 transition-all cursor-pointer"
                                             >
                                               <Edit2 className="w-3 h-3" />
                                             </button>
@@ -9735,7 +9735,7 @@ export function NotionDatabaseTable({
                                               setActiveInlineEditor({ rowIndex: actualRowIndex, colName, initialValue: cleanInitial, multiline: true });
                                             }}
                                             title="Edit keterangan langsung"
-                                            className="opacity-0 group-hover:opacity-100 group-hover/cell:opacity-100 p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-400 hover:text-teal-400 transition-all shrink-0 cursor-pointer"
+                                            className="opacity-40 hover:opacity-100 group-hover:opacity-90 p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-400 hover:text-teal-400 transition-all shrink-0 cursor-pointer"
                                           >
                                             <Edit2 className="w-3 h-3" />
                                           </button>
@@ -10599,6 +10599,22 @@ export function NotionDatabaseTable({
                                        }`}
                                        onClick={(e) => e.stopPropagation()}
                                      >
+                                       {/* Buka Halaman / Detail (OPEN) Shortcut in Action Menu */}
+                                       <button
+                                         type="button"
+                                         onClick={(e) => {
+                                           e.stopPropagation();
+                                           setSelectedRow(row);
+                                           setModalTab('details');
+                                           setActiveActionMenuRowIndex(null);
+                                         }}
+                                         className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs rounded-lg hover:bg-teal-50 dark:hover:bg-teal-950/40 text-teal-700 dark:text-teal-300 font-bold transition-colors cursor-pointer border-b border-slate-100 dark:border-slate-800 mb-0.5"
+                                         title="Buka dokumen / detail halaman (OPEN)"
+                                       >
+                                         <FileText className="w-3.5 h-3.5 shrink-0 text-teal-600 dark:text-teal-400" />
+                                         <span>Buka Halaman (OPEN)</span>
+                                       </button>
+
                                        {!isSubItem && (
                                          <button
                                            type="button"
