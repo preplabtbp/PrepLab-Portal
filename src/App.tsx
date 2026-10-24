@@ -117,6 +117,7 @@ const EmployeeLeavesScreen = lazyWithRetry(() => import('./components/employee-l
 const EmployeeLeaveFormScreen = lazyWithRetry(() => import('./components/employee-leave-form-screen').then(m => ({ default: m.EmployeeLeaveFormScreen })));
 const EmployeeTardinessScreen = lazyWithRetry(() => import('./components/employee-tardiness-screen').then(m => ({ default: m.EmployeeTardinessScreen })));
 const EmployeeFingerScreen = lazyWithRetry(() => import('./components/employee-finger-screen').then(m => ({ default: m.EmployeeFingerScreen })));
+const ZonaAdministrasiScreen = lazyWithRetry(() => import('./components/zona-administrasi-screen').then(m => ({ default: m.ZonaAdministrasiScreen })));
 const EmployeeTardinessFormScreen = lazyWithRetry(() => import('./components/employee-tardiness-form-screen').then(m => ({ default: m.EmployeeTardinessFormScreen })));
 const XrfCalibrationScreen = lazyWithRetry(() => import('./components/xrf-calibration/XrfCalibrationScreen').then(m => ({ default: m.XrfCalibrationScreen })));
 const ScreenTestSmelterScreen = lazyWithRetry(() => import('./components/screen-test/ScreenTestSmelterScreen').then(m => ({ default: m.ScreenTestSmelterScreen })));
@@ -581,7 +582,7 @@ export default function App() {
   useEffect(() => {
     if (!isCrewRole) return;
     const path = location.pathname.replace(/^\//, '');
-    const allowedCrewPaths = ['', 'home', 'quiz', 'clinic', 'kunjungan-klinik', 'employee-leaves', 'izin-karyawan', 'pelaporan-izin', 'form-izin', 'rekapan-izin', 'keterlambatan', 'rekapan-keterlambatan', 'form-keterlambatan', 'pelaporan-keterlambatan', 'rekapan-finger', 'rekap-finger', 'finger', 'settings', 'logbook'];
+    const allowedCrewPaths = ['', 'home', 'quiz', 'clinic', 'kunjungan-klinik', 'zona-administrasi', 'employee-leaves', 'izin-karyawan', 'pelaporan-izin', 'form-izin', 'rekapan-izin', 'keterlambatan', 'rekapan-keterlambatan', 'form-keterlambatan', 'pelaporan-keterlambatan', 'rekapan-finger', 'rekap-finger', 'finger', 'settings', 'logbook'];
     if (isMaintenanceCrew) {
       allowedCrewPaths.push('wo-list', 'wo-maintenance-dashboard', 'wo-dashboard');
     }
@@ -791,7 +792,7 @@ export default function App() {
 
     // Role guard for Crew: restrict navigation to allowed modules only
     if (isCrewRole) {
-      const allowedCrewTabs = ['home', '', 'quiz', 'clinic', 'kunjungan-klinik', 'employee-leaves', 'izin-karyawan', 'pelaporan-izin', 'keterlambatan', 'rekapan-keterlambatan', 'form-keterlambatan', 'pelaporan-keterlambatan', 'rekapan-finger', 'rekap-finger', 'finger', 'settings', 'logbook'];
+      const allowedCrewTabs = ['home', '', 'quiz', 'clinic', 'kunjungan-klinik', 'zona-administrasi', 'employee-leaves', 'izin-karyawan', 'pelaporan-izin', 'keterlambatan', 'rekapan-keterlambatan', 'form-keterlambatan', 'pelaporan-keterlambatan', 'rekapan-finger', 'rekap-finger', 'finger', 'settings', 'logbook'];
       if (isMaintenanceCrew) {
         allowedCrewTabs.push('wo-list', 'wo-maintenance-dashboard', 'wo-dashboard');
       }
@@ -2060,16 +2061,17 @@ export default function App() {
   <Route path="/preplab-cloud" element={<PreplabCloudScreen onBack={() => handleNav('home')} userProfile={userProfile} inspectorNik={inspectorNik!} inspectorName={inspectorName!} isDeveloper={isDeveloper} isManager={isManager} />} />
   <Route path="/manual" element={<UserManualScreen onBack={() => handleNav('home')} onNav={handleNav} />} />
   <Route path="/employee-database" element={<EmployeeDatabaseScreen inspectorNik={inspectorNik!} onBack={() => handleNav('home')} />} />
-  <Route path="/employee-leaves" element={<EmployeeLeavesScreen userProfile={userProfile} inspectorName={inspectorName!} inspectorNik={inspectorNik!} userPt={effectiveUniverse || 'TBP'} onNav={handleNav} onBack={() => handleNav('home')} />} />
+  <Route path="/zona-administrasi" element={<ZonaAdministrasiScreen onNav={handleNav} onBack={() => handleNav('home')} isCrew={isCrewRole} />} />
+  <Route path="/employee-leaves" element={<EmployeeLeavesScreen userProfile={userProfile} inspectorName={inspectorName!} inspectorNik={inspectorNik!} userPt={effectiveUniverse || 'TBP'} onNav={handleNav} onBack={() => handleNav('zona-administrasi')} />} />
   <Route path="/rekapan-izin" element={<Navigate to="/employee-leaves" replace />} />
   <Route path="/izin-karyawan" element={<Navigate to="/employee-leaves" replace />} />
   <Route path="/pelaporan-izin" element={<EmployeeLeaveFormScreen inspectorName={inspectorName!} inspectorNik={inspectorNik!} userProfile={userProfile} onNav={handleNav} onBack={() => handleNav('home')} />} />
   <Route path="/form-izin" element={<Navigate to="/pelaporan-izin" replace />} />
-  <Route path="/keterlambatan" element={<EmployeeTardinessScreen userProfile={userProfile} inspectorName={inspectorName!} inspectorNik={inspectorNik!} onNav={handleNav} onBack={() => handleNav('home')} />} />
+  <Route path="/keterlambatan" element={<EmployeeTardinessScreen userProfile={userProfile} inspectorName={inspectorName!} inspectorNik={inspectorNik!} onNav={handleNav} onBack={() => handleNav('zona-administrasi')} />} />
   <Route path="/rekapan-keterlambatan" element={<Navigate to="/keterlambatan" replace />} />
   <Route path="/form-keterlambatan" element={<EmployeeTardinessFormScreen inspectorName={inspectorName!} inspectorNik={inspectorNik!} userProfile={userProfile} onNav={handleNav} onBack={() => handleNav('keterlambatan')} />} />
   <Route path="/pelaporan-keterlambatan" element={<Navigate to="/form-keterlambatan" replace />} />
-  <Route path="/rekapan-finger" element={<EmployeeFingerScreen userProfile={userProfile} inspectorName={inspectorName!} inspectorNik={inspectorNik!} onNav={handleNav} onBack={() => handleNav('home')} />} />
+  <Route path="/rekapan-finger" element={<EmployeeFingerScreen userProfile={userProfile} inspectorName={inspectorName!} inspectorNik={inspectorNik!} onNav={handleNav} onBack={() => handleNav('zona-administrasi')} />} />
   <Route path="/rekap-finger" element={<Navigate to="/rekapan-finger" replace />} />
   <Route path="/finger" element={<Navigate to="/rekapan-finger" replace />} />
   <Route path="/roster-admin" element={<RosterAdminScreen />} />
@@ -2085,7 +2087,7 @@ export default function App() {
     }
   }} />} />
   <Route path="/training-external" element={<TrainingDatabaseScreen key="external" scope="external" inspectorNik={inspectorNik!} inspectorName={inspectorName!} onBack={() => handleNav('home')} />} />
-  <Route path="/meal-orders" element={<MealOrdersScreen inspectorNik={inspectorNik!} inspectorName={inspectorName!} onBack={() => handleNav('home')} />} />
+  <Route path="/meal-orders" element={<MealOrdersScreen inspectorNik={inspectorNik!} inspectorName={inspectorName!} onBack={() => handleNav('zona-administrasi')} />} />
   <Route path="/settings" element={<SettingsScreen inspectorName={inspectorName} inspectorNik={inspectorNik} onLogoutKaryawan={handleLogoutKaryawan} onOpenThemeModal={() => setShowGlobalThemeModal(true)} onNav={handleNav} />} />
   <Route 
     path="/admin-dashboard" 

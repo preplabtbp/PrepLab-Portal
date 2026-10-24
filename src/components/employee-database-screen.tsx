@@ -1874,7 +1874,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
     return getEmployeeShiftBadge(rawShift);
   }, [selectedEmployee, rosterData]);
 
-  // Jatuh Tempo Cuti karyawan terpilih: dihitung dari Modul Roster & Cuti (logika yang sama)
+  // Jatuh Tempo Cuti karyawan terpilih: dihitung dari Modul Roster (logika yang sama)
   const selectedRosterLeave = useMemo(() => {
     if (!selectedEmployee || rosterData.length === 0) return null;
     const nik = String(selectedEmployee.nik || '').toUpperCase().trim();
@@ -5778,7 +5778,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                       <p className="mt-1.5 text-[10px] font-semibold text-teal-800/80 leading-tight">{selectedEmployee.sisaCt && selectedEmployee.sisaCt !== '-' ? 'Hari tersisa' : 'Belum ada data'}</p>
                     </div>
 
-                    {/* Jatuh Tempo CT (dari Modul Roster & Cuti) */}
+                    {/* Jatuh Tempo CT (dari Modul Roster) */}
                     <div
                       onClick={openStatusEdit}
                       className={`relative bg-gradient-to-br from-[#f1f4fe] via-[#e5ecfc] to-[#dae4f9] text-indigo-950 rounded-2xl px-3 py-4 shadow-2xs border border-indigo-300/70 transition-all hover:-translate-y-0.5 hover:shadow-sm min-h-[7.5rem] flex flex-col items-center justify-center text-center ${canManageDatabase ? 'cursor-pointer group' : ''}`}
@@ -5790,7 +5790,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                         {selectedRosterLeave?.actualCuti ? formatShortDate(selectedRosterLeave.actualCuti) : formatShortDate(selectedEmployee.jatuhTempoCt)}
                       </p>
                       <p className="mt-1.5 text-[10px] font-semibold text-indigo-800/80 leading-tight">{selectedRosterLeave?.actualCuti
-                        ? `${selectedRosterLeave.daysRemaining > 0 ? `${selectedRosterLeave.daysRemaining} hari lagi` : selectedRosterLeave.daysRemaining === 0 ? 'Hari ini' : 'Sedang cuti'} · Roster & Cuti`
+                        ? `${selectedRosterLeave.daysRemaining > 0 ? `${selectedRosterLeave.daysRemaining} hari lagi` : selectedRosterLeave.daysRemaining === 0 ? 'Hari ini' : 'Sedang cuti'} · Roster`
                         : 'Belum ada jadwal di Roster'}</p>
                     </div>
                     {/* Jumlah Cuti Site per Periode */}

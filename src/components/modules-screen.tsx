@@ -138,11 +138,7 @@ export function ModulesScreen({ onNav, inspectorNik = '', inspectorName = '', us
         { id: 'induksi', title: "Induksi Internal", desc: "Form & Laporan Induksi", icon: <ShieldCheck className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'indigo', action: () => onNav('induksi') },
         { id: 'employee-database', title: "Database Karyawan", desc: "Data karyawan & struktur", icon: <Users className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'indigo', action: () => onNav('employee-database') },
         ...(isQA ? [{ id: 'p5m', title: "P5M Schedule", desc: "Jadwal & materi briefing", icon: <Calendar className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'indigo', action: () => onNav('p5m') }] : []),
-        { id: 'employee-leaves', title: "Rekapan Izin Karyawan", desc: "Rekapan data izin (Google Sheet)", icon: <FileSpreadsheet className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'indigo', action: () => onNav('employee-leaves') },
-        { id: 'keterlambatan', title: "Rekapan Keterlambatan & Pulang Cepat", desc: "Rekapan keterlambatan (Google Sheet)", icon: <FileSpreadsheet className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'indigo', action: () => onNav('keterlambatan') },
-        { id: 'rekapan-finger', title: "Rekapan Finger", desc: "Rekapan data & form tidak finger", icon: <Fingerprint className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'indigo', action: () => onNav('rekapan-finger') },
-        { id: 'roster-admin', title: "Roster & Cuti", desc: "Informasi kehadiran", icon: <Clock className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'indigo', action: () => onNav('roster-admin') },
-        { id: 'meal-orders', title: "Orderan Makanan", desc: "Order harian Kantin & Lapangan", icon: <Utensils className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'indigo', action: () => onNav('meal-orders') },
+        { id: 'zona-administrasi', title: "Zona Administrasi", desc: "Izin, keterlambatan, finger, makanan & roster", icon: <Briefcase className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'indigo', action: () => onNav('zona-administrasi') },
         // { id: 'food-report', title: "Lapor Makan", desc: "Status konsumsi", icon: <Utensils className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'indigo', action: () => setShowFoodReportModal(true) }, // Di-hide sementara (belum operasional)
       ]
     },

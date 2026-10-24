@@ -233,7 +233,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
       });
       const json = await res.json();
       if (!res.ok || json.status !== 'success') throw new Error(json.message || 'Gagal menyinkronkan dengan Roster');
-      toast.success(json.message || `Berhasil menyinkronkan ${json.synced} orderan dari Roster & Cuti`);
+      toast.success(json.message || `Berhasil menyinkronkan ${json.synced} orderan dari Roster`);
       queryClient.invalidateQueries({ queryKey: ['meal-orders'] });
     } catch (e: any) {
       toast.error(e.message);
@@ -1478,7 +1478,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                   <h1 className="text-lg font-bold tracking-tight text-slate-900">Orderan Makanan</h1>
                   {isFetching && !isLoading && <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-400" />}
                 </div>
-                <p className="text-xs text-slate-500">Order harian Pagi, Siang, Sore & Malam · sinkron dengan Roster & Cuti</p>
+                <p className="text-xs text-slate-500">Order harian Pagi, Siang, Sore & Malam · sinkron dengan Roster</p>
               </div>
             </div>
 
@@ -1914,7 +1914,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                 <div className="flex flex-wrap justify-center gap-2 mt-3">
                   <Button onClick={handleSyncRoster} disabled={syncingRoster} className="text-xs bg-indigo-600 hover:bg-indigo-700 text-white">
                     {syncingRoster ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-                    <span className="ml-1.5">Sinkronkan dari Roster & Cuti</span>
+                    <span className="ml-1.5">Sinkronkan dari Roster</span>
                   </Button>
                   {previousDate && (
                     <Button variant="outline" onClick={copyFromPrevious} disabled={copying} className="text-xs">

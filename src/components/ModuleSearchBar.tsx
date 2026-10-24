@@ -3,6 +3,7 @@ import {
   Search,
   X,
   Clock,
+  Briefcase,
   GraduationCap,
   Utensils,
   ArrowRight, 
@@ -175,16 +176,16 @@ export const ALL_PORTAL_MODULES: PortalModuleItem[] = [
     target: 'inspection-schedule'
   },
   {
-    id: 'roster-admin',
-    title: 'Roster & Cuti Kerja',
-    desc: 'Jadwal shift kerja harian & status roster personil',
+    id: 'zona-administrasi',
+    title: 'Zona Administrasi',
+    desc: 'Rekapan izin, keterlambatan & pulang cepat, finger, orderan makanan & roster',
     category: 'Administrasi & SDM',
-    icon: <Calendar className="w-5 h-5" />,
-    iconBg: 'bg-blue-500/15 border-blue-500/25',
-    iconColor: 'text-blue-600 dark:text-blue-400',
-    tags: ['roster', 'cuti', 'shift', 'jadwal', 'absensi', 'libur'],
+    icon: <Briefcase className="w-5 h-5" />,
+    iconBg: 'bg-indigo-500/15 border-indigo-500/25',
+    iconColor: 'text-indigo-600 dark:text-indigo-400',
+    tags: ['zona', 'administrasi', 'izin', 'rekapan izin', 'keterlambatan', 'terlambat', 'pulang cepat', 'finger', 'absen', 'absensi', 'roster', 'cuti', 'shift', 'jadwal', 'libur', 'off', 'makan', 'makanan', 'order', 'orderan', 'catering', 'kantin', 'lapangan', 'sahur', 'takjil', 'konsumsi'],
     actionType: 'nav',
-    target: 'roster-admin'
+    target: 'zona-administrasi'
   },
   {
     id: 'training-database',
@@ -197,18 +198,6 @@ export const ALL_PORTAL_MODULES: PortalModuleItem[] = [
     tags: ['training', 'internal', 'external', 'eksternal', 'training external', 'training internal', 'database training', 'pelatihan', 'hazid', 'jsa', 'iut', 'ott', 'iai', 'bfa', 'sap', 'k3', 'wah', 'loto', 'pop', 'pra pop', 'pom', 'pengawas operasional', 'sertifikasi'],
     actionType: 'nav',
     target: 'training-database'
-  },
-  {
-    id: 'meal-orders',
-    title: 'Orderan Makanan',
-    desc: 'Order makan harian Pagi, Sahur, Siang, Sore, Takjil & Malam (Kantin & Lapangan)',
-    category: 'Administrasi & SDM',
-    icon: <Utensils className="w-5 h-5" />,
-    iconBg: 'bg-indigo-500/15 border-indigo-500/25',
-    iconColor: 'text-indigo-600 dark:text-indigo-400',
-    tags: ['makan', 'makanan', 'order', 'orderan', 'catering', 'kantin', 'lapangan', 'sahur', 'takjil', 'konsumsi'],
-    actionType: 'nav',
-    target: 'meal-orders'
   },
   {
     id: 'agenda',
