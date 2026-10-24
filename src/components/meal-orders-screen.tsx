@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Utensils, ArrowLeft, ChevronLeft, ChevronRight, Plus, Copy, Download, Search, Trash2, Edit3, Loader2, X, Users, FileSpreadsheet, Upload, RefreshCw, ArrowLeftRight, Package, Truck, BarChart3, Eye, EyeOff, SlidersHorizontal, ChevronDown, ChevronUp, ShieldCheck,
+  Utensils, ArrowLeft, ChevronLeft, ChevronRight, Plus, Copy, Download, Search, Trash2, Edit3, Loader2, X, Users, FileSpreadsheet, Upload, RefreshCw, ArrowLeftRight, Package, Truck, BarChart3, Eye, EyeOff, SlidersHorizontal, ChevronDown, ChevronUp, ShieldCheck, Sparkles,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -11,6 +11,15 @@ import { isTuesdayWednesdaySaturday, mealChoicePatch, computeMealOrderByRoster, 
 import { BungkusRecapSheet, buildBungkusRecap, downloadBungkusRecapPdf, recapTitle, type RecapBlock } from './meal-bungkus-recap';
 import { mealCounts, bungkusCount, MEAL_SLOT_BY_GROUP, type MealSlot } from '../utils/meal-bungkus-counts';
 import { MealBungkusStats } from './meal-bungkus-stats';
+import DisplayCards, { DisplayCardProps } from './ui/display-cards';
+
+// Posisi tumpukan 3D untuk 4 kartu landing (DisplayCards bawaan hanya 3 posisi)
+const MEAL_CARD_POSITIONS = [
+  "[grid-area:stack] hover:-translate-y-10 before:absolute before:w-[100%] before:outline-1 before:rounded-3xl before:outline-slate-200 before:h-[100%] before:content-[''] before:bg-blend-overlay before:bg-white/40 grayscale-[35%] hover:before:opacity-0 before:transition-opacity before:duration-700 hover:grayscale-0 before:left-0 before:top-0",
+  "[grid-area:stack] translate-x-8 sm:translate-x-14 translate-y-8 sm:translate-y-11 hover:translate-y-0 before:absolute before:w-[100%] before:outline-1 before:rounded-3xl before:outline-slate-200 before:h-[100%] before:content-[''] before:bg-blend-overlay before:bg-white/40 grayscale-[35%] hover:before:opacity-0 before:transition-opacity before:duration-700 hover:grayscale-0 before:left-0 before:top-0",
+  "[grid-area:stack] translate-x-16 sm:translate-x-28 translate-y-16 sm:translate-y-22 hover:translate-y-8 before:absolute before:w-[100%] before:outline-1 before:rounded-3xl before:outline-slate-200 before:h-[100%] before:content-[''] before:bg-blend-overlay before:bg-white/40 grayscale-[35%] hover:before:opacity-0 before:transition-opacity before:duration-700 hover:grayscale-0 before:left-0 before:top-0",
+  "[grid-area:stack] translate-x-24 sm:translate-x-42 translate-y-24 sm:translate-y-33 hover:translate-y-16",
+];
 import { MealBungkusRecipientsTable } from './meal-bungkus-recipients';
 import { EmployeeProfileExcelImportModal } from './EmployeeProfileExcelImportModal';
 import { parseGolonganLevel, checkIsGolonganI } from './RosterLeaveScheduleSheet';
@@ -152,7 +161,8 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
   const queryClient = useQueryClient();
   const [date, setDate] = useState(() => shiftDate(todayWit(), 1));
   // orders = Orderan Makanan · recipients = Daftar Penerima Bungkusan · recap = List Pengiriman Ke GA · stats = Rekapan Bungkusan
-  const [view, setView] = useState<'orders' | 'recipients' | 'recap' | 'stats'>('orders');
+  // 'landing' = Pusat Menu Tab (3D DisplayCards), sama seperti modul Rekapan Izin & Finger
+  const [view, setView] = useState<'landing' | 'orders' | 'recipients' | 'recap' | 'stats'>('landing');
   const [downloadingPdf, setDownloadingPdf] = useState(false);
   const tableScrollRef = useRef<HTMLDivElement>(null);
   const tableAnchorRef = useRef<HTMLDivElement>(null);
@@ -695,10 +705,17 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
       const isGol1To2 = isGolongan1To2(emp, r);
       const isMessCR = isCRMess(r, emp);
       const isMessNR = isNRMess(r, emp);
-      const isNirwanaOrKawasi = isResidenceNirwana(r, emp) || isResidenceKawasi(r, emp);
+      const isNirwana = isResidenceNirwana(r, emp);
+      const isKawasi = isResidenceKawasi(r, emp);
+      const isNirwanaOrKawasi = isNirwana || isKawasi;
 
       // Karyawan Gol II-V Mess CR saat Off tetap mendapatkan jatah makan di Kantin (Pagi, Siang, Sore)
-      const isOffWithMeal = isOff && isGol2To5 && isMessCR;
+      const isOffWithMealCR = isOff && isGol2To5 && isMessCR;
+
+      // Karyawan Gol I NR Nirwana saat Off mengikuti orderan makanan pada portal (Pagi/Siang/Sore di Kantin)
+      const isOffNirwanaNR = isOff && isMessNR && isNirwana;
+
+      const isOffWithMeal = isOffWithMealCR || isOffNirwanaNR;
 
       // PERMINTAAN USER: ketika di orderan makanan ada Izin/Sakit maka Orderan makanan TETAP KOSONG pada Excel
       const isAbsentWithoutMeal = isIzinOrSakit || statusExport === 'Cuti' || (isOff && !isOffWithMeal);
@@ -708,21 +725,23 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
         : kantinSlots.map(s => {
             const mc = mealCounts(r, s);
             let count = mc.makanKantin;
-            // Karyawan Mess NR di Nirwana: jatah makan kantin terisi jika kolom Kantin bernilai 1 atau batch terisi
-            if (count === 0 && isMessNR && isResidenceNirwana(r, emp)) {
+            // Karyawan Mess NR di Nirwana: jatah makan kantin terisi jika kolom Kantin bernilai 1 atau batch terisi / K / ada porsi
+            if (count === 0 && isMessNR && isNirwana) {
               const kVal = String((r as any)[`${s}Kantin`] || '').trim();
-              if (kVal === '1') count = 1;
+              if (kVal === '1' || kVal === 'K' || portions(kVal) > 0) {
+                count = portions(kVal) || 1;
+              }
             }
-            return count > 0 ? count : (isOffWithMeal ? 1 : '');
+            return count > 0 ? count : (isOffWithMealCR ? 1 : '');
           });
 
-      const bungkus = isAbsentWithoutMeal || isOffWithMeal
+      const bungkus = isAbsentWithoutMeal || isOffWithMealCR
         ? bungkusCols.map(() => '')
         : bungkusCols.map(c => {
             // Untuk karyawan Mess NR di Nirwana, jika waktu makan tsb sudah masuk ke kolom Kantin (mis. Pagi), jangan diduplikasi di kolom Bungkusan
-            if (isMessNR && isResidenceNirwana(r, emp)) {
+            if (isMessNR && isNirwana) {
               const kVal = String((r as any)[`${c.slot}Kantin`] || '').trim();
-              if (kVal === '1' && (c.slot === 'pagi' || c.slot === 'siang' || c.slot === 'sore')) {
+              if ((kVal === '1' || kVal === 'K' || portions(kVal) > 0) && (c.slot === 'pagi' || c.slot === 'siang' || c.slot === 'sore')) {
                 const lapCount = portions((r as any)[`${c.slot}Lapangan`]);
                 return lapCount > 0 ? lapCount : '';
               }
@@ -738,14 +757,16 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
       let jenisMeal = '-';
       if (isCuti) {
         jenisMeal = 'Bungkusan';
-      } else if (isOff && isGol1To2 && isMessNR && isNirwanaOrKawasi) {
-        jenisMeal = 'Bungkusan';
-      } else if (isOff && isGol2To5 && isMessCR) {
+      } else if (isOffWithMealCR) {
         jenisMeal = 'Kantin';
+      } else if (isOffNirwanaNR) {
+        jenisMeal = hasKantin ? 'Kantin' : hasBungkus ? 'Bungkusan' : '-';
+      } else if (isOff && isGol1To2 && isMessNR && isKawasi) {
+        jenisMeal = 'Bungkusan';
       } else if (isAbsentWithoutMeal) {
         jenisMeal = '-';
       } else {
-        jenisMeal = hasKantin || !hasBungkus ? 'Kantin' : 'Bungkusan';
+        jenisMeal = hasKantin ? 'Kantin' : hasBungkus ? 'Bungkusan' : '-';
       }
 
       return [
@@ -1460,18 +1481,106 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
   const confirmedTbp = useMemo(() => getConfirmedSummary(tbpFiltered), [tbpFiltered]);
   const confirmedGps = useMemo(() => getConfirmedSummary(gpsFiltered), [gpsFiltered]);
 
+  // Kartu DisplayCards untuk Landing View Modul Orderan Makanan
+  const mealDisplayCards: DisplayCardProps[] = useMemo(() => [
+    {
+      icon: <Utensils className="w-4 h-4 text-emerald-600" />,
+      title: "Orderan Makanan",
+      description: "Order harian Pagi, Siang, Sore & Malam (Kantin & Lapangan)",
+      date: `${rows.length} Karyawan · ${dayName(date)}, ${longDate(date)}`,
+      iconClassName: "bg-slate-100 text-emerald-600",
+      titleClassName: "text-emerald-800",
+      className: MEAL_CARD_POSITIONS[0],
+      onClick: () => setView('orders')
+    },
+    {
+      icon: <Users className="w-4 h-4 text-teal-600" />,
+      title: "Daftar Penerima Bungkusan",
+      description: "Daftar karyawan penerima makanan bungkus per tanggal",
+      date: "Penerima Bungkusan Harian",
+      iconClassName: "bg-slate-100 text-teal-600",
+      titleClassName: "text-teal-800",
+      className: MEAL_CARD_POSITIONS[1],
+      onClick: () => setView('recipients')
+    },
+    {
+      icon: <Truck className="w-4 h-4 text-indigo-600" />,
+      title: "List Pengiriman Ke GA",
+      description: "Rekap pengiriman bungkusan ke GA, siap unduh PDF",
+      date: "Pengiriman Harian",
+      iconClassName: "bg-slate-100 text-indigo-600",
+      titleClassName: "text-indigo-800",
+      className: MEAL_CARD_POSITIONS[2],
+      onClick: () => setView('recap')
+    },
+    {
+      icon: <BarChart3 className="w-4 h-4 text-amber-600" />,
+      title: "Rekapan Bungkusan",
+      description: "Statistik & rekapan jumlah bungkusan per periode",
+      date: "Statistik Bungkusan",
+      iconClassName: "bg-slate-100 text-amber-600",
+      titleClassName: "text-amber-800",
+      className: MEAL_CARD_POSITIONS[3],
+      onClick: () => setView('stats')
+    }
+  ], [rows.length, date]);
+
   return (
     <div className="min-h-screen pb-24 bg-slate-50">
       <div className="w-full max-w-[2200px] mx-auto px-3 sm:px-4 lg:px-5 py-3 sm:py-5 space-y-4">
+        {/* Landing: Pusat Menu Tab (3D) */}
+        {view === 'landing' && (
+          <div className="space-y-4">
+            {onBack && (
+              <div className="flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={onBack}
+                  className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-bold rounded-xl border border-slate-200 bg-white text-slate-700 hover:text-emerald-700 hover:bg-emerald-50/60 hover:border-emerald-300 transition-all cursor-pointer shadow-2xs"
+                  title="Kembali ke Zona Administrasi"
+                >
+                  <ChevronLeft className="w-4 h-4 text-emerald-600" />
+                  <span>Kembali ke Zona Administrasi</span>
+                </button>
+              </div>
+            )}
+
+            <div className="bg-white rounded-3xl border border-slate-200/90 p-6 sm:p-12 shadow-sm text-center space-y-8 animate-in fade-in duration-500 relative overflow-hidden">
+              <div className="max-w-2xl mx-auto space-y-3 relative z-10">
+                <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full text-[11px] font-extrabold uppercase tracking-wider bg-emerald-50 text-emerald-800 border border-emerald-200/80 shadow-2xs">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                  PORTAL OPERASIONAL PREPLAB • NAVIGASI MODUL
+                </div>
+                <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
+                  Pusat Orderan Makanan &amp; Bungkusan
+                </h2>
+                <p className="text-xs sm:text-sm text-slate-500 leading-relaxed max-w-xl mx-auto">
+                  Pilih lembar kerja interaktif di bawah untuk mengelola orderan makan harian, daftar penerima bungkusan, list pengiriman ke GA, atau rekapan bungkusan.
+                </p>
+              </div>
+
+              {/* Ambient Soft Blur Behind Cards */}
+              <div className="relative pt-2 pb-6 flex justify-center overflow-x-auto z-10">
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[30rem] sm:w-[42rem] h-60 sm:h-72 bg-gradient-to-r from-emerald-200/50 via-sky-100/40 to-teal-100/50 rounded-full blur-3xl pointer-events-none -z-10" />
+                <DisplayCards cards={mealDisplayCards} className="min-h-[460px] sm:min-h-[540px]" />
+              </div>
+
+              <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold text-slate-500 bg-slate-50 border border-slate-200/70 shadow-2xs relative z-10">
+                <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Arahkan kursor &amp; klik salah satu kartu di atas untuk membuka lembar kerja secara instan</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {view !== 'landing' && (<>
         {/* Header: judul + tanggal | aksi */}
         <div className={`${UI.panel} px-4 sm:px-5 py-4 space-y-4`}>
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
             <div className="flex items-center gap-3 min-w-0">
-              {onBack && (
-                <button type="button" onClick={onBack} className={UI.iconBtn} title="Kembali">
-                  <ArrowLeft className="w-4 h-4" />
-                </button>
-              )}
+              <button type="button" onClick={() => setView('landing')} className={UI.iconBtn} title="Kembali ke Menu Tab">
+                <ArrowLeft className="w-4 h-4" />
+              </button>
               <div className="w-11 h-11 rounded-xl bg-emerald-700 text-white flex items-center justify-center shrink-0 shadow-sm"><Utensils className="w-5 h-5" /></div>
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
@@ -1569,6 +1678,15 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
         </div>
 
         {/* Tab: Orderan Makanan / Daftar Penerima Bungkusan / List Pengiriman Ke GA / Rekapan Bungkusan */}
+        <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setView('landing')}
+          className="inline-flex items-center gap-1.5 h-11 px-3.5 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 hover:text-emerald-700 hover:bg-emerald-50/60 hover:border-emerald-300 transition-all cursor-pointer shadow-sm"
+          title="Kembali ke Menu Tab"
+        >
+          <ChevronLeft className="w-4 h-4 text-emerald-600" /> Menu Tab
+        </button>
         <div className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
           {([
             ['orders', 'Orderan Makanan', Utensils],
@@ -1586,6 +1704,8 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
             </button>
           ))}
         </div>
+        </div>
+        </>)}
 
         {view === 'recipients' && (
           <MealBungkusRecipientsTable date={date} rows={rows} />
