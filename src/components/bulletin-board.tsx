@@ -243,54 +243,51 @@ export function BulletinBoard({
   }, []);
 
   // Notion-Style Multi-Tab Navigation State
-  const closingTabIdRef = useRef<string | null>(null);
-  const [openTabs, setOpenTabs] = useState<Array<{ id: string; title: string; icon?: string; post?: any }>>(() => {
+  const [openTabs, setOpenTabs] = useState<Array<{ tabId: string; postId: string | number | null; title: string; icon?: string; post?: any }>>(() => {
     try {
       const saved = sessionStorage.getItem("preplab_labnote_open_tabs");
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed.map((t: any, idx: number) => ({
+            tabId: t.tabId || `tab_${idx}_${t.id || 'tab'}`,
+            postId: t.postId !== undefined ? t.postId : (t.id === 'dashboard' ? null : t.id),
+            title: t.title || 'Tab',
+            icon: t.icon || '📝',
+            post: t.post
+          }));
+        }
       }
     } catch {}
-    return [{ id: 'dashboard', title: 'Dashboard', icon: '🏠' }];
+    const params = new URLSearchParams(window.location.search);
+    const initPageId = params.get("page") || params.get("postId") || params.get("id");
+    if (initPageId) {
+      return [{ tabId: 'tab_1', postId: initPageId, title: 'Memuat...', icon: '📝' }];
+    }
+    return [{ tabId: 'tab_1', postId: null, title: 'Dashboard', icon: '🏠' }];
+  });
+
+  const [activeTabId, setActiveTabId] = useState<string>(() => {
+    try {
+      const savedActive = sessionStorage.getItem("preplab_labnote_active_tab_id");
+      if (savedActive) return savedActive;
+    } catch {}
+    return 'tab_1';
   });
 
   // Save lightweight tab references to sessionStorage
   useEffect(() => {
     try {
       const lightweight = openTabs.map(t => ({
-        id: String(t.id),
+        tabId: t.tabId,
+        postId: t.postId,
         title: t.title,
         icon: t.icon
       }));
       sessionStorage.setItem("preplab_labnote_open_tabs", JSON.stringify(lightweight));
+      sessionStorage.setItem("preplab_labnote_active_tab_id", activeTabId);
     } catch {}
-  }, [openTabs]);
-
-  // Synchronize tabs automatically whenever selectedPost changes
-  useEffect(() => {
-    if (!selectedPost) return;
-    const postIdStr = String(selectedPost.id);
-    if (closingTabIdRef.current === postIdStr) return; // Guard: do not re-add tab currently being closed!
-    const postTitle = getPostTitle(selectedPost);
-    const postIcon = getPostEmoji(selectedPost);
-
-    setOpenTabs(prev => {
-      if (closingTabIdRef.current === postIdStr) return prev;
-      const existingIdx = prev.findIndex(t => String(t.id) === postIdStr);
-      if (existingIdx !== -1) {
-        const updated = [...prev];
-        updated[existingIdx] = { ...updated[existingIdx], title: postTitle, icon: postIcon, post: selectedPost };
-        return updated;
-      }
-      // Cap at maximum 10 active tabs (keep index 0 Dashboard, remove oldest tab if full)
-      let list = [...prev];
-      if (list.length >= 10) {
-        list.splice(1, 1);
-      }
-      return [...list, { id: postIdStr, title: postTitle, icon: postIcon, post: selectedPost }];
-    });
-  }, [selectedPost, getPostEmoji]);
+  }, [openTabs, activeTabId]);
 
   // Keep sessionStorage in sync with selectedPost
   useEffect(() => {
@@ -330,6 +327,52 @@ export function BulletinBoard({
   const [isFocusMode, setIsFocusMode] = useState(true);
   const [isLibraryActive, setIsLibraryActive] = useState<boolean>(false);
   const [libraryDocType, setLibraryDocType] = useState<LibraryDocType>('ALL');
+
+  // Synchronize the ACTIVE TAB automatically whenever selectedPost or library status changes (never spawns a new tab)
+  useEffect(() => {
+    let postTitle = 'Dashboard';
+    let postIcon = '🏠';
+    let postId: string | number | null = null;
+
+    if (isLibraryActive) {
+      postTitle = `Library: ${libraryDocType || 'Hub'}`;
+      postIcon = '📚';
+      postId = 'library';
+    } else if (selectedPost) {
+      postTitle = getPostTitle(selectedPost) || 'Dokumen';
+      postIcon = getPostEmoji(selectedPost) || '📝';
+      postId = selectedPost.id;
+    }
+
+    setOpenTabs(prev => {
+      const targetIdx = prev.findIndex(t => t.tabId === activeTabId);
+      if (targetIdx === -1) {
+        if (prev.length > 0) {
+          setActiveTabId(prev[0].tabId);
+          const copy = [...prev];
+          copy[0] = { ...copy[0], postId, title: postTitle, icon: postIcon, post: selectedPost };
+          return copy;
+        }
+        return [{ tabId: activeTabId, postId, title: postTitle, icon: postIcon, post: selectedPost }];
+      }
+
+      const current = prev[targetIdx];
+      if (current.postId === postId && current.title === postTitle && current.icon === postIcon && current.post === selectedPost) {
+        return prev;
+      }
+
+      const updated = [...prev];
+      updated[targetIdx] = {
+        ...current,
+        postId,
+        title: postTitle,
+        icon: postIcon,
+        post: selectedPost
+      };
+      return updated;
+    });
+  }, [selectedPost, isLibraryActive, libraryDocType, activeTabId, getPostEmoji]);
+
 
   // Sync focus mode state from portal layout
   useEffect(() => {
@@ -631,7 +674,7 @@ export function BulletinBoard({
           }
         }
       } catch (err) {}
-    }, 120000); // 2 minutes interval: drastically cuts down Cloud Run vCPU & egress cost
+    }, 10000); // 10 seconds interval: optimal near-realtime collaboration for active documents
 
     return () => {
       isMounted = false;
@@ -1193,45 +1236,53 @@ export function BulletinBoard({
     navigateToPost(nextPost);
   };
 
-  // Tab click handler
-  const handleSelectTab = (tab: { id: string; title: string; icon?: string; post?: any }, resetHistory: boolean = false) => {
-    if (tab.id === 'dashboard') {
+  // Tab click handler: activate tab and display its content
+  const handleSelectTab = (tab: { tabId: string; postId: string | number | null; title: string; icon?: string; post?: any }, resetHistory: boolean = false) => {
+    setActiveTabId(tab.tabId);
+
+    if (tab.postId === 'library') {
+      openLibraryHub('ALL');
+      return;
+    }
+
+    if (tab.postId === null) {
       navigateToPost(null, resetHistory);
       return;
     }
-    if (selectedPost && String(selectedPost.id) === String(tab.id) && !isEditing) return;
+
+    if (selectedPost && String(selectedPost.id) === String(tab.postId) && !isEditing) return;
 
     if (tab.post) {
       navigateToPost(tab.post, resetHistory);
       return;
     }
 
-    const found = posts.find(p => String(p.id) === String(tab.id));
+    const found = posts.find(p => String(p.id) === String(tab.postId));
     if (found) {
       navigateToPost(found, resetHistory);
       return;
     }
 
     // Check if it's a section hub (e.g. section-preparasi or logbook-preparasi)
-    if (String(tab.id).startsWith('section-') || String(tab.id).startsWith('logbook-')) {
-      const cleanSec = String(tab.id).replace(/^(section-|logbook-)/, '').replace(/-/g, ' ').trim();
+    if (String(tab.postId).startsWith('section-') || String(tab.postId).startsWith('logbook-')) {
+      const cleanSec = String(tab.postId).replace(/^(section-|logbook-)/, '').replace(/-/g, ' ').trim();
       openSectionLogbook(cleanSec);
       return;
     }
 
     // Fallback load
-    fetch(`/api/bulletin/${tab.id}`)
+    fetch(`/api/bulletin/${tab.postId}`)
       .then(res => res.json())
       .then(json => {
         if (json.status === 'success' && json.data) {
           navigateToPost(json.data, resetHistory);
         } else {
           toast.error('Halaman tidak ditemukan');
-          handleCloseTab(tab.id);
+          handleCloseTab(tab.tabId);
         }
       })
       .catch(() => {
-        handleCloseTab(tab.id);
+        handleCloseTab(tab.tabId);
       });
   };
 
@@ -1241,57 +1292,62 @@ export function BulletinBoard({
       e.preventDefault();
       e.stopPropagation();
     }
-    if (tabIdToClose === 'dashboard') return;
-
-    const closeIdStr = String(tabIdToClose);
-    closingTabIdRef.current = closeIdStr;
-
-    // Immediately calculate remaining tabs and next active tab
-    let nextActiveTab: { id: string; title: string; icon?: string; post?: any } | null = null;
-    let shouldSwitch = false;
 
     setOpenTabs(prev => {
-      const targetIdx = prev.findIndex(t => String(t.id) === closeIdStr);
+      const targetIdx = prev.findIndex(t => t.tabId === tabIdToClose);
       if (targetIdx === -1) return prev;
 
-      const remaining = prev.filter(t => String(t.id) !== closeIdStr);
-
-      // If closing currently active tab, calculate next tab to switch to
-      if (selectedPost && String(selectedPost.id) === closeIdStr) {
-        shouldSwitch = true;
-        nextActiveTab = remaining[Math.max(0, targetIdx - 1)] || remaining[0] || { id: 'dashboard', title: 'Dashboard', icon: '🏠' };
+      // If it's the last remaining tab, reset it to Dashboard instead of closing
+      if (prev.length === 1) {
+        const resetTab = {
+          tabId: prev[0].tabId,
+          postId: null,
+          title: 'Dashboard',
+          icon: '🏠',
+          post: null
+        };
+        navigateToPost(null, true);
+        return [resetTab];
       }
 
-      // Persist remaining tabs to sessionStorage immediately
-      try {
-        const lightweight = remaining.map(t => ({
-          id: String(t.id),
-          title: t.title,
-          icon: t.icon
-        }));
-        sessionStorage.setItem("preplab_labnote_open_tabs", JSON.stringify(lightweight));
-      } catch {}
+      const remaining = prev.filter(t => t.tabId !== tabIdToClose);
+
+      // If closing currently active tab, calculate next tab to switch to
+      if (activeTabId === tabIdToClose) {
+        const nextActive = remaining[Math.max(0, targetIdx - 1)] || remaining[0];
+        if (nextActive) {
+          setActiveTabId(nextActive.tabId);
+          setTimeout(() => {
+            handleSelectTab(nextActive, true);
+          }, 0);
+        }
+      }
 
       return remaining;
     });
-
-    if (shouldSwitch && nextActiveTab) {
-      if ((nextActiveTab as any).id !== 'dashboard') {
-        handleSelectTab(nextActiveTab, true);
-      } else {
-        navigateToPost(null, true);
-      }
-    }
-
-    setTimeout(() => {
-      if (closingTabIdRef.current === closeIdStr) {
-        closingTabIdRef.current = null;
-      }
-    }, 400);
   };
 
+  // Explicitly create a new tab and focus on it (Dashboard / New Workspace)
   const handleNewTab = () => {
-    navigateToPost(null);
+    const newTabId = 'tab_' + Date.now();
+    const newTab = {
+      tabId: newTabId,
+      postId: null,
+      title: 'Dashboard',
+      icon: '🏠',
+      post: null
+    };
+
+    setOpenTabs(prev => {
+      if (prev.length >= 12) {
+        toast.info('Maksimal 12 tab dapat dibuka bersamaan');
+        return prev;
+      }
+      return [...prev, newTab];
+    });
+
+    setActiveTabId(newTabId);
+    navigateToPost(null, true);
   };
 
   const goBack = () => {
@@ -2514,10 +2570,11 @@ ${aiMeetingNotes
             {/* Horizontal Scrollable Tabs Strip */}
             <div className="flex items-center gap-1 overflow-x-auto no-scrollbar flex-1 h-full pt-1">
               {openTabs.map((tab) => {
-                const isActive = selectedPost ? String(tab.id) === String(selectedPost.id) : tab.id === 'dashboard';
+                const isActive = tab.tabId === activeTabId;
+                const canClose = openTabs.length > 1 || tab.postId !== null;
                 return (
                   <div
-                    key={tab.id}
+                    key={tab.tabId}
                     onClick={() => handleSelectTab(tab)}
                     className={`group relative h-8 px-3 rounded-t-lg flex items-center gap-1.5 text-xs transition-all cursor-pointer border-t border-x shrink-0 max-w-[210px] ${
                       isActive
@@ -2526,11 +2583,11 @@ ${aiMeetingNotes
                     }`}
                     title={tab.title}
                   >
-                    <span className="text-xs shrink-0">{tab.icon || '📄'}</span>
+                    <span className="text-xs shrink-0">{tab.icon || '📝'}</span>
                     <span className="truncate flex-1 text-[11.5px]">{tab.title}</span>
-                    {tab.id !== 'dashboard' && (
+                    {canClose && (
                       <button
-                        onClick={(e) => handleCloseTab(tab.id, e)}
+                        onClick={(e) => handleCloseTab(tab.tabId, e)}
                         className={`p-0.5 rounded-md hover:bg-black/10 dark:hover:bg-white/20 text-[var(--text-muted,#64748b)] hover:text-[var(--text-main,#1e293b)] transition-opacity ${
                           isActive ? 'opacity-70 hover:opacity-100' : 'opacity-0 group-hover:opacity-70 hover:opacity-100'
                         }`}
@@ -2547,7 +2604,7 @@ ${aiMeetingNotes
               <button
                 onClick={handleNewTab}
                 className="p-1.5 rounded-md hover:bg-black/5 dark:hover:bg-white/10 text-[var(--text-muted,#64748b)] hover:text-[var(--text-main,#1e293b)] transition-colors cursor-pointer shrink-0 ml-0.5"
-                title="Buka Tab Baru (Dashboard)"
+                title="Buka Tab Baru (+)"
               >
                 <Plus className="w-3.5 h-3.5" />
               </button>
