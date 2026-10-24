@@ -5,10 +5,11 @@ import {
   Clock, Sparkles, Shield, ArrowUpDown, ChevronDown, Check,
   ChevronRight, Building2, MapPin, Briefcase, Info, Printer,
   ChevronLeft, Edit2, Eye, EyeOff, RotateCcw, X, Save, Settings2,
-  ShieldAlert, Lock
+  ShieldAlert, Lock, Maximize2
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { toast } from 'sonner';
+import { useTableColumnResize, ColumnResizeHandle, ColumnDef } from '../hooks/useTableColumnResize';
 
 interface RosterLeaveScheduleSheetProps {
   roster: any[];
@@ -647,23 +648,23 @@ const DEFAULT_VISIBLE_COLUMNS: Record<string, boolean> = {
   totalHari: true,
 };
 
-const COLUMN_DEFS = [
-  { id: 'no', label: 'NO' },
-  { id: 'nama', label: 'NAMA KARYAWAN' },
-  { id: 'jabatan', label: 'JABATAN' },
-  { id: 'section', label: 'SECTION' },
-  { id: 'poh', label: 'POH' },
-  { id: 'tanggalCuti', label: 'TANGGAL CUTI' },
-  { id: 'tanggalOnsite', label: 'TANGGAL ON SITE' },
-  { id: 'ket', label: 'KETERANGAN' },
-  { id: 'perubahanJadwalOnsite', label: 'PERUBAHAN JADWAL ONSITE' },
-  { id: 'travel', label: 'Travel (TRV)', group: 'duration' as const },
-  { id: 'tahunanIstimewa', label: 'Tahunan / Istimewa', group: 'duration' as const },
-  { id: 'extra', label: 'Extra (CE)', group: 'duration' as const },
-  { id: 'izinKhusus', label: 'Izin Khusus (IK)', group: 'duration' as const },
-  { id: 'izin', label: 'Izin (I / SL)', group: 'duration' as const },
-  { id: 'tambahanTravel', label: 'Tambahan Travel (TT)', group: 'duration' as const },
-  { id: 'totalHari', label: 'TOTAL HARI' },
+const COLUMN_DEFS: (ColumnDef & { group?: string })[] = [
+  { id: 'no', label: 'NO', defaultWidth: 48, minWidth: 40 },
+  { id: 'nama', label: 'NAMA KARYAWAN', defaultWidth: 200, minWidth: 140 },
+  { id: 'jabatan', label: 'JABATAN', defaultWidth: 160, minWidth: 100 },
+  { id: 'section', label: 'SECTION', defaultWidth: 140, minWidth: 90 },
+  { id: 'poh', label: 'POH', defaultWidth: 110, minWidth: 80 },
+  { id: 'tanggalCuti', label: 'TANGGAL CUTI', defaultWidth: 120, minWidth: 90 },
+  { id: 'tanggalOnsite', label: 'TANGGAL ON SITE', defaultWidth: 120, minWidth: 90 },
+  { id: 'ket', label: 'KETERANGAN', defaultWidth: 140, minWidth: 90 },
+  { id: 'perubahanJadwalOnsite', label: 'PERUBAHAN JADWAL ONSITE', defaultWidth: 150, minWidth: 100 },
+  { id: 'travel', label: 'Travel (TRV)', defaultWidth: 70, minWidth: 50, group: 'duration' },
+  { id: 'tahunanIstimewa', label: 'Tahunan / Istimewa', defaultWidth: 110, minWidth: 60, group: 'duration' },
+  { id: 'extra', label: 'Extra (CE)', defaultWidth: 70, minWidth: 50, group: 'duration' },
+  { id: 'izinKhusus', label: 'Izin Khusus (IK)', defaultWidth: 90, minWidth: 50, group: 'duration' },
+  { id: 'izin', label: 'Izin (I / SL)', defaultWidth: 70, minWidth: 50, group: 'duration' },
+  { id: 'tambahanTravel', label: 'Tambahan Travel (TT)', defaultWidth: 130, minWidth: 60, group: 'duration' },
+  { id: 'totalHari', label: 'TOTAL HARI', defaultWidth: 80, minWidth: 60 },
 ];
 
 export function RosterLeaveScheduleSheet({ 
@@ -796,6 +797,12 @@ export function RosterLeaveScheduleSheet({
       localStorage.setItem('preplab_leave_visible_cols', JSON.stringify(DEFAULT_VISIBLE_COLUMNS));
     } catch(e) {}
   };
+
+  // Column Resize & Autofit Helper
+  const resizeHelper = useTableColumnResize({
+    tableId: 'roster_leave_schedule',
+    columns: COLUMN_DEFS,
+  });
 
   // Custom Overrides state (persisted to localStorage)
   const [customOverrides, setCustomOverrides] = useState<Record<string, any>>(() => {
@@ -1137,6 +1144,13 @@ export function RosterLeaveScheduleSheet({
   const totalVisibleCols = useMemo(() => {
     return Object.keys(visibleColumns).filter(k => visibleColumns[k]).length;
   }, [visibleColumns]);
+
+  const totalTableWidthCalc = useMemo(() => {
+    return COLUMN_DEFS.reduce((sum, col) => {
+      if (!visibleColumns[col.id]) return sum;
+      return sum + resizeHelper.getColWidth(col.id);
+    }, 0);
+  }, [visibleColumns, resizeHelper.colWidths, resizeHelper.getColWidth]);
 
   const activeColumnDefs = useMemo(() => {
     return COLUMN_DEFS;
@@ -1963,6 +1977,35 @@ export function RosterLeaveScheduleSheet({
             </div>
           </div>
 
+          {/* Autofit & Reset Buttons */}
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              type="button"
+              onClick={resizeHelper.handleToggleAutofit}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer shadow-2xs ${
+                resizeHelper.isAutofit
+                  ? 'bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300 border-teal-300 dark:border-teal-700 ring-2 ring-teal-500/30'
+                  : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:bg-slate-50'
+              }`}
+              title="Autofit: Sesuaikan lebar semua kolom otomatis mengikuti konten"
+            >
+              <Maximize2 className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
+              <span>{resizeHelper.isAutofit ? 'Autofit Aktif' : 'Autofit Kolom'}</span>
+            </button>
+
+            {resizeHelper.isAnyResized && (
+              <button
+                type="button"
+                onClick={resizeHelper.handleResetAll}
+                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:text-teal-600 hover:border-teal-300 transition-all cursor-pointer shadow-2xs"
+                title="Reset seluruh lebar kolom ke standar"
+              >
+                <RotateCcw className="w-3.5 h-3.5 text-slate-400" />
+                <span className="hidden sm:inline">Reset Kolom</span>
+              </button>
+            )}
+          </div>
+
           {/* Search Box */}
           <div className="relative flex-1 md:max-w-xs">
             <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -1991,7 +2034,32 @@ export function RosterLeaveScheduleSheet({
         }}
       >
         <div className="overflow-x-auto max-h-[72vh] overflow-y-auto relative custom-scrollbar">
-          <table className="w-full text-left text-xs border-collapse">
+          <table 
+            className="w-full text-left text-xs border-collapse"
+            style={{
+              tableLayout: resizeHelper.isAutofit ? 'auto' : 'fixed',
+              width: resizeHelper.isAutofit ? '100%' : `${totalTableWidthCalc}px`,
+              minWidth: '100%'
+            }}
+          >
+            <colgroup>
+              {visibleColumns.no && <col style={{ width: resizeHelper.isAutofit ? undefined : `${resizeHelper.getColWidth('no')}px` }} />}
+              {visibleColumns.nama && <col style={{ width: resizeHelper.isAutofit ? undefined : `${resizeHelper.getColWidth('nama')}px` }} />}
+              {visibleColumns.jabatan && <col style={{ width: resizeHelper.isAutofit ? undefined : `${resizeHelper.getColWidth('jabatan')}px` }} />}
+              {visibleColumns.section && <col style={{ width: resizeHelper.isAutofit ? undefined : `${resizeHelper.getColWidth('section')}px` }} />}
+              {visibleColumns.poh && <col style={{ width: resizeHelper.isAutofit ? undefined : `${resizeHelper.getColWidth('poh')}px` }} />}
+              {visibleColumns.tanggalCuti && <col style={{ width: resizeHelper.isAutofit ? undefined : `${resizeHelper.getColWidth('tanggalCuti')}px` }} />}
+              {visibleColumns.tanggalOnsite && <col style={{ width: resizeHelper.isAutofit ? undefined : `${resizeHelper.getColWidth('tanggalOnsite')}px` }} />}
+              {visibleColumns.ket && <col style={{ width: resizeHelper.isAutofit ? undefined : `${resizeHelper.getColWidth('ket')}px` }} />}
+              {visibleColumns.perubahanJadwalOnsite && <col style={{ width: resizeHelper.isAutofit ? undefined : `${resizeHelper.getColWidth('perubahanJadwalOnsite')}px` }} />}
+              {visibleDurationColsCount > 0 && visibleColumns.travel && <col style={{ width: resizeHelper.isAutofit ? undefined : `${resizeHelper.getColWidth('travel')}px` }} />}
+              {visibleDurationColsCount > 0 && visibleColumns.tahunanIstimewa && <col style={{ width: resizeHelper.isAutofit ? undefined : `${resizeHelper.getColWidth('tahunanIstimewa')}px` }} />}
+              {visibleDurationColsCount > 0 && visibleColumns.extra && <col style={{ width: resizeHelper.isAutofit ? undefined : `${resizeHelper.getColWidth('extra')}px` }} />}
+              {visibleDurationColsCount > 0 && visibleColumns.izinKhusus && <col style={{ width: resizeHelper.isAutofit ? undefined : `${resizeHelper.getColWidth('izinKhusus')}px` }} />}
+              {visibleDurationColsCount > 0 && visibleColumns.izin && <col style={{ width: resizeHelper.isAutofit ? undefined : `${resizeHelper.getColWidth('izin')}px` }} />}
+              {visibleDurationColsCount > 0 && visibleColumns.tambahanTravel && <col style={{ width: resizeHelper.isAutofit ? undefined : `${resizeHelper.getColWidth('tambahanTravel')}px` }} />}
+              {visibleColumns.totalHari && <col style={{ width: resizeHelper.isAutofit ? undefined : `${resizeHelper.getColWidth('totalHari')}px` }} />}
+            </colgroup>
             <thead>
               {/* Header Title Bar - Sticky Top 0 */}
               <tr className="sticky top-0 z-30 bg-slate-900 text-white border-b border-slate-800">
@@ -2008,36 +2076,93 @@ export function RosterLeaveScheduleSheet({
                 }}
               >
                 {visibleColumns.no && (
-                  <th rowSpan={visibleDurationColsCount > 0 ? 2 : 1} className="py-2.5 px-3 text-center w-12 border-r border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900">NO</th>
+                  <th 
+                    rowSpan={visibleDurationColsCount > 0 ? 2 : 1} 
+                    style={{ width: resizeHelper.isAutofit ? undefined : `${resizeHelper.getColWidth('no')}px` }}
+                    className="py-2.5 px-3 text-center border-r border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 relative"
+                  >
+                    NO
+                    <ColumnResizeHandle colId="no" isResizing={resizeHelper.resizingCol === 'no'} onResizeStart={resizeHelper.handleResizeStart} onResetCol={resizeHelper.handleResetCol} />
+                  </th>
                 )}
                 {visibleColumns.nama && (
-                  <th rowSpan={visibleDurationColsCount > 0 ? 2 : 1} className="py-2.5 px-4 min-w-[190px] border-r border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900">NAMA KARYAWAN</th>
+                  <th 
+                    rowSpan={visibleDurationColsCount > 0 ? 2 : 1} 
+                    style={{ width: resizeHelper.isAutofit ? undefined : `${resizeHelper.getColWidth('nama')}px` }}
+                    className="py-2.5 px-4 border-r border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 relative"
+                  >
+                    NAMA KARYAWAN
+                    <ColumnResizeHandle colId="nama" isResizing={resizeHelper.resizingCol === 'nama'} onResizeStart={resizeHelper.handleResizeStart} onResetCol={resizeHelper.handleResetCol} />
+                  </th>
                 )}
                 {visibleColumns.jabatan && (
-                  <th rowSpan={visibleDurationColsCount > 0 ? 2 : 1} className="py-2.5 px-3 min-w-[150px] border-r border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900">JABATAN</th>
+                  <th 
+                    rowSpan={visibleDurationColsCount > 0 ? 2 : 1} 
+                    style={{ width: resizeHelper.isAutofit ? undefined : `${resizeHelper.getColWidth('jabatan')}px` }}
+                    className="py-2.5 px-3 text-center border-r border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 relative"
+                  >
+                    JABATAN
+                    <ColumnResizeHandle colId="jabatan" isResizing={resizeHelper.resizingCol === 'jabatan'} onResizeStart={resizeHelper.handleResizeStart} onResetCol={resizeHelper.handleResetCol} />
+                  </th>
                 )}
                 {visibleColumns.section && (
-                  <th rowSpan={visibleDurationColsCount > 0 ? 2 : 1} className="py-2.5 px-3 min-w-[130px] border-r border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900">SECTION</th>
+                  <th 
+                    rowSpan={visibleDurationColsCount > 0 ? 2 : 1} 
+                    style={{ width: resizeHelper.isAutofit ? undefined : `${resizeHelper.getColWidth('section')}px` }}
+                    className="py-2.5 px-3 text-center border-r border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 relative"
+                  >
+                    SECTION
+                    <ColumnResizeHandle colId="section" isResizing={resizeHelper.resizingCol === 'section'} onResizeStart={resizeHelper.handleResizeStart} onResetCol={resizeHelper.handleResetCol} />
+                  </th>
                 )}
                 {visibleColumns.poh && (
-                  <th rowSpan={visibleDurationColsCount > 0 ? 2 : 1} className="py-2.5 px-3 min-w-[110px] border-r border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900">POH</th>
+                  <th 
+                    rowSpan={visibleDurationColsCount > 0 ? 2 : 1} 
+                    style={{ width: resizeHelper.isAutofit ? undefined : `${resizeHelper.getColWidth('poh')}px` }}
+                    className="py-2.5 px-3 text-center border-r border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 relative"
+                  >
+                    POH
+                    <ColumnResizeHandle colId="poh" isResizing={resizeHelper.resizingCol === 'poh'} onResizeStart={resizeHelper.handleResizeStart} onResetCol={resizeHelper.handleResetCol} />
+                  </th>
                 )}
                 {visibleColumns.tanggalCuti && (
-                  <th rowSpan={visibleDurationColsCount > 0 ? 2 : 1} className="py-2.5 px-3 text-center min-w-[110px] border-r border-slate-200 dark:border-slate-800 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300">
+                  <th 
+                    rowSpan={visibleDurationColsCount > 0 ? 2 : 1} 
+                    style={{ width: resizeHelper.isAutofit ? undefined : `${resizeHelper.getColWidth('tanggalCuti')}px` }}
+                    className="py-2.5 px-3 text-center border-r border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-300 relative"
+                  >
                     TANGGAL CUTI
+                    <ColumnResizeHandle colId="tanggalCuti" isResizing={resizeHelper.resizingCol === 'tanggalCuti'} onResizeStart={resizeHelper.handleResizeStart} onResetCol={resizeHelper.handleResetCol} />
                   </th>
                 )}
                 {visibleColumns.tanggalOnsite && (
-                  <th rowSpan={visibleDurationColsCount > 0 ? 2 : 1} className="py-2.5 px-3 text-center min-w-[110px] border-r border-slate-200 dark:border-slate-800 bg-teal-500/10 text-teal-800 dark:text-teal-300">
+                  <th 
+                    rowSpan={visibleDurationColsCount > 0 ? 2 : 1} 
+                    style={{ width: resizeHelper.isAutofit ? undefined : `${resizeHelper.getColWidth('tanggalOnsite')}px` }}
+                    className="py-2.5 px-3 text-center border-r border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-300 relative"
+                  >
                     TANGGAL ON SITE
+                    <ColumnResizeHandle colId="tanggalOnsite" isResizing={resizeHelper.resizingCol === 'tanggalOnsite'} onResizeStart={resizeHelper.handleResizeStart} onResetCol={resizeHelper.handleResetCol} />
                   </th>
                 )}
                 {visibleColumns.ket && (
-                  <th rowSpan={visibleDurationColsCount > 0 ? 2 : 1} className="py-2.5 px-3 min-w-[140px] border-r border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900">KETERANGAN</th>
+                  <th 
+                    rowSpan={visibleDurationColsCount > 0 ? 2 : 1} 
+                    style={{ width: resizeHelper.isAutofit ? undefined : `${resizeHelper.getColWidth('ket')}px` }}
+                    className="py-2.5 px-3 text-center border-r border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 relative"
+                  >
+                    KETERANGAN
+                    <ColumnResizeHandle colId="ket" isResizing={resizeHelper.resizingCol === 'ket'} onResizeStart={resizeHelper.handleResizeStart} onResetCol={resizeHelper.handleResetCol} />
+                  </th>
                 )}
                 {visibleColumns.perubahanJadwalOnsite && (
-                  <th rowSpan={visibleDurationColsCount > 0 ? 2 : 1} className="py-2.5 px-3 text-center min-w-[120px] border-r border-slate-200 dark:border-slate-800 bg-amber-500/10 text-amber-800 dark:text-amber-300">
+                  <th 
+                    rowSpan={visibleDurationColsCount > 0 ? 2 : 1} 
+                    style={{ width: resizeHelper.isAutofit ? undefined : `${resizeHelper.getColWidth('perubahanJadwalOnsite')}px` }}
+                    className="py-2.5 px-3 text-center border-r border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-300 relative"
+                  >
                     PERUBAHAN JADWAL ONSITE
+                    <ColumnResizeHandle colId="perubahanJadwalOnsite" isResizing={resizeHelper.resizingCol === 'perubahanJadwalOnsite'} onResizeStart={resizeHelper.handleResizeStart} onResetCol={resizeHelper.handleResetCol} />
                   </th>
                 )}
 
@@ -2049,12 +2174,15 @@ export function RosterLeaveScheduleSheet({
                 )}
 
                 {visibleColumns.totalHari && (
-                  <th rowSpan={visibleDurationColsCount > 0 ? 2 : 1} className="py-2.5 px-3 text-center min-w-[70px] border-r border-slate-200 dark:border-slate-800 bg-slate-200 dark:bg-slate-800 text-slate-900 dark:text-white font-extrabold">
+                  <th 
+                    rowSpan={visibleDurationColsCount > 0 ? 2 : 1} 
+                    style={{ width: resizeHelper.isAutofit ? undefined : `${resizeHelper.getColWidth('totalHari')}px` }}
+                    className="py-2.5 px-3 text-center border-r border-slate-200 dark:border-slate-800 bg-slate-200 dark:bg-slate-800 text-slate-900 dark:text-white font-extrabold relative"
+                  >
                     TOTAL HARI
+                    <ColumnResizeHandle colId="totalHari" isResizing={resizeHelper.resizingCol === 'totalHari'} onResizeStart={resizeHelper.handleResizeStart} onResetCol={resizeHelper.handleResetCol} />
                   </th>
                 )}
-
-
               </tr>
 
               {/* Sub-headers for duration columns - Sticky Top 77px */}
@@ -2067,23 +2195,39 @@ export function RosterLeaveScheduleSheet({
                   }}
                 >
                   {visibleColumns.travel && (
-                    <th className="py-1.5 px-2 text-center w-14 border-r border-slate-200 dark:border-slate-800" title="Jumlah kode TRV yang muncul di Roster Kerja antara Tanggal Cuti dan Tanggal On Site">Travel</th>
+                    <th style={{ width: resizeHelper.isAutofit ? undefined : `${resizeHelper.getColWidth('travel')}px` }} className="py-1.5 px-2 text-center border-r border-slate-200 dark:border-slate-800 relative" title="Jumlah kode TRV">
+                      Travel
+                      <ColumnResizeHandle colId="travel" isResizing={resizeHelper.resizingCol === 'travel'} onResizeStart={resizeHelper.handleResizeStart} onResetCol={resizeHelper.handleResetCol} />
+                    </th>
                   )}
                   {visibleColumns.tahunanIstimewa && (
-                    <th className="py-1.5 px-2 text-center w-24 border-r border-slate-200 dark:border-slate-800" title="Jumlah kode CT yang muncul di Roster Kerja antara Tanggal Cuti dan Tanggal On Site">Tahunan / Istimewa</th>
+                    <th style={{ width: resizeHelper.isAutofit ? undefined : `${resizeHelper.getColWidth('tahunanIstimewa')}px` }} className="py-1.5 px-2 text-center border-r border-slate-200 dark:border-slate-800 relative" title="Jumlah kode CT / CI">
+                      Tahunan / Istimewa
+                      <ColumnResizeHandle colId="tahunanIstimewa" isResizing={resizeHelper.resizingCol === 'tahunanIstimewa'} onResizeStart={resizeHelper.handleResizeStart} onResetCol={resizeHelper.handleResetCol} />
+                    </th>
                   )}
                   {visibleColumns.extra && (
-                    <th className="py-1.5 px-2 text-center w-14 border-r border-slate-200 dark:border-slate-800" title="Jumlah kode CE yang muncul di Roster Kerja antara Tanggal Cuti dan Tanggal On Site">Extra</th>
+                    <th style={{ width: resizeHelper.isAutofit ? undefined : `${resizeHelper.getColWidth('extra')}px` }} className="py-1.5 px-2 text-center border-r border-slate-200 dark:border-slate-800 relative" title="Jumlah kode CE">
+                      Extra
+                      <ColumnResizeHandle colId="extra" isResizing={resizeHelper.resizingCol === 'extra'} onResizeStart={resizeHelper.handleResizeStart} onResetCol={resizeHelper.handleResetCol} />
+                    </th>
                   )}
                   {visibleColumns.izinKhusus && (
-                    <th className="py-1.5 px-2 text-center w-20 border-r border-slate-200 dark:border-slate-800" title="Jumlah kode IK yang muncul di Roster Kerja antara Tanggal Cuti dan Tanggal On Site">Izin Khusus</th>
+                    <th style={{ width: resizeHelper.isAutofit ? undefined : `${resizeHelper.getColWidth('izinKhusus')}px` }} className="py-1.5 px-2 text-center border-r border-slate-200 dark:border-slate-800 relative" title="Jumlah kode IK">
+                      Izin Khusus
+                      <ColumnResizeHandle colId="izinKhusus" isResizing={resizeHelper.resizingCol === 'izinKhusus'} onResizeStart={resizeHelper.handleResizeStart} onResetCol={resizeHelper.handleResetCol} />
+                    </th>
                   )}
                   {visibleColumns.izin && (
-                    <th className="py-1.5 px-2 text-center w-14 border-r border-slate-200 dark:border-slate-800" title="Jumlah kode I yang muncul di Roster Kerja antara Tanggal Cuti dan Tanggal On Site">Izin</th>
+                    <th style={{ width: resizeHelper.isAutofit ? undefined : `${resizeHelper.getColWidth('izin')}px` }} className="py-1.5 px-2 text-center border-r border-slate-200 dark:border-slate-800 relative" title="Jumlah kode I">
+                      Izin
+                      <ColumnResizeHandle colId="izin" isResizing={resizeHelper.resizingCol === 'izin'} onResizeStart={resizeHelper.handleResizeStart} onResetCol={resizeHelper.handleResetCol} />
+                    </th>
                   )}
                   {visibleColumns.tambahanTravel && (
-                    <th className="py-1.5 px-2 text-center min-w-[140px] border-r border-slate-200 dark:border-slate-800 text-amber-700 dark:text-amber-400" title="Jumlah kode TT yang muncul di Roster Kerja antara Tanggal Cuti dan Tanggal On Site">
+                    <th style={{ width: resizeHelper.isAutofit ? undefined : `${resizeHelper.getColWidth('tambahanTravel')}px` }} className="py-1.5 px-2 text-center border-r border-slate-200 dark:border-slate-800 relative" title="Jumlah kode TT">
                       Tambahan Travel (TT)
+                      <ColumnResizeHandle colId="tambahanTravel" isResizing={resizeHelper.resizingCol === 'tambahanTravel'} onResizeStart={resizeHelper.handleResizeStart} onResetCol={resizeHelper.handleResetCol} />
                     </th>
                   )}
                 </tr>
@@ -2127,17 +2271,13 @@ export function RosterLeaveScheduleSheet({
                               {rec.nama}
                             </span>
                             {rec.isCustomEdited && (
-                              <span className="text-[9px] px-1.5 py-0.2 rounded-full font-bold bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-500/30 shrink-0" title="Data baris ini telah dimodifikasi secara kustom">
+                              <span className="text-[9px] px-1.5 py-0.2 rounded-full font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 shrink-0" title="Data baris ini telah dimodifikasi secara kustom">
                                 Diedit
                               </span>
                             )}
                           </div>
                           <div className="text-[10px] text-slate-400 flex items-center gap-1.5 mt-0.5">
-                            <span className={`px-1.5 py-0.2 rounded text-[9px] font-black uppercase ${
-                              rec.pt === 'GPS' 
-                                ? 'bg-cyan-500/15 text-cyan-700 dark:text-cyan-300 border border-cyan-500/30' 
-                                : 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30'
-                            }`}>
+                            <span className="px-1.5 py-0.2 rounded text-[9px] font-bold uppercase bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
                               PT {rec.pt}
                             </span>
                           </div>
@@ -2146,7 +2286,7 @@ export function RosterLeaveScheduleSheet({
 
                       {/* JABATAN - Inline Editable */}
                       {visibleColumns.jabatan && (
-                        <td className="py-2 px-2.5 border-r border-slate-100 dark:border-slate-800" onClick={(e) => e.stopPropagation()}>
+                        <td className="py-2 px-2.5 text-center border-r border-slate-100 dark:border-slate-800" onClick={(e) => e.stopPropagation()}>
                           <input
                             type="text"
                             defaultValue={rec.jabatan}
@@ -2161,7 +2301,7 @@ export function RosterLeaveScheduleSheet({
                               if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
                             }}
                             placeholder="Jabatan..."
-                            className="w-full max-w-[170px] px-1.5 py-0.5 text-xs font-semibold text-slate-800 dark:text-slate-200 rounded bg-transparent hover:bg-slate-100 dark:hover:bg-slate-800 focus:bg-white dark:focus:bg-slate-800 border border-transparent hover:border-slate-300 dark:hover:border-slate-700 focus:border-indigo-500 outline-none transition-all"
+                            className="w-full max-w-[170px] mx-auto block px-1.5 py-0.5 text-xs text-center font-semibold text-slate-800 dark:text-slate-200 rounded bg-transparent hover:bg-slate-100 dark:hover:bg-slate-800 focus:bg-white dark:focus:bg-slate-800 border border-transparent hover:border-slate-300 dark:hover:border-slate-700 focus:border-slate-400 outline-none transition-all"
                             title="Edit Jabatan langsung di tabel sebagai referensi"
                           />
                         </td>
@@ -2169,7 +2309,7 @@ export function RosterLeaveScheduleSheet({
 
                       {/* SECTION - Inline Editable */}
                       {visibleColumns.section && (
-                        <td className="py-2 px-2.5 border-r border-slate-100 dark:border-slate-800" onClick={(e) => e.stopPropagation()}>
+                        <td className="py-2 px-2.5 text-center border-r border-slate-100 dark:border-slate-800" onClick={(e) => e.stopPropagation()}>
                           <input
                             type="text"
                             defaultValue={rec.section}
@@ -2184,11 +2324,11 @@ export function RosterLeaveScheduleSheet({
                               if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
                             }}
                             placeholder="Section..."
-                            className="w-full max-w-[130px] px-1.5 py-0.5 text-xs font-bold text-teal-700 dark:text-teal-300 rounded bg-transparent hover:bg-slate-100 dark:hover:bg-slate-800 focus:bg-white dark:focus:bg-slate-800 border border-transparent hover:border-slate-300 dark:hover:border-slate-700 focus:border-teal-500 outline-none transition-all"
+                            className="w-full max-w-[130px] mx-auto block px-1.5 py-0.5 text-xs text-center font-semibold text-slate-800 dark:text-slate-200 rounded bg-transparent hover:bg-slate-100 dark:hover:bg-slate-800 focus:bg-white dark:focus:bg-slate-800 border border-transparent hover:border-slate-300 dark:hover:border-slate-700 focus:border-slate-400 outline-none transition-all"
                             title="Edit Section langsung di tabel sebagai referensi"
                           />
                           {rec.subSection && rec.subSection !== rec.section && (
-                            <div className="text-[10px] text-slate-400 pl-1.5">
+                            <div className="text-[10px] text-slate-400 text-center">
                               {rec.subSection}
                             </div>
                           )}
@@ -2197,8 +2337,8 @@ export function RosterLeaveScheduleSheet({
 
                       {/* POH - Inline Editable */}
                       {visibleColumns.poh && (
-                        <td className="py-2 px-2.5 border-r border-slate-100 dark:border-slate-800 text-slate-700 dark:text-slate-300 font-medium" onClick={(e) => e.stopPropagation()}>
-                          <div className="flex items-center gap-1">
+                        <td className="py-2 px-2.5 text-center border-r border-slate-100 dark:border-slate-800 text-slate-700 dark:text-slate-300 font-medium" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center justify-center gap-1">
                             <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                             <input
                               type="text"
@@ -2214,7 +2354,7 @@ export function RosterLeaveScheduleSheet({
                                 if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
                               }}
                               placeholder="POH..."
-                              className="w-full max-w-[110px] px-1.5 py-0.5 text-xs font-semibold rounded bg-transparent hover:bg-slate-100 dark:hover:bg-slate-800 focus:bg-white dark:focus:bg-slate-800 border border-transparent hover:border-slate-300 dark:hover:border-slate-700 focus:border-teal-500 text-slate-800 dark:text-slate-200 outline-none transition-all"
+                              className="w-full max-w-[110px] px-1.5 py-0.5 text-xs text-center font-semibold rounded bg-transparent hover:bg-slate-100 dark:hover:bg-slate-800 focus:bg-white dark:focus:bg-slate-800 border border-transparent hover:border-slate-300 dark:hover:border-slate-700 focus:border-slate-400 text-slate-800 dark:text-slate-200 outline-none transition-all"
                               title="Edit POH langsung di tabel sebagai referensi"
                             />
                           </div>
@@ -2223,10 +2363,10 @@ export function RosterLeaveScheduleSheet({
 
                       {/* TANGGAL CUTI - Inline Date Picker */}
                       {visibleColumns.tanggalCuti && (
-                        <td className="py-2 px-2 text-center font-bold text-emerald-700 dark:text-emerald-400 border-r border-slate-100 dark:border-slate-800 bg-emerald-500/5 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                        <td className="py-2 px-2 text-center font-semibold text-slate-700 dark:text-slate-300 border-r border-slate-100 dark:border-slate-800 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                           <div className="relative inline-flex items-center group">
-                            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold font-mono bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 hover:bg-emerald-100/80 dark:hover:bg-emerald-900/60 border border-emerald-200/80 dark:border-emerald-800/60 transition-all cursor-pointer shadow-2xs">
-                              <Calendar className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0 group-hover:scale-110 transition-transform" />
+                            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold font-mono bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 transition-all cursor-pointer shadow-2xs">
+                              <Calendar className="w-3.5 h-3.5 text-slate-500 shrink-0" />
                               <span>{rec.tanggalCuti}</span>
                             </div>
                             <input
@@ -2248,10 +2388,10 @@ export function RosterLeaveScheduleSheet({
 
                       {/* TANGGAL ON SITE - Inline Date Picker */}
                       {visibleColumns.tanggalOnsite && (
-                        <td className="py-2 px-2 text-center font-bold text-teal-700 dark:text-teal-400 border-r border-slate-100 dark:border-slate-800 bg-teal-500/5 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                        <td className="py-2 px-2 text-center font-semibold text-slate-700 dark:text-slate-300 border-r border-slate-100 dark:border-slate-800 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                           <div className="relative inline-flex items-center group">
-                            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold font-mono bg-teal-50 dark:bg-teal-950/40 text-teal-800 dark:text-teal-300 hover:bg-teal-100/80 dark:hover:bg-teal-900/60 border border-teal-200/80 dark:border-teal-800/60 transition-all cursor-pointer shadow-2xs">
-                              <Calendar className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400 shrink-0 group-hover:scale-110 transition-transform" />
+                            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold font-mono bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 transition-all cursor-pointer shadow-2xs">
+                              <Calendar className="w-3.5 h-3.5 text-slate-500 shrink-0" />
                               <span>{rec.tanggalOnsite}</span>
                             </div>
                             <input
@@ -2273,19 +2413,11 @@ export function RosterLeaveScheduleSheet({
 
                       {/* KETERANGAN - Manual Dropdown Selector */}
                       {visibleColumns.ket && (
-                        <td className="py-2 px-2.5 border-r border-slate-100 dark:border-slate-800" onClick={(e) => e.stopPropagation()}>
+                        <td className="py-2 px-2.5 text-center border-r border-slate-100 dark:border-slate-800" onClick={(e) => e.stopPropagation()}>
                           <select
                             value={rec.ket || 'Sesuai Roster'}
                             onChange={(e) => handleInlineUpdateLeave(rec, 'ket', e.target.value)}
-                            className={`px-2.5 py-1 rounded-lg text-[10.5px] font-bold border cursor-pointer outline-none transition-all shadow-2xs ${
-                              rec.ket === 'Cuti Selesai' || rec.ket === 'Cuti Site Selesai'
-                                ? 'bg-slate-100 text-slate-800 border-slate-300 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700'
-                                : rec.ket === 'Cuti Site'
-                                ? 'bg-indigo-50 text-indigo-800 border-indigo-300 dark:bg-indigo-950/50 dark:text-indigo-300 dark:border-indigo-700'
-                                : rec.ket === 'Sesuai Roster'
-                                ? 'bg-emerald-50 text-emerald-800 border-emerald-300 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-700'
-                                : 'bg-amber-50 text-amber-800 border-amber-300 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-700'
-                            }`}
+                            className="mx-auto block px-2.5 py-1 rounded-lg text-[10.5px] font-semibold text-center border cursor-pointer outline-none transition-all shadow-2xs bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700"
                             title="Pilih keterangan cuti langsung di tabel"
                           >
                             <option value="Sesuai Roster">Sesuai Roster</option>
@@ -2359,7 +2491,7 @@ export function RosterLeaveScheduleSheet({
                             onKeyDown={(e) => {
                               if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
                             }}
-                            className="w-11 px-1 py-0.5 text-xs font-bold text-center text-amber-700 dark:text-amber-300 rounded bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-amber-400 focus:border-amber-500 outline-none transition-all shadow-2xs"
+                            className="w-11 px-1 py-0.5 text-xs font-semibold text-center text-slate-700 dark:text-slate-300 rounded bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-slate-400 focus:border-slate-500 outline-none transition-all shadow-2xs"
                             title={`Travel: Jumlah 'TRV' yang muncul di Roster Kerja antara Tanggal Cuti (${rec.tanggalCuti}) dan Tanggal On Site (${rec.perubahanJadwalOnsite !== '-' ? rec.perubahanJadwalOnsite : rec.tanggalOnsite})`}
                           />
                         </td>
@@ -2380,7 +2512,7 @@ export function RosterLeaveScheduleSheet({
                             onKeyDown={(e) => {
                               if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
                             }}
-                            className="w-11 px-1 py-0.5 text-xs font-bold text-center text-purple-700 dark:text-purple-300 rounded bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-purple-400 focus:border-purple-500 outline-none transition-all shadow-2xs"
+                            className="w-11 px-1 py-0.5 text-xs font-semibold text-center text-slate-700 dark:text-slate-300 rounded bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-slate-400 focus:border-slate-500 outline-none transition-all shadow-2xs"
                             title={`Tahunan / Istimewa: Jumlah 'CT' yang muncul di Roster Kerja antara Tanggal Cuti (${rec.tanggalCuti}) dan Tanggal On Site (${rec.perubahanJadwalOnsite !== '-' ? rec.perubahanJadwalOnsite : rec.tanggalOnsite})`}
                           />
                         </td>
@@ -2401,7 +2533,7 @@ export function RosterLeaveScheduleSheet({
                             onKeyDown={(e) => {
                               if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
                             }}
-                            className="w-11 px-1 py-0.5 text-xs font-bold text-center text-blue-700 dark:text-blue-300 rounded bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-blue-400 focus:border-blue-500 outline-none transition-all shadow-2xs"
+                            className="w-11 px-1 py-0.5 text-xs font-semibold text-center text-slate-700 dark:text-slate-300 rounded bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-slate-400 focus:border-slate-500 outline-none transition-all shadow-2xs"
                             title={`Extra: Jumlah 'CE' yang muncul di Roster Kerja antara Tanggal Cuti (${rec.tanggalCuti}) dan Tanggal On Site (${rec.perubahanJadwalOnsite !== '-' ? rec.perubahanJadwalOnsite : rec.tanggalOnsite})`}
                           />
                         </td>
@@ -2422,7 +2554,7 @@ export function RosterLeaveScheduleSheet({
                             onKeyDown={(e) => {
                               if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
                             }}
-                            className="w-11 px-1 py-0.5 text-xs font-bold text-center text-indigo-700 dark:text-indigo-300 rounded bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-indigo-400 focus:border-indigo-500 outline-none transition-all shadow-2xs"
+                            className="w-11 px-1 py-0.5 text-xs font-semibold text-center text-slate-700 dark:text-slate-300 rounded bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-slate-400 focus:border-slate-500 outline-none transition-all shadow-2xs"
                             title={`Izin Khusus: Jumlah 'IK' yang muncul di Roster Kerja antara Tanggal Cuti (${rec.tanggalCuti}) dan Tanggal On Site (${rec.perubahanJadwalOnsite !== '-' ? rec.perubahanJadwalOnsite : rec.tanggalOnsite})`}
                           />
                         </td>
@@ -2443,7 +2575,7 @@ export function RosterLeaveScheduleSheet({
                             onKeyDown={(e) => {
                               if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
                             }}
-                            className="w-11 px-1 py-0.5 text-xs font-bold text-center text-yellow-800 dark:text-yellow-300 rounded bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-yellow-400 focus:border-yellow-500 outline-none transition-all shadow-2xs"
+                            className="w-11 px-1 py-0.5 text-xs font-semibold text-center text-slate-700 dark:text-slate-300 rounded bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-slate-400 focus:border-slate-500 outline-none transition-all shadow-2xs"
                             title={`Izin: Jumlah 'I' atau 'SL' yang muncul di Roster Kerja antara Tanggal Cuti (${rec.tanggalCuti}) dan Tanggal On Site (${rec.perubahanJadwalOnsite !== '-' ? rec.perubahanJadwalOnsite : rec.tanggalOnsite})`}
                           />
                         </td>
@@ -2464,7 +2596,7 @@ export function RosterLeaveScheduleSheet({
                             onKeyDown={(e) => {
                               if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
                             }}
-                            className="w-11 px-1 py-0.5 text-xs font-black text-center text-rose-700 dark:text-rose-400 rounded bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-rose-400 focus:border-rose-500 outline-none transition-all shadow-2xs"
+                            className="w-11 px-1 py-0.5 text-xs font-semibold text-center text-slate-700 dark:text-slate-300 rounded bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-slate-400 focus:border-slate-500 outline-none transition-all shadow-2xs"
                             title={`Tambahan Travel (TT): Jumlah 'TT' yang muncul di Roster Kerja antara Tanggal Cuti (${rec.tanggalCuti}) dan Tanggal On Site (${rec.perubahanJadwalOnsite !== '-' ? rec.perubahanJadwalOnsite : rec.tanggalOnsite})`}
                           />
                         </td>

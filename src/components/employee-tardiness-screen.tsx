@@ -31,11 +31,29 @@ import {
   X,
   Check,
   BarChart3,
-  Table as TableIcon
+  Table as TableIcon,
+  Maximize2,
+  Minimize2
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { toast } from 'sonner';
 import { EmployeeTardinessDiagram } from './employee-tardiness-diagram';
+import { useTableColumnResize, ColumnResizeHandle, ColumnDef } from '../hooks/useTableColumnResize';
+
+export const TARDINESS_COLUMNS: ColumnDef[] = [
+  { id: 'no', label: 'No', defaultWidth: 55, minWidth: 42, align: 'center' },
+  { id: 'tanggal', label: 'Tanggal', defaultWidth: 140, minWidth: 100, align: 'left' },
+  { id: 'waktu', label: 'Waktu', defaultWidth: 100, minWidth: 80, align: 'center' },
+  { id: 'nama', label: 'Nama Karyawan', defaultWidth: 190, minWidth: 120, align: 'left' },
+  { id: 'jabatan', label: 'Jabatan', defaultWidth: 170, minWidth: 110, align: 'left' },
+  { id: 'section', label: 'Section', defaultWidth: 140, minWidth: 100, align: 'center' },
+  { id: 'shift', label: 'Shift', defaultWidth: 110, minWidth: 85, align: 'center' },
+  { id: 'kategori', label: 'Kategori', defaultWidth: 150, minWidth: 110, align: 'center' },
+  { id: 'alasan', label: 'Alasan', defaultWidth: 220, minWidth: 130, align: 'left' },
+  { id: 'warning', label: 'Status Peringatan', defaultWidth: 220, minWidth: 130, align: 'center' },
+  { id: 'bukti', label: 'Bukti Finger', defaultWidth: 130, minWidth: 95, align: 'center' },
+  { id: 'aksi', label: 'Aksi', defaultWidth: 90, minWidth: 70, align: 'center' },
+];
 
 export interface TardinessRecord {
   id: string | number;
@@ -131,6 +149,12 @@ export function EmployeeTardinessScreen({
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [sortBy, setSortBy] = useState<'date-desc' | 'date-asc' | 'name-asc' | 'time-desc'>('date-desc');
+
+  // Table column resize helper
+  const resizeHelper = useTableColumnResize({
+    tableId: 'employee_tardiness',
+    columns: TARDINESS_COLUMNS
+  });
 
   // Inline editing state: { id, field }
   const [editingCell, setEditingCell] = useState<{ id: string | number; field: string } | null>(null);
@@ -922,16 +946,57 @@ export function EmployeeTardinessScreen({
 
           {/* ── 2. MAIN TABLE DENGAN INLINE EDITING SEPERTI GOOGLE SHEET ── */}
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xs overflow-hidden">
-            <div className="p-3.5 bg-slate-50/80 dark:bg-slate-800/40 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+            <div className="p-3 bg-slate-50/80 dark:bg-slate-800/40 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3 flex-wrap">
               <div className="flex items-center gap-2 text-xs font-bold text-slate-700 dark:text-slate-200">
                 <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
                 <span>Tabel Keterlambatan &amp; Pulang Cepat</span>
-                <span className="text-[11px] font-normal text-slate-400">
+                <span className="text-[11px] font-normal text-slate-400 hidden sm:inline">
                   (Klik sel untuk mengedit langsung seperti Google Sheet)
                 </span>
               </div>
-              <div className="text-[11px] text-slate-400">
-                {lastSyncAt ? `Sinkron terakhir: ${lastSyncAt}` : ''}
+              <div className="flex items-center gap-2">
+                {/* Autofit Button */}
+                <button
+                  type="button"
+                  onClick={resizeHelper.handleToggleAutofit}
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-all shadow-2xs cursor-pointer active:scale-95 ${
+                    resizeHelper.isAutofit
+                      ? 'bg-rose-50 dark:bg-rose-950/50 text-rose-700 dark:text-rose-300 border-rose-300 dark:border-rose-700'
+                      : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300'
+                  }`}
+                  title={resizeHelper.isAutofit ? 'Matikan Autofit (Gunakan ukuran kolom kustom)' : 'Aktifkan Autofit (Otomatis sesuaikan lebar kolom)'}
+                >
+                  {resizeHelper.isAutofit ? (
+                    <>
+                      <Minimize2 className="w-3 h-3 text-rose-600 dark:text-rose-400" />
+                      <span>Autofit: Aktif</span>
+                    </>
+                  ) : (
+                    <>
+                      <Maximize2 className="w-3 h-3 text-slate-500" />
+                      <span>Autofit Kolom</span>
+                    </>
+                  )}
+                </button>
+
+                {/* Reset Columns Button */}
+                {resizeHelper.isAnyColumnResized && (
+                  <button
+                    type="button"
+                    onClick={resizeHelper.handleResetAllColumns}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold text-slate-600 dark:text-slate-300 hover:text-rose-600 dark:hover:text-rose-400 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-rose-400 transition-all shadow-2xs cursor-pointer active:scale-95"
+                    title="Kembalikan semua lebar kolom ke ukuran bawaan"
+                  >
+                    <RotateCcw className="w-3 h-3 text-rose-600 dark:text-rose-400" />
+                    <span>Reset Kolom</span>
+                  </button>
+                )}
+
+                {lastSyncAt && (
+                  <span className="text-[11px] text-slate-400 hidden md:inline ml-1">
+                    Sinkron: {lastSyncAt}
+                  </span>
+                )}
               </div>
             </div>
 
@@ -948,21 +1013,36 @@ export function EmployeeTardinessScreen({
               </div>
             ) : (
               <div className="overflow-auto max-h-[calc(100vh-270px)] min-h-[420px] rounded-b-2xl border-t border-slate-200 dark:border-slate-800">
-                <table className="w-full text-left text-xs border-collapse relative">
+                <table 
+                  className="w-full text-left text-xs border-collapse relative"
+                  style={{
+                    tableLayout: resizeHelper.isAutofit ? 'auto' : 'fixed',
+                    width: resizeHelper.isAutofit ? '100%' : `${resizeHelper.totalTableWidth}px`,
+                    minWidth: '100%'
+                  }}
+                >
                   <thead className="sticky top-0 z-20 shadow-xs">
                     <tr className="bg-slate-100 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 font-bold uppercase tracking-wider text-[11px]">
-                      <th className="sticky top-0 bg-slate-100 dark:bg-slate-800 py-3.5 px-3 text-center w-12 z-20">No</th>
-                      <th className="sticky top-0 bg-slate-100 dark:bg-slate-800 py-3.5 px-4 z-20">Tanggal</th>
-                      <th className="sticky top-0 bg-slate-100 dark:bg-slate-800 py-3.5 px-3 text-center z-20">Waktu</th>
-                      <th className="sticky top-0 bg-slate-100 dark:bg-slate-800 py-3.5 px-4 z-20">Nama Karyawan</th>
-                      <th className="sticky top-0 bg-slate-100 dark:bg-slate-800 py-3.5 px-4 z-20">Jabatan</th>
-                      <th className="sticky top-0 bg-slate-100 dark:bg-slate-800 py-3.5 px-3 text-center z-20">Section</th>
-                      <th className="sticky top-0 bg-slate-100 dark:bg-slate-800 py-3.5 px-3 text-center z-20">Shift</th>
-                      <th className="sticky top-0 bg-slate-100 dark:bg-slate-800 py-3.5 px-3 text-center z-20">Kategori</th>
-                      <th className="sticky top-0 bg-slate-100 dark:bg-slate-800 py-3.5 px-4 z-20">Alasan</th>
-                      <th className="sticky top-0 bg-slate-100 dark:bg-slate-800 py-3.5 px-3 text-center z-20">Status Peringatan</th>
-                      <th className="sticky top-0 bg-slate-100 dark:bg-slate-800 py-3.5 px-3 text-center z-20">Bukti Finger</th>
-                      <th className="sticky top-0 bg-slate-100 dark:bg-slate-800 py-3.5 px-3 text-center z-20">Aksi</th>
+                      {TARDINESS_COLUMNS.map((col) => {
+                        const colW = resizeHelper.getColWidth(col.id);
+                        return (
+                          <th
+                            key={col.id}
+                            style={{ width: resizeHelper.isAutofit ? undefined : `${colW}px` }}
+                            className={`sticky top-0 bg-slate-100 dark:bg-slate-800 py-3.5 px-3 z-20 border-r border-slate-200/60 dark:border-slate-700/60 relative select-none ${
+                              col.align === 'center' ? 'text-center' : 'text-left'
+                            } ${resizeHelper.resizingCol === col.id ? 'bg-rose-500/10 text-rose-700' : ''}`}
+                          >
+                            <span className="truncate">{col.label}</span>
+                            <ColumnResizeHandle
+                              colId={col.id}
+                              isResizing={resizeHelper.resizingCol === col.id}
+                              onResizeStart={resizeHelper.handleResizeStart}
+                              onResetCol={resizeHelper.handleResetCol}
+                            />
+                          </th>
+                        );
+                      })}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -1104,14 +1184,14 @@ export function EmployeeTardinessScreen({
                           </td>
 
                           {/* 4. Section (Inline Editable Select) */}
-                          <td className="py-2.5 px-3 text-center whitespace-nowrap">
+                          <td className="py-2.5 px-3 text-center whitespace-nowrap border-r border-slate-100 dark:border-slate-800">
                             {editingCell?.id === r.id && editingCell?.field === 'section' ? (
                               <select
                                 autoFocus
                                 value={editValue}
                                 onChange={e => handleInlineCellUpdate(r.id, 'section', e.target.value)}
                                 onBlur={() => setEditingCell(null)}
-                                className="text-xs font-semibold px-2 py-1 rounded bg-white dark:bg-slate-800 border border-teal-500 focus:outline-none"
+                                className="text-xs font-semibold px-2 py-1 rounded bg-white dark:bg-slate-800 border border-slate-300 focus:outline-none"
                               >
                                 <option value="Preparation">Preparation</option>
                                 <option value="Laboratory">Laboratory</option>
@@ -1121,7 +1201,7 @@ export function EmployeeTardinessScreen({
                             ) : (
                               <span
                                 onClick={() => startEditingCell(r.id, 'section', r.section || 'Preparation')}
-                                className={`inline-block px-2.5 py-0.5 rounded-full text-[11px] font-semibold border cursor-pointer hover:shadow-xs transition-colors ${getSectionBadgeClass(r.section)}`}
+                                className="inline-block px-2.5 py-0.5 rounded-full text-[11px] font-semibold border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 cursor-pointer hover:shadow-xs transition-colors"
                                 title="Klik untuk mengubah Section"
                               >
                                 {r.section || 'Preparation'}
@@ -1130,14 +1210,14 @@ export function EmployeeTardinessScreen({
                           </td>
 
                           {/* 5. Shift (Inline Editable Select) */}
-                          <td className="py-2.5 px-3 text-center whitespace-nowrap">
+                          <td className="py-2.5 px-3 text-center whitespace-nowrap border-r border-slate-100 dark:border-slate-800">
                             {editingCell?.id === r.id && editingCell?.field === 'shift' ? (
                               <select
                                 autoFocus
                                 value={editValue}
                                 onChange={e => handleInlineCellUpdate(r.id, 'shift', e.target.value)}
                                 onBlur={() => setEditingCell(null)}
-                                className="text-xs font-semibold px-2 py-1 rounded bg-white dark:bg-slate-800 border border-teal-500 focus:outline-none"
+                                className="text-xs font-semibold px-2 py-1 rounded bg-white dark:bg-slate-800 border border-slate-300 focus:outline-none"
                               >
                                 <option value="Shift A">Shift A</option>
                                 <option value="Shift B">Shift B</option>
@@ -1146,13 +1226,7 @@ export function EmployeeTardinessScreen({
                             ) : (
                               <span
                                 onClick={() => startEditingCell(r.id, 'shift', r.shift || 'Nonshift')}
-                                className={`inline-block px-2 py-0.5 rounded-full text-[11px] font-semibold border cursor-pointer hover:opacity-80 ${
-                                  (r.shift || '').includes('A') 
-                                    ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
-                                    : (r.shift || '').includes('B')
-                                    ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800'
-                                    : 'bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800'
-                                }`}
+                                className="inline-block px-2 py-0.5 rounded-full text-[11px] font-semibold border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 cursor-pointer hover:opacity-80"
                                 title="Klik untuk mengubah Shift"
                               >
                                 {r.shift || 'Nonshift'}
@@ -1161,14 +1235,14 @@ export function EmployeeTardinessScreen({
                           </td>
 
                           {/* 6. Kategori / Status Finger (Inline Editable Select) */}
-                          <td className="py-2.5 px-3 text-center whitespace-nowrap">
+                          <td className="py-2.5 px-3 text-center whitespace-nowrap border-r border-slate-100 dark:border-slate-800">
                             {editingCell?.id === r.id && editingCell?.field === 'statusFinger' ? (
                               <select
                                 autoFocus
                                 value={editValue}
                                 onChange={e => handleInlineCellUpdate(r.id, 'statusFinger', e.target.value)}
                                 onBlur={() => setEditingCell(null)}
-                                className="text-xs font-semibold px-2 py-1 rounded bg-white dark:bg-slate-800 border border-teal-500 focus:outline-none"
+                                className="text-xs font-semibold px-2 py-1 rounded bg-white dark:bg-slate-800 border border-slate-300 focus:outline-none"
                               >
                                 <option value="Masuk">Terlambat Masuk</option>
                                 <option value="Pulang">Pulang Cepat</option>
@@ -1176,21 +1250,17 @@ export function EmployeeTardinessScreen({
                             ) : (
                               <span
                                 onClick={() => startEditingCell(r.id, 'statusFinger', r.statusFinger)}
-                                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold border cursor-pointer hover:opacity-80 ${
-                                  isPulang
-                                    ? 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800'
-                                    : 'bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800'
-                                }`}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 cursor-pointer hover:opacity-80"
                                 title="Klik untuk mengubah status Masuk / Pulang"
                               >
-                                <span className={`w-1.5 h-1.5 rounded-full ${isPulang ? 'bg-indigo-500' : 'bg-amber-500'}`} />
+                                <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
                                 {isPulang ? 'Pulang Cepat' : 'Terlambat Masuk'}
                               </span>
                             )}
                           </td>
 
                           {/* 7. Alasan (Inline Editable Text) */}
-                          <td className="py-2.5 px-4 max-w-[240px]">
+                          <td className="py-2.5 px-4 max-w-[240px] border-r border-slate-100 dark:border-slate-800">
                             {editingCell?.id === r.id && editingCell?.field === 'alasan' ? (
                               <input
                                 type="text"
@@ -1202,12 +1272,12 @@ export function EmployeeTardinessScreen({
                                   if (e.key === 'Enter') handleInlineCellUpdate(r.id, 'alasan', editValue);
                                   if (e.key === 'Escape') setEditingCell(null);
                                 }}
-                                className="w-full text-xs px-2 py-1 rounded bg-white dark:bg-slate-800 border border-teal-500 shadow-xs focus:outline-none"
+                                className="w-full text-xs px-2 py-1 rounded bg-white dark:bg-slate-800 border border-slate-300 shadow-xs focus:outline-none"
                               />
                             ) : (
                               <div
                                 onClick={() => startEditingCell(r.id, 'alasan', r.alasan || '')}
-                                className="cursor-pointer group flex items-center justify-between gap-1 p-1 -m-1 rounded hover:bg-teal-50/40 dark:hover:bg-teal-950/20 hover:ring-1 hover:ring-teal-400"
+                                className="cursor-pointer group flex items-center justify-between gap-1 p-1 -m-1 rounded hover:bg-slate-100/60 dark:hover:bg-slate-800/60"
                                 title="Klik untuk mengedit alasan"
                               >
                                 <div className="font-medium text-slate-700 dark:text-slate-300 truncate" title={r.alasan || '-'}>
@@ -1219,7 +1289,7 @@ export function EmployeeTardinessScreen({
                           </td>
 
                           {/* 8. KOLOM WARNING KETIKA DALAM 1 BULAN KARYAWAN SUDAH TERLAMBAT >= 4 HARI */}
-                          <td className="py-2.5 px-3 text-center whitespace-nowrap">
+                          <td className="py-2.5 px-3 text-center whitespace-nowrap border-r border-slate-100 dark:border-slate-800">
                             {isWarning ? (
                               <span 
                                 className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-rose-100 text-rose-700 border border-rose-300 dark:bg-rose-950/80 dark:text-rose-300 dark:border-rose-800 shadow-2xs animate-pulse"
@@ -1229,14 +1299,14 @@ export function EmployeeTardinessScreen({
                                 <span>⚠️ {monthlyLateCount}x Terlambat (SP / Evaluasi)</span>
                               </span>
                             ) : (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10.5px] font-medium bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400">
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10.5px] font-medium bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
                                 {monthlyLateCount > 0 ? `${monthlyLateCount}x di bln ini` : '-'}
                               </span>
                             )}
                           </td>
 
                           {/* 9. Foto Bukti Finger */}
-                          <td className="py-2.5 px-3 text-center whitespace-nowrap">
+                          <td className="py-2.5 px-3 text-center whitespace-nowrap border-r border-slate-100 dark:border-slate-800">
                             {r.fotoFinger ? (
                               <button
                                 type="button"
@@ -1244,9 +1314,9 @@ export function EmployeeTardinessScreen({
                                   setPreviewPhotoUrl(r.fotoFinger!);
                                   setPreviewPhotoTitle(`${r.name} · ${r.statusFinger} (${r.waktuFinger})`);
                                 }}
-                                className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-semibold bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800 hover:bg-rose-100 transition-colors cursor-pointer"
+                                className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 transition-colors cursor-pointer"
                               >
-                                <ImageIcon className="w-3.5 h-3.5 text-rose-600" />
+                                <ImageIcon className="w-3.5 h-3.5 text-slate-500" />
                                 <span>Lihat Foto</span>
                               </button>
                             ) : (

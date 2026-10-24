@@ -41,7 +41,7 @@ const SHIFT_OPTIONS = [
   { code: '-', label: '- (Kosongkan)', desc: 'Hapus Roster', bg: 'bg-transparent text-slate-400 border-slate-300' },
 ];
 
-export function RosterAdminScreen() {
+export function RosterAdminScreen({ onBack }: { onBack?: () => void } = {}) {
   const [roster, setRoster] = useState<any[]>(() => {
     try {
       const cached = sessionStorage.getItem('preplab_roster_cache');
@@ -88,6 +88,8 @@ export function RosterAdminScreen() {
     }
     if (returnTo) {
       window.location.href = returnTo;
+    } else if (onBack) {
+      onBack();
     } else {
       window.history.back();
     }
@@ -548,10 +550,10 @@ export function RosterAdminScreen() {
               type="button"
               onClick={handleBack}
               className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-bold rounded-xl border border-slate-200 bg-white text-slate-700 hover:text-teal-700 hover:bg-teal-50/60 hover:border-teal-300 transition-all cursor-pointer shadow-2xs"
-              title="Kembali ke Menu Utama"
+              title="Kembali ke Zona Administrasi"
             >
               <ChevronLeft className="w-4 h-4 text-teal-600" />
-              <span>← Kembali ke Menu Utama</span>
+              <span>Kembali ke Zona Administrasi</span>
             </button>
           </div>
 

@@ -4,11 +4,32 @@ import {
   RefreshCw, CheckCircle2, Clock, Sparkles, Building2,
   Printer, ChevronLeft, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown,
   ChevronDown, Coffee, CalendarClock, ShieldCheck, Sun, Moon,
-  AlertCircle, Eye, EyeOff, SlidersHorizontal, RotateCcw, Check
+  AlertCircle, Eye, EyeOff, SlidersHorizontal, RotateCcw, Check,
+  Maximize2
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { toast } from 'sonner';
 import { parseGolonganLevel, checkIsGolonganI } from './RosterLeaveScheduleSheet';
+import { useTableColumnResize, ColumnResizeHandle, ColumnDef } from '../hooks/useTableColumnResize';
+
+const OFF_COLUMNS: ColumnDef[] = [
+  { id: 'no', label: 'NO', defaultWidth: 48, minWidth: 40 },
+  { id: 'pt', label: 'PT', defaultWidth: 80, minWidth: 60 },
+  { id: 'employee', label: 'Nama Karyawan', defaultWidth: 200, minWidth: 140 },
+  { id: 'gol', label: 'Gol', defaultWidth: 60, minWidth: 50 },
+  { id: 'section', label: 'Section', defaultWidth: 130, minWidth: 90 },
+  { id: 'jabatan', label: 'Jabatan', defaultWidth: 160, minWidth: 100 },
+  { id: 'poh', label: 'POH', defaultWidth: 85, minWidth: 60 },
+  { id: 'offSchedule', label: 'Jadwal Hari & Tanggal Off', defaultWidth: 220, minWidth: 150 },
+  { id: 'totalOff', label: 'Total Off', defaultWidth: 90, minWidth: 70 },
+  { id: 'matrixSen', label: 'Senin', defaultWidth: 65, minWidth: 50 },
+  { id: 'matrixSel', label: 'Selasa', defaultWidth: 65, minWidth: 50 },
+  { id: 'matrixRab', label: 'Rabu', defaultWidth: 65, minWidth: 50 },
+  { id: 'matrixKam', label: 'Kamis', defaultWidth: 65, minWidth: 50 },
+  { id: 'matrixJum', label: 'Jumat', defaultWidth: 65, minWidth: 50 },
+  { id: 'matrixSab', label: 'Sabtu', defaultWidth: 65, minWidth: 50 },
+  { id: 'matrixMin', label: 'Minggu', defaultWidth: 65, minWidth: 50 },
+];
 
 interface RosterOffScheduleSheetProps {
   roster: any[];
@@ -366,6 +387,12 @@ export function RosterOffScheduleSheet({
   // Sorting: sekarang mendukung 'offDate' (urutan tanggal Off tercepat/terlama)
   const [sortField, setSortField] = useState<'offDate' | 'nama' | 'section' | 'totalOff' | 'pt' | 'gol'>('offDate');
   const [sortAsc, setSortAsc] = useState(true);
+
+  // Column Resize & Autofit Helper
+  const resizeHelper = useTableColumnResize({
+    tableId: 'roster_off_schedule',
+    columns: OFF_COLUMNS,
+  });
 
   // Column Visibility Popover State & Settings (Persisted in localStorage)
   const [isColMenuOpen, setIsColMenuOpen] = useState(false);
@@ -1190,31 +1217,72 @@ export function RosterOffScheduleSheet({
               <option value="GPS">Hanya PT GPS</option>
             </select>
           </div>
+
+          {/* Autofit & Reset Buttons */}
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={resizeHelper.handleToggleAutofit}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer shadow-2xs ${
+                resizeHelper.isAutofit
+                  ? 'bg-teal-50 text-teal-800 border-teal-300 ring-2 ring-teal-500/30'
+                  : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+              }`}
+              title="Autofit: Sesuaikan lebar semua kolom otomatis mengikuti konten"
+            >
+              <Maximize2 className="w-3.5 h-3.5 text-teal-600" />
+              <span>{resizeHelper.isAutofit ? 'Autofit Aktif' : 'Autofit Kolom'}</span>
+            </button>
+
+            {resizeHelper.isAnyResized && (
+              <button
+                type="button"
+                onClick={resizeHelper.handleResetAll}
+                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-white text-slate-600 border border-slate-300 hover:text-teal-600 transition-all cursor-pointer shadow-2xs"
+                title="Reset seluruh lebar kolom ke standar"
+              >
+                <RotateCcw className="w-3.5 h-3.5 text-slate-400" />
+                <span className="hidden sm:inline">Reset Kolom</span>
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
       {/* Main Table */}
       <div className="w-full overflow-x-auto rounded-xl border border-slate-200 shadow-2xs bg-white">
-        <table className="w-full text-left text-xs border-collapse">
+        <table 
+          className="w-full text-left text-xs border-collapse"
+          style={{
+            tableLayout: resizeHelper.isAutofit ? 'auto' : 'fixed',
+            width: resizeHelper.isAutofit ? '100%' : `${resizeHelper.totalTableWidth}px`,
+            minWidth: '100%'
+          }}
+        >
           <thead>
             <tr className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200 uppercase tracking-wider text-[11px]">
               
               {/* NO */}
               {colVisibility.no && (
-                <th className="py-3 px-3 text-center w-12 border-r border-slate-200">NO</th>
+                <th style={{ width: resizeHelper.isAutofit ? undefined : `${resizeHelper.getColWidth('no')}px` }} className="py-3 px-3 text-center border-r border-slate-200 relative">
+                  NO
+                  <ColumnResizeHandle colId="no" isResizing={resizeHelper.resizingCol === 'no'} onResizeStart={resizeHelper.handleResizeStart} onResetCol={resizeHelper.handleResetCol} />
+                </th>
               )}
 
               {/* PT */}
               {colVisibility.pt && (
                 <th
                   onClick={() => handleToggleSort('pt')}
-                  className="py-3 px-3 text-center w-24 border-r border-slate-200 cursor-pointer hover:bg-slate-200/60 select-none"
+                  style={{ width: resizeHelper.isAutofit ? undefined : `${resizeHelper.getColWidth('pt')}px` }}
+                  className="py-3 px-3 text-center border-r border-slate-200 cursor-pointer hover:bg-slate-200/60 select-none relative"
                   title="Klik untuk mengurutkan Perusahaan"
                 >
                   <div className="inline-flex items-center gap-1">
                     <span>PT</span>
                     <ArrowUpDown className="w-3 h-3 text-slate-400" />
                   </div>
+                  <ColumnResizeHandle colId="pt" isResizing={resizeHelper.resizingCol === 'pt'} onResizeStart={resizeHelper.handleResizeStart} onResetCol={resizeHelper.handleResetCol} />
                 </th>
               )}
 
@@ -1222,13 +1290,15 @@ export function RosterOffScheduleSheet({
               {colVisibility.employee && (
                 <th
                   onClick={() => handleToggleSort('nama')}
-                  className="py-3 px-3 min-w-[210px] border-r border-slate-200 cursor-pointer hover:bg-slate-200/60 select-none"
+                  style={{ width: resizeHelper.isAutofit ? undefined : `${resizeHelper.getColWidth('employee')}px` }}
+                  className="py-3 px-3 border-r border-slate-200 cursor-pointer hover:bg-slate-200/60 select-none relative"
                   title="Klik untuk mengurutkan Nama"
                 >
                   <div className="inline-flex items-center gap-1">
                     <span>Nama Karyawan</span>
                     <ArrowUpDown className="w-3 h-3 text-slate-400" />
                   </div>
+                  <ColumnResizeHandle colId="employee" isResizing={resizeHelper.resizingCol === 'employee'} onResizeStart={resizeHelper.handleResizeStart} onResetCol={resizeHelper.handleResetCol} />
                 </th>
               )}
 
@@ -1236,13 +1306,15 @@ export function RosterOffScheduleSheet({
               {colVisibility.gol && (
                 <th
                   onClick={() => handleToggleSort('gol')}
-                  className="py-3 px-2 text-center w-20 border-r border-slate-200 cursor-pointer hover:bg-slate-200/60 select-none"
+                  style={{ width: resizeHelper.isAutofit ? undefined : `${resizeHelper.getColWidth('gol')}px` }}
+                  className="py-3 px-2 text-center border-r border-slate-200 cursor-pointer hover:bg-slate-200/60 select-none relative"
                   title="Klik untuk mengurutkan Golongan"
                 >
                   <div className="inline-flex items-center gap-1">
                     <span>Gol</span>
                     <ArrowUpDown className="w-3 h-3 text-slate-400" />
                   </div>
+                  <ColumnResizeHandle colId="gol" isResizing={resizeHelper.resizingCol === 'gol'} onResizeStart={resizeHelper.handleResizeStart} onResetCol={resizeHelper.handleResetCol} />
                 </th>
               )}
 
@@ -1250,27 +1322,31 @@ export function RosterOffScheduleSheet({
               {colVisibility.section && (
                 <th
                   onClick={() => handleToggleSort('section')}
-                  className="py-3 px-3 min-w-[130px] border-r border-slate-200 cursor-pointer hover:bg-slate-200/60 select-none"
+                  style={{ width: resizeHelper.isAutofit ? undefined : `${resizeHelper.getColWidth('section')}px` }}
+                  className="py-3 px-3 text-center border-r border-slate-200 cursor-pointer hover:bg-slate-200/60 select-none relative"
                   title="Klik untuk mengurutkan Section"
                 >
-                  <div className="inline-flex items-center gap-1">
+                  <div className="inline-flex items-center justify-center gap-1">
                     <span>Section</span>
                     <ArrowUpDown className="w-3 h-3 text-slate-400" />
                   </div>
+                  <ColumnResizeHandle colId="section" isResizing={resizeHelper.resizingCol === 'section'} onResizeStart={resizeHelper.handleResizeStart} onResetCol={resizeHelper.handleResetCol} />
                 </th>
               )}
 
               {/* Jabatan */}
               {colVisibility.jabatan && (
-                <th className="py-3 px-3 min-w-[150px] border-r border-slate-200">
+                <th style={{ width: resizeHelper.isAutofit ? undefined : `${resizeHelper.getColWidth('jabatan')}px` }} className="py-3 px-3 text-center border-r border-slate-200 relative">
                   Jabatan
+                  <ColumnResizeHandle colId="jabatan" isResizing={resizeHelper.resizingCol === 'jabatan'} onResizeStart={resizeHelper.handleResizeStart} onResetCol={resizeHelper.handleResetCol} />
                 </th>
               )}
 
               {/* POH */}
               {colVisibility.poh && (
-                <th className="py-3 px-3 min-w-[90px] border-r border-slate-200 text-center">
+                <th style={{ width: resizeHelper.isAutofit ? undefined : `${resizeHelper.getColWidth('poh')}px` }} className="py-3 px-3 text-center border-r border-slate-200 relative">
                   POH
+                  <ColumnResizeHandle colId="poh" isResizing={resizeHelper.resizingCol === 'poh'} onResizeStart={resizeHelper.handleResizeStart} onResetCol={resizeHelper.handleResetCol} />
                 </th>
               )}
 
@@ -1278,25 +1354,27 @@ export function RosterOffScheduleSheet({
               {colVisibility.offSchedule && (
                 <th
                   onClick={() => handleToggleSort('offDate')}
-                  className={`py-3 px-3 min-w-[220px] border-r border-slate-200 cursor-pointer select-none transition-colors text-center ${
-                    sortField === 'offDate' ? 'bg-amber-100/70 text-amber-950 font-black' : 'hover:bg-slate-200/60'
+                  style={{ width: resizeHelper.isAutofit ? undefined : `${resizeHelper.getColWidth('offSchedule')}px` }}
+                  className={`py-3 px-3 border-r border-slate-200 cursor-pointer select-none transition-colors text-center relative ${
+                    sortField === 'offDate' ? 'bg-slate-200 text-slate-900 font-black' : 'hover:bg-slate-200/60'
                   }`}
                   title="Klik untuk mengurutkan berdasarkan Tanggal Off (Senin -> Minggu / Sebaliknya)"
                 >
                   <div className="flex items-center justify-center gap-2">
                     <div className="flex items-center gap-1.5">
-                      <Coffee className="w-3.5 h-3.5 text-amber-600" />
+                      <Coffee className="w-3.5 h-3.5 text-slate-600" />
                       <span>Jadwal Hari & Tanggal Off</span>
                     </div>
-                    <div className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-900 border border-amber-400/40">
+                    <div className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-slate-200 text-slate-800 border border-slate-300">
                       {sortField === 'offDate' ? (
                         sortAsc ? <span>Senin ➔ Min</span> : <span>Min ➔ Senin</span>
                       ) : (
                         <span>Urutkan</span>
                       )}
-                      <ArrowUpDown className="w-3 h-3 text-amber-700" />
+                      <ArrowUpDown className="w-3 h-3 text-slate-600" />
                     </div>
                   </div>
+                  <ColumnResizeHandle colId="offSchedule" isResizing={resizeHelper.resizingCol === 'offSchedule'} onResizeStart={resizeHelper.handleResizeStart} onResetCol={resizeHelper.handleResetCol} />
                 </th>
               )}
 
@@ -1304,13 +1382,15 @@ export function RosterOffScheduleSheet({
               {colVisibility.totalOff && (
                 <th
                   onClick={() => handleToggleSort('totalOff')}
-                  className="py-3 px-3 text-center w-24 border-r border-slate-200 cursor-pointer hover:bg-slate-200/60 select-none"
+                  style={{ width: resizeHelper.isAutofit ? undefined : `${resizeHelper.getColWidth('totalOff')}px` }}
+                  className="py-3 px-3 text-center border-r border-slate-200 cursor-pointer hover:bg-slate-200/60 select-none relative"
                   title="Klik untuk mengurutkan Total Hari Off"
                 >
                   <div className="inline-flex items-center gap-1">
                     <span>Total Off</span>
                     <ArrowUpDown className="w-3 h-3 text-slate-400" />
                   </div>
+                  <ColumnResizeHandle colId="totalOff" isResizing={resizeHelper.resizingCol === 'totalOff'} onResizeStart={resizeHelper.handleResizeStart} onResetCol={resizeHelper.handleResetCol} />
                 </th>
               )}
 
@@ -1320,12 +1400,14 @@ export function RosterOffScheduleSheet({
                 return (
                   <th
                     key={d.dateKey}
-                    className={`py-3 px-2 text-center w-16 border-r border-slate-200 ${
-                      d.isToday ? 'bg-amber-100 text-amber-950 font-black' : ''
+                    style={{ width: resizeHelper.isAutofit ? undefined : `${resizeHelper.getColWidth(d.colKey)}px` }}
+                    className={`py-3 px-2 text-center border-r border-slate-200 relative ${
+                      d.isToday ? 'bg-slate-200/90 text-slate-900 font-black' : ''
                     }`}
                   >
                     <div className="text-[10px] leading-tight">{d.dayName}</div>
                     <div className="text-[11px] font-black">{d.date.getDate()}</div>
+                    <ColumnResizeHandle colId={d.colKey} isResizing={resizeHelper.resizingCol === d.colKey} onResizeStart={resizeHelper.handleResizeStart} onResetCol={resizeHelper.handleResetCol} />
                   </th>
                 );
               })}
@@ -1363,15 +1445,9 @@ export function RosterOffScheduleSheet({
                     {/* PT Badge */}
                     {colVisibility.pt && (
                       <td className="py-2.5 px-3 text-center border-r border-slate-200">
-                        {record.pt === 'GPS' ? (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-black bg-sky-100 text-sky-800 border border-sky-300">
-                            PT GPS
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300">
-                            PT TBP
-                          </span>
-                        )}
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                          {record.pt === 'GPS' ? 'PT GPS' : 'PT TBP'}
+                        </span>
                       </td>
                     )}
 
@@ -1382,7 +1458,7 @@ export function RosterOffScheduleSheet({
                           {record.nama}
                         </div>
                         <div className="flex items-center gap-2 mt-0.5">
-                          <span className="text-[9.5px] px-1.5 py-0.2 rounded font-bold uppercase tracking-wider bg-slate-100 text-slate-600 border border-slate-200">
+                          <span className="text-[9.5px] px-1.5 py-0.2 rounded font-medium uppercase tracking-wider bg-slate-100 text-slate-600 border border-slate-200">
                             Nonshift
                           </span>
                         </div>
@@ -1392,7 +1468,7 @@ export function RosterOffScheduleSheet({
                     {/* Golongan Badge */}
                     {colVisibility.gol && (
                       <td className="py-2.5 px-2 text-center border-r border-slate-200">
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-black bg-purple-100 text-purple-900 border border-purple-300">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold bg-slate-100 text-slate-700 border border-slate-200">
                           {record.gol}
                         </span>
                       </td>
@@ -1400,7 +1476,7 @@ export function RosterOffScheduleSheet({
 
                     {/* Section */}
                     {colVisibility.section && (
-                      <td className="py-2.5 px-3 border-r border-slate-200">
+                      <td className="py-2.5 px-3 text-center border-r border-slate-200">
                         <div className="font-semibold text-slate-800 text-xs">
                           {record.section}
                         </div>
@@ -1409,8 +1485,8 @@ export function RosterOffScheduleSheet({
 
                     {/* Jabatan */}
                     {colVisibility.jabatan && (
-                      <td className="py-2.5 px-3 border-r border-slate-200">
-                        <div className="text-[11px] text-slate-600 truncate max-w-[200px]" title={record.jabatan}>
+                      <td className="py-2.5 px-3 text-center border-r border-slate-200">
+                        <div className="text-[11px] text-slate-600 truncate max-w-[200px] mx-auto" title={record.jabatan}>
                           {record.jabatan}
                         </div>
                       </td>
@@ -1430,9 +1506,9 @@ export function RosterOffScheduleSheet({
                           {record.offDates.map((off, oIdx) => (
                             <span
                               key={oIdx}
-                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-amber-500/15 text-amber-900 border border-amber-400/40 shadow-2xs"
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-slate-100 text-slate-700 border border-slate-200"
                             >
-                              <Coffee className="w-3 h-3 text-amber-600" />
+                              <Coffee className="w-3 h-3 text-slate-400" />
                               <span>{off.formatted}</span>
                             </span>
                           ))}
@@ -1443,7 +1519,7 @@ export function RosterOffScheduleSheet({
                     {/* Total Off */}
                     {colVisibility.totalOff && (
                       <td className="py-2.5 px-3 text-center border-r border-slate-200">
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-black bg-amber-100 text-amber-900 border border-amber-300">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-bold text-slate-800">
                           {record.totalOffDays} Hari
                         </span>
                       </td>
@@ -1465,20 +1541,21 @@ export function RosterOffScheduleSheet({
                       );
 
                       if (isOff) {
-                        cellBg = 'bg-amber-100/70 font-black';
+                        cellBg = 'bg-slate-100/70 font-semibold';
                         badge = (
-                          <span className="px-1.5 py-0.5 rounded font-black text-[10.5px] bg-amber-500 text-white shadow-2xs">
+                          <span className="px-1.5 py-0.5 rounded font-bold text-[10.5px] bg-slate-200 text-slate-800 border border-slate-300">
                             OFF
                           </span>
                         );
                       } else if (code === 'CT' || code === 'C' || code.startsWith('C')) {
-                        cellBg = 'bg-teal-50 font-bold';
+                        cellBg = 'bg-slate-50 font-medium';
                         badge = (
-                          <span className="px-1.5 py-0.5 rounded font-bold text-[10px] bg-teal-100 text-teal-800 border border-teal-300">
+                          <span className="px-1.5 py-0.5 rounded font-medium text-[10px] bg-slate-100 text-slate-700 border border-slate-200">
                             {code}
                           </span>
                         );
                       } else if (code === 'S' || code === 'SL' || code === 'I' || code === 'IK') {
+                        // Warning status kept highlighted in rose
                         cellBg = 'bg-rose-50 font-bold';
                         badge = (
                           <span className="px-1.5 py-0.5 rounded font-bold text-[10px] bg-rose-100 text-rose-800 border border-rose-300">
@@ -1491,7 +1568,7 @@ export function RosterOffScheduleSheet({
                         <td
                           key={dIdx}
                           className={`py-2 px-1 text-center border-r border-slate-200 transition-colors ${cellBg} ${
-                            dayStatus.isToday ? 'ring-1 ring-inset ring-amber-400' : ''
+                            dayStatus.isToday ? 'ring-1 ring-inset ring-slate-400' : ''
                           }`}
                         >
                           {badge}

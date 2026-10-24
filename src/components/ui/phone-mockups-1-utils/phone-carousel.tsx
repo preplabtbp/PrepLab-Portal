@@ -22,11 +22,15 @@ export interface PhoneCarouselProps {
   initialIndex?: number;
   className?: string;
   onActiveChange?: (index: number) => void;
+  /** Ponsel lebih besar & sebaran selebar layar. */
+  wide?: boolean;
+  /** Bingkai item: ponsel (default) atau kotak dengan bayangan di bawahnya. */
+  frame?: "phone" | "box";
 }
 
 const SWIPE_THRESHOLD = 40;
 
-export function PhoneCarousel({ images, initialIndex = 0, className, onActiveChange }: PhoneCarouselProps) {
+export function PhoneCarousel({ images, initialIndex = 0, className, onActiveChange, wide = false, frame = "phone" }: PhoneCarouselProps) {
   const count = images.length;
   const [active, setActive] = useState(() => Math.min(Math.max(initialIndex, 0), Math.max(count - 1, 0)));
   const pointerStartX = useRef<number | null>(null);
@@ -74,7 +78,13 @@ export function PhoneCarousel({ images, initialIndex = 0, className, onActiveCha
       aria-roledescription="carousel"
     >
       <div
-        className="relative mx-auto h-[470px] sm:h-[560px] w-full max-w-5xl touch-pan-y"
+        className={cn(
+          "relative mx-auto w-full touch-pan-y",
+          wide ? "max-w-none" : "max-w-5xl",
+          frame === "box"
+            ? (wide ? "h-[300px] sm:h-[420px]" : "h-[260px] sm:h-[310px]")
+            : (wide ? "h-[480px] sm:h-[640px]" : "h-[470px] sm:h-[560px]")
+        )}
         onPointerDown={e => { pointerStartX.current = e.clientX; didSwipe.current = false; }}
         onPointerUp={e => {
           if (pointerStartX.current === null) return;
@@ -91,6 +101,9 @@ export function PhoneCarousel({ images, initialIndex = 0, className, onActiveCha
           const abs = Math.abs(offset);
           const hidden = abs > 2;
           const isActive = offset === 0;
+          const screen = item.content ?? (
+            <img src={item.src} alt={item.alt} draggable={false} className="h-full w-full object-cover object-top" />
+          );
           return (
             <button
               key={`${item.alt}-${i}`}
@@ -104,29 +117,49 @@ export function PhoneCarousel({ images, initialIndex = 0, className, onActiveCha
                 else goTo(i);
               }}
               className={cn(
-                "absolute left-1/2 top-0 w-[200px] sm:w-[250px] cursor-pointer transition-all duration-500 ease-out",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-4 rounded-[2.6rem]",
+                "absolute left-1/2 top-0 cursor-pointer transition-all duration-500 ease-out",
+                frame === "box" && wide
+                  ? "w-[230px] sm:w-[340px]"
+                  : wide ? "w-[210px] sm:w-[285px]" : "w-[200px] sm:w-[250px]",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-4",
+                frame === "box" ? "rounded-[2rem]" : "rounded-[2.6rem]",
                 hidden && "pointer-events-none"
               )}
               style={{
-                transform: `translateX(calc(-50% + ${offset * 62}%)) scale(${1 - abs * 0.14})`,
+                transform: `translateX(calc(-50% + ${offset * (wide ? 95 : 62)}%)) scale(${1 - abs * 0.14})`,
                 transformOrigin: "center top",
                 zIndex: 10 - abs,
                 opacity: hidden ? 0 : 1 - abs * 0.28,
                 filter: isActive ? "none" : `saturate(${1 - abs * 0.35})`,
               }}
             >
-              <IPhoneFrame className={cn(isActive && "shadow-2xl")}>
-                {item.content ?? (
-                  <img src={item.src} alt={item.alt} draggable={false} className="h-full w-full object-cover object-top" />
-                )}
-              </IPhoneFrame>
+              {frame === "box" ? (
+                <div className="relative">
+                  <div
+                    className={cn(
+                      "relative aspect-square w-full overflow-hidden rounded-[2rem] border border-[#e2e8f0] bg-white transition-transform duration-500",
+                      isActive ? "-translate-y-2 shadow-lg" : "shadow-sm"
+                    )}
+                  >
+                    {screen}
+                  </div>
+                  {/* Bayangan lantai di bawah kotak */}
+                  <span
+                    className={cn(
+                      "pointer-events-none absolute left-1/2 -bottom-7 h-5 -translate-x-1/2 rounded-[50%] bg-[#0f172a] blur-md transition-all duration-500",
+                      isActive ? "w-[80%] opacity-25" : "w-[65%] opacity-15"
+                    )}
+                  />
+                </div>
+              ) : (
+                <IPhoneFrame className={cn(isActive && "shadow-2xl")}>{screen}</IPhoneFrame>
+              )}
             </button>
           );
         })}
       </div>
 
-      <div className="mt-2 flex flex-col items-center gap-3">
+      <div className={cn("flex flex-col items-center gap-3", frame === "box" ? "mt-8 sm:mt-10" : "mt-2")}>
         {(current.label || current.description) && (
           <div className="text-center px-4 min-h-[44px]">
             {current.label && <p className="text-base sm:text-lg font-black tracking-tight text-foreground">{current.label}</p>}

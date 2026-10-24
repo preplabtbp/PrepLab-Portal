@@ -35,8 +35,20 @@ import {
   Edit3,
   X,
   RotateCcw,
-  Upload
+  Upload,
+  Maximize2,
+  Minimize2
 } from 'lucide-react';
+import { useTableColumnResize, ColumnResizeHandle, ColumnDef } from '../hooks/useTableColumnResize';
+
+export const FINGER_COLUMNS: ColumnDef[] = [
+  { id: 'no', label: 'No', defaultWidth: 55, minWidth: 42, align: 'center' },
+  { id: 'nik', label: 'NIK', defaultWidth: 110, minWidth: 80, align: 'center' },
+  { id: 'karyawan', label: 'Nama Karyawan (Roster Gol V - I)', defaultWidth: 280, minWidth: 160, align: 'left' },
+  { id: 'alasan', label: 'Alasan Tidak Finger', defaultWidth: 240, minWidth: 140, align: 'left' },
+  { id: 'tanggal', label: 'Tanggal Kejadian', defaultWidth: 220, minWidth: 130, align: 'left' },
+  { id: 'detail', label: 'Detail', defaultWidth: 95, minWidth: 70, align: 'center' },
+];
 import {
   BarChart,
   Bar,
@@ -362,6 +374,12 @@ export function EmployeeFingerScreen({
   const [isStatsAccordionOpen, setIsStatsAccordionOpen] = useState<boolean>(true);
   const [expandedEmployees, setExpandedEmployees] = useState<Record<string, boolean>>({});
   const [allActiveEmployees, setAllActiveEmployees] = useState<Array<{ nik: string; name: string; pt: string; shift?: string; section?: string; jabatan?: string; gol?: string }>>([]);
+
+  // Table column resize helper for Rekapan Finger table
+  const resizeHelper = useTableColumnResize({
+    tableId: 'employee_finger',
+    columns: FINGER_COLUMNS
+  });
 
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedPt, setSelectedPt] = useState<string>('ALL');
@@ -1785,7 +1803,7 @@ export function EmployeeFingerScreen({
                   else window.history.back();
                 }}
                 className="p-2 -ml-2 rounded-xl text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-                title={activeTab !== 'landing' ? "Kembali ke Menu Tab" : "Kembali ke Menu Utama"}
+                title={activeTab !== 'landing' ? "Kembali ke Menu Tab" : "Kembali ke Zona Administrasi"}
               >
                 <ChevronLeft className="w-5 h-5" />
               </button>
@@ -2246,8 +2264,43 @@ export function EmployeeFingerScreen({
                   <span>Daftar Karyawan Roster Aktif Gol V - I ({allActiveEmployees.length || groupedEmployees.length} Personel)</span>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  {/* Autofit Column Button */}
+                  <button
+                    type="button"
+                    onClick={resizeHelper.handleToggleAutofit}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl border transition-all shadow-2xs cursor-pointer active:scale-95 ${
+                      resizeHelper.isAutofit
+                        ? 'bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 border-indigo-300 dark:border-indigo-700'
+                        : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-50'
+                    }`}
+                    title={resizeHelper.isAutofit ? 'Matikan Autofit (Gunakan lebar kolom kustom)' : 'Aktifkan Autofit (Otomatis sesuaikan lebar kolom)'}
+                  >
+                    {resizeHelper.isAutofit ? (
+                      <>
+                        <Minimize2 className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                        <span>Autofit: Aktif</span>
+                      </>
+                    ) : (
+                      <>
+                        <Maximize2 className="w-3.5 h-3.5 text-slate-500" />
+                        <span>Autofit Kolom</span>
+                      </>
+                    )}
+                  </button>
 
+                  {/* Reset Kolom Button */}
+                  {resizeHelper.isAnyColumnResized && (
+                    <button
+                      type="button"
+                      onClick={resizeHelper.handleResetAllColumns}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-750 shadow-2xs transition-all cursor-pointer active:scale-95"
+                      title="Kembalikan semua lebar kolom ke ukuran bawaan"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                      <span>Reset Kolom</span>
+                    </button>
+                  )}
 
                   <button
                     type="button"
@@ -2275,40 +2328,37 @@ export function EmployeeFingerScreen({
               <div className={`w-full overflow-x-auto relative custom-scrollbar ${
                 'overflow-y-auto max-h-[74vh]'
               }`}>
-                <table className="w-full text-xs text-left border-collapse border-slate-200 dark:border-slate-800">
+                <table 
+                  className="w-full text-xs text-left border-collapse border-slate-200 dark:border-slate-800"
+                  style={{
+                    tableLayout: resizeHelper.isAutofit ? 'auto' : 'fixed',
+                    width: resizeHelper.isAutofit ? '100%' : `${resizeHelper.totalTableWidth}px`,
+                    minWidth: '100%'
+                  }}
+                >
                   {/* HEADER TABEL RESMI DENGAN FREEZE PANE (STICKY TOP-0) */}
                   <thead className="sticky top-0 z-20 shadow-xs">
-                    <tr className="border-b border-slate-300 dark:border-slate-750 font-bold uppercase tracking-wider text-[11px] text-center select-none bg-slate-100 dark:bg-slate-850 text-slate-700 dark:text-slate-300 shadow-xs">
-                      <th className={`px-3 py-3.5 w-12 border-r border-slate-300 dark:border-slate-750 text-center bg-slate-100 dark:bg-slate-850 ${
-                        'sticky top-0 z-20 shadow-xs'
-                      }`}>
-                        No
-                      </th>
-                      <th className={`px-3 py-3.5 w-32 border-r border-slate-300 dark:border-slate-750 text-center bg-slate-100 dark:bg-slate-850 ${
-                        'sticky top-0 z-20 shadow-xs'
-                      }`}>
-                        NIK
-                      </th>
-                      <th className={`px-4 py-3.5 min-w-[260px] text-left border-r border-slate-300 dark:border-slate-750 bg-slate-100 dark:bg-slate-850 ${
-                        'sticky top-0 z-20 shadow-xs'
-                      }`}>
-                        Nama Karyawan (Roster Gol V - I)
-                      </th>
-                      <th className={`px-4 py-3.5 min-w-[240px] text-left border-r border-slate-300 dark:border-slate-750 bg-rose-50/95 dark:bg-rose-950/90 text-rose-800 dark:text-rose-300 backdrop-blur-xs ${
-                        'sticky top-0 z-20 shadow-xs'
-                      }`}>
-                        Alasan Tidak Finger
-                      </th>
-                      <th className={`px-4 py-3.5 min-w-[240px] text-left border-r border-slate-300 dark:border-slate-750 bg-indigo-50/95 dark:bg-indigo-950/90 text-indigo-800 dark:text-indigo-300 backdrop-blur-xs ${
-                        'sticky top-0 z-20 shadow-xs'
-                      }`}>
-                        Tanggal Kejadian
-                      </th>
-                      <th className={`px-3 py-3.5 w-24 text-center bg-slate-100 dark:bg-slate-850 ${
-                        'sticky top-0 z-20 shadow-xs'
-                      }`}>
-                        Detail
-                      </th>
+                    <tr className="border-b border-slate-300 dark:border-slate-750 font-bold uppercase tracking-wider text-[11px] select-none bg-slate-100 dark:bg-slate-850 text-slate-700 dark:text-slate-300 shadow-xs">
+                      {FINGER_COLUMNS.map((col) => {
+                        const colW = resizeHelper.getColWidth(col.id);
+                        return (
+                          <th
+                            key={col.id}
+                            style={{ width: resizeHelper.isAutofit ? undefined : `${colW}px` }}
+                            className={`px-3 py-3.5 border-r border-slate-300 dark:border-slate-750 relative select-none sticky top-0 z-20 shadow-xs bg-slate-100 dark:bg-slate-850 ${
+                              col.align === 'center' ? 'text-center' : 'text-left'
+                            } ${resizeHelper.resizingCol === col.id ? 'bg-indigo-500/10 text-indigo-700' : ''}`}
+                          >
+                            <span className="truncate">{col.label}</span>
+                            <ColumnResizeHandle
+                              colId={col.id}
+                              isResizing={resizeHelper.resizingCol === col.id}
+                              onResizeStart={resizeHelper.handleResizeStart}
+                              onResetCol={resizeHelper.handleResetCol}
+                            />
+                          </th>
+                        );
+                      })}
                     </tr>
                   </thead>
 
@@ -2364,29 +2414,13 @@ export function EmployeeFingerScreen({
                                     {emp.name}
                                   </span>
                                   <div className="flex items-center gap-1.5 shrink-0">
-                                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md ${
-                                      emp.golLevel === 5 ? 'bg-purple-100 text-purple-800 dark:bg-purple-950/70 dark:text-purple-300' :
-                                      emp.golLevel === 4 ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-950/70 dark:text-indigo-300' :
-                                      emp.golLevel === 3 ? 'bg-blue-100 text-blue-800 dark:bg-blue-950/70 dark:text-blue-300' :
-                                      emp.golLevel === 2 ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-300' :
-                                      'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
-                                    }`}>
+                                    <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
                                       {emp.golDisplay}
                                     </span>
-                                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md ${
-                                      emp.pt === 'GPS'
-                                        ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300'
-                                        : 'bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300'
-                                    }`} title="PT Karyawan dari Data Roster">
+                                    <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700" title="PT Karyawan dari Data Roster">
                                       {emp.pt}
                                     </span>
-                                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md ${
-                                      emp.shift === 'Shift A'
-                                        ? 'bg-teal-100 text-teal-800 dark:bg-teal-950/60 dark:text-teal-300'
-                                        : emp.shift === 'Shift B'
-                                        ? 'bg-sky-100 text-sky-800 dark:bg-sky-950/60 dark:text-sky-300'
-                                        : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
-                                    }`} title="Shift Roster Karyawan">
+                                    <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700" title="Shift Roster Karyawan">
                                       {emp.shift || 'Nonshift'}
                                     </span>
                                   </div>
@@ -2401,7 +2435,7 @@ export function EmployeeFingerScreen({
                                       {emp.incidents.length} Kasus Finger
                                     </span>
                                   ) : (
-                                    <span className="inline-flex items-center gap-1 text-[10px] font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-50/60 dark:bg-emerald-950/40 px-1.5 py-0.2 rounded">
+                                    <span className="inline-flex items-center gap-1 text-[10px] font-medium text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.2 rounded border border-slate-200 dark:border-slate-700">
                                       Normal / Nihil
                                     </span>
                                   )}
@@ -2437,14 +2471,14 @@ export function EmployeeFingerScreen({
                                     {emp.incidents.map((inc, i) => (
                                       <div
                                         key={inc.sheetRowId || i}
-                                        className="inline-flex items-center justify-between gap-2 px-2.5 py-1 rounded-lg text-xs font-semibold bg-indigo-50 dark:bg-indigo-950/70 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 shadow-2xs whitespace-nowrap"
+                                        className="inline-flex items-center justify-between gap-2 px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 shadow-2xs whitespace-nowrap"
                                         title={`Shift ${inc.schedule} | Masuk: ${inc.jamMasuk}, Pulang: ${inc.jamPulang}`}
                                       >
                                         <div className="flex items-center gap-1.5">
-                                          <Calendar className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                                          <Calendar className="w-3.5 h-3.5 text-slate-500 shrink-0" />
                                           <span>{inc.tanggalDisplay || inc.tanggal}</span>
                                         </div>
-                                        <span className="text-[10px] px-1.5 py-0.2 rounded font-bold bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                                        <span className="text-[10px] px-1.5 py-0.2 rounded font-semibold bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
                                           Shift {inc.schedule}
                                         </span>
                                       </div>
@@ -2460,8 +2494,8 @@ export function EmployeeFingerScreen({
                                   onClick={(e) => { e.stopPropagation(); toggleEmployeeExpand(emp.nik); }}
                                   className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-semibold transition-all shadow-2xs ${
                                     isExpanded
-                                      ? 'bg-indigo-600 text-white shadow-indigo-500/20'
-                                      : 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 border border-indigo-200 dark:border-indigo-800'
+                                      ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-xs'
+                                      : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'
                                   }`}
                                   title="Klik untuk membuka/menutup dropdown list kejadian"
                                 >

@@ -2065,7 +2065,7 @@ export default function App() {
   <Route path="/employee-leaves" element={<EmployeeLeavesScreen userProfile={userProfile} inspectorName={inspectorName!} inspectorNik={inspectorNik!} userPt={effectiveUniverse || 'TBP'} onNav={handleNav} onBack={() => handleNav('zona-administrasi')} />} />
   <Route path="/rekapan-izin" element={<Navigate to="/employee-leaves" replace />} />
   <Route path="/izin-karyawan" element={<Navigate to="/employee-leaves" replace />} />
-  <Route path="/pelaporan-izin" element={<EmployeeLeaveFormScreen inspectorName={inspectorName!} inspectorNik={inspectorNik!} userProfile={userProfile} onNav={handleNav} onBack={() => handleNav('home')} />} />
+  <Route path="/pelaporan-izin" element={<EmployeeLeaveFormScreen inspectorName={inspectorName!} inspectorNik={inspectorNik!} userProfile={userProfile} onNav={handleNav} onBack={() => handleNav('zona-administrasi')} />} />
   <Route path="/form-izin" element={<Navigate to="/pelaporan-izin" replace />} />
   <Route path="/keterlambatan" element={<EmployeeTardinessScreen userProfile={userProfile} inspectorName={inspectorName!} inspectorNik={inspectorNik!} onNav={handleNav} onBack={() => handleNav('zona-administrasi')} />} />
   <Route path="/rekapan-keterlambatan" element={<Navigate to="/keterlambatan" replace />} />
@@ -2074,7 +2074,7 @@ export default function App() {
   <Route path="/rekapan-finger" element={<EmployeeFingerScreen userProfile={userProfile} inspectorName={inspectorName!} inspectorNik={inspectorNik!} onNav={handleNav} onBack={() => handleNav('zona-administrasi')} />} />
   <Route path="/rekap-finger" element={<Navigate to="/rekapan-finger" replace />} />
   <Route path="/finger" element={<Navigate to="/rekapan-finger" replace />} />
-  <Route path="/roster-admin" element={<RosterAdminScreen />} />
+  <Route path="/roster-admin" element={<RosterAdminScreen onBack={() => handleNav('zona-administrasi')} />} />
   <Route path="/training-database" element={<TrainingDatabaseScreen key="internal" scope="internal" inspectorNik={inspectorNik!} inspectorName={inspectorName!} onBack={() => handleNav('home')} />} />
   <Route path="/safety-rekap" element={<SafetyRekapScreen inspectorNik={inspectorNik!} inspectorName={inspectorName!} inspectorRole={userProfile?.jabatan} inspectorSection={userProfile?.section} onBack={() => handleNav('home')} />} />
   <Route path="/inspection-schedule" element={<InspectionScheduleScreen inspectorNik={inspectorNik!} inspectorName={inspectorName!} onBack={() => {
