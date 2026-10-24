@@ -2748,7 +2748,7 @@ export function EmployeeFingerScreen({
                     className="px-3 py-1.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500 font-medium"
                   >
                     <option value="ALL">Semua Tanggal ({recordsByDate.length} Formulir terpisah)</option>
-                    {uniqueDates.map(d => (
+                    {formUniqueDates.map(d => (
                       <option key={d.iso} value={d.iso}>Formulir Tanggal {d.doc} ({d.count} orang)</option>
                     ))}
                   </select>
@@ -3218,8 +3218,8 @@ export function EmployeeFingerScreen({
                   }}
                   className="px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-amber-500 font-medium"
                 >
-                  <option value="ALL">Semua Tanggal ({uniqueDates.length} Tanggal)</option>
-                  {uniqueDates.map(d => (
+                  <option value="ALL">Semua Tanggal ({formUniqueDates.length} Tanggal)</option>
+                  {formUniqueDates.map(d => (
                     <option key={d.iso} value={d.iso}>
                       {formatToIndoDateDDMMMYYYY(d.iso)} ({d.count} kasus)
                     </option>
