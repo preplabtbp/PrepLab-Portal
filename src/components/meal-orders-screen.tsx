@@ -708,6 +708,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
       const isNirwana = isResidenceNirwana(r, emp);
       const isKawasi = isResidenceKawasi(r, emp);
       const isNirwanaOrKawasi = isNirwana || isKawasi;
+      const isLongShift = /long/i.test(sh) || /long/i.test(sk) || /long/i.test(st) || /^ls$/i.test(sh) || /^ls$/i.test(sk) || /^ls$/i.test(st);
 
       // Karyawan Gol II-V Mess CR saat Off tetap mendapatkan jatah makan di Kantin (Pagi, Siang, Sore)
       const isOffWithMealCR = isOff && isGol2To5 && isMessCR;
@@ -726,7 +727,8 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
             const mc = mealCounts(r, s);
             let count = mc.makanKantin;
             // Karyawan Mess NR di Nirwana: jatah makan kantin terisi jika kolom Kantin bernilai 1 atau batch terisi / K / ada porsi
-            if (count === 0 && isMessNR && isNirwana) {
+            // PERMINTAAN USER: Untuk NR Nirwana Long Shift, Pagi TETAP di kolom Bungkusan (tidak masuk ke Kantin)
+            if (count === 0 && isMessNR && isNirwana && !(isLongShift && s === 'pagi')) {
               const kVal = String((r as any)[`${s}Kantin`] || '').trim();
               if (kVal === '1' || kVal === 'K' || portions(kVal) > 0) {
                 count = portions(kVal) || 1;
@@ -738,8 +740,9 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
       const bungkus = isAbsentWithoutMeal || isOffWithMealCR
         ? bungkusCols.map(() => '')
         : bungkusCols.map(c => {
-            // Untuk karyawan Mess NR di Nirwana, jika waktu makan tsb sudah masuk ke kolom Kantin (mis. Pagi), jangan diduplikasi di kolom Bungkusan
-            if (isMessNR && isNirwana) {
+            // Untuk karyawan Mess NR di Nirwana: jika waktu makan tsb sudah masuk ke kolom Kantin (mis. Pagi/Siang/Sore non-Longshift), jangan diduplikasi di kolom Bungkusan.
+            // PERMINTAAN USER: Untuk NR Nirwana Long Shift, Pagi TETAP pada kolom Bungkusan!
+            if (isMessNR && isNirwana && !(isLongShift && c.slot === 'pagi')) {
               const kVal = String((r as any)[`${c.slot}Kantin`] || '').trim();
               if ((kVal === '1' || kVal === 'K' || portions(kVal) > 0) && (c.slot === 'pagi' || c.slot === 'siang' || c.slot === 'sore')) {
                 const lapCount = portions((r as any)[`${c.slot}Lapangan`]);
