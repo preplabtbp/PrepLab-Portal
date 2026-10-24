@@ -721,34 +721,19 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
       // PERMINTAAN USER: ketika di orderan makanan ada Izin/Sakit maka Orderan makanan TETAP KOSONG pada Excel
       const isAbsentWithoutMeal = isIzinOrSakit || statusExport === 'Cuti' || (isOff && !isOffWithMeal);
 
+      // Kantin: Hanya untuk Mess CR yang makan di kantin.
+      // PERMINTAAN USER: Semua Orderan NR Nirwana ketika di Orderan dengan keterangan "1" (atau K) Maka masuk ke Bungkusan pada Export Excel (bukan Kantin)
       const kantin = isAbsentWithoutMeal
         ? kantinSlots.map(() => '')
         : kantinSlots.map(s => {
-            const mc = mealCounts(r, s);
-            let count = mc.makanKantin;
-            // Karyawan Mess NR di Nirwana: jatah makan kantin terisi jika kolom Kantin bernilai 1 atau batch terisi / K / ada porsi
-            // PERMINTAAN USER: Untuk NR Nirwana Long Shift (Pagi) & saat OFF, orderan TETAP di kolom Bungkusan (bukan Kantin)
-            if (count === 0 && isMessNR && isNirwana && !isOff && !(isLongShift && s === 'pagi')) {
-              const kVal = String((r as any)[`${s}Kantin`] || '').trim();
-              if (kVal === '1' || kVal === 'K' || portions(kVal) > 0) {
-                count = portions(kVal) || 1;
-              }
-            }
+            const count = mealCounts(r, s).makanKantin;
             return count > 0 ? count : (isOffWithMealCR ? 1 : '');
           });
 
+      // Bungkusan: Untuk semua bungkusan lapangan & bungkusan kantin (semua orderan NR Nirwana keterangan "1" masuk ke sini)
       const bungkus = isAbsentWithoutMeal || isOffWithMealCR
         ? bungkusCols.map(() => '')
         : bungkusCols.map(c => {
-            // Untuk karyawan Mess NR di Nirwana: jika waktu makan tsb sudah masuk ke kolom Kantin (mis. Pagi/Sore pada Day shift), jangan diduplikasi di kolom Bungkusan.
-            // PERMINTAAN USER: Untuk NR Nirwana Long Shift & saat OFF, orderan TETAP pada kolom Bungkusan (Pagi, Siang, Sore) bukan Kantin!
-            if (isMessNR && isNirwana && !isOff && !(isLongShift && c.slot === 'pagi')) {
-              const kVal = String((r as any)[`${c.slot}Kantin`] || '').trim();
-              if ((kVal === '1' || kVal === 'K' || portions(kVal) > 0) && (c.slot === 'pagi' || c.slot === 'siang' || c.slot === 'sore')) {
-                const lapCount = portions((r as any)[`${c.slot}Lapangan`]);
-                return lapCount > 0 ? lapCount : '';
-              }
-            }
             const count = bungkusOf(r, c.slot);
             return count > 0 ? count : '';
           });

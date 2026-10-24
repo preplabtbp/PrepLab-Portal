@@ -34,9 +34,9 @@ export function mealCounts(r: MealCountRow, slot: MealSlot): MealSlotCount {
   const kantin = String((r as any)[`${slot}Kantin`] || '').trim();
   if (isCRMess(r)) return { lapangan, bungkusKantin: 0, makanKantin: kantin && kantin !== '-' ? 1 : 0 };
   let bungkusKantin = 0;
-  if (slot === 'pagi' || slot === 'sore') bungkusKantin = mealPortions(slot === 'pagi' ? r.batchPagi : r.batchSore) || (kantin === '1' ? 1 : 0);
+  if (slot === 'pagi' || slot === 'sore') bungkusKantin = mealPortions(slot === 'pagi' ? r.batchPagi : r.batchSore) || (kantin === '1' || kantin === 'K' ? 1 : 0);
   else if (slot === 'siang') bungkusKantin = kantin && kantin !== '-' ? 1 : 0;
-  else bungkusKantin = kantin === '1' ? 1 : 0;
+  else bungkusKantin = kantin === '1' || kantin === 'K' ? 1 : 0;
   return { lapangan, bungkusKantin, makanKantin: 0 };
 }
 
