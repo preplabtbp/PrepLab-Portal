@@ -2734,18 +2734,18 @@ ${aiMeetingNotes
               <button
                 onClick={goBack}
                 disabled={navHistory.length <= 1}
-                className="p-1.5 rounded-md hover:bg-black/5 dark:hover:bg-white/10 transition-colors disabled:opacity-25 disabled:pointer-events-none text-[var(--text-muted,#64748b)] hover:text-[var(--text-main,#1e293b)] cursor-pointer"
+                className="h-7 w-7 rounded-lg border border-slate-300/80 dark:border-slate-700 bg-white/90 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-all flex items-center justify-center shadow-2xs disabled:opacity-35 disabled:cursor-not-allowed disabled:bg-slate-100/50 dark:disabled:bg-slate-800/40 disabled:border-slate-200 dark:disabled:border-slate-800 disabled:text-slate-400 cursor-pointer shrink-0"
                 title="Kembali ke halaman sebelumnya (<)"
               >
-                <ChevronLeft className="w-3.5 h-3.5" />
+                <ChevronLeft className="w-4 h-4 shrink-0 stroke-[2.5]" />
               </button>
               <button
                 onClick={goForward}
                 disabled={forwardHistory.length === 0}
-                className="p-1.5 rounded-md hover:bg-black/5 dark:hover:bg-white/10 transition-colors disabled:opacity-25 disabled:pointer-events-none text-[var(--text-muted,#64748b)] hover:text-[var(--text-main,#1e293b)] cursor-pointer"
+                className="h-7 w-7 rounded-lg border border-slate-300/80 dark:border-slate-700 bg-white/90 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-all flex items-center justify-center shadow-2xs disabled:opacity-35 disabled:cursor-not-allowed disabled:bg-slate-100/50 dark:disabled:bg-slate-800/40 disabled:border-slate-200 dark:disabled:border-slate-800 disabled:text-slate-400 cursor-pointer shrink-0"
                 title="Maju ke halaman berikutnya (>)"
               >
-                <ChevronRight className="w-3.5 h-3.5" />
+                <ChevronRight className="w-4 h-4 shrink-0 stroke-[2.5]" />
               </button>
             </div>
 
