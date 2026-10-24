@@ -656,7 +656,17 @@ router.get("/api/bulletin/:id/comments", async (req, res) => {
         return res.json({ status: "success", data: [] });
       }
 
-      const { topicTitle, topicId } = req.query as { topicTitle?: string; topicId?: string };
+      const { topicTitle, topicId, pt: queryPt, section: querySection } = req.query as { 
+        topicTitle?: string; 
+        topicId?: string; 
+        pt?: string; 
+        section?: string; 
+      };
+
+      // Retrieve post metadata to ensure strict PT universe & section alignment
+      const postRows = await db.select().from(bulletinPosts).where(eq(bulletinPosts.id, postId)).limit(1);
+      const post = postRows[0];
+      const targetUniverse = ((queryPt || post?.pt || 'TBP').toUpperCase().includes('GTS')) ? 'GTS' : 'TBP_GPS';
 
       const data = await db
         .select({
@@ -666,6 +676,7 @@ router.get("/api/bulletin/:id/comments", async (req, res) => {
           topicId: bulletinComments.topicId,
           section: bulletinComments.section,
           category: bulletinComments.category,
+          universe: bulletinComments.universe,
           statusUpdate: bulletinComments.statusUpdate,
           authorNik: bulletinComments.authorNik,
           authorName: bulletinComments.authorName,
@@ -687,10 +698,17 @@ router.get("/api/bulletin/:id/comments", async (req, res) => {
         .orderBy(desc(bulletinComments.createdAt));
 
       let result = data;
+
+      // Strict Universe Isolation: Do not leak GTS comments into TBP or vice-versa
+      result = result.filter(c => {
+        if (!c.universe) return true; // legacy unassigned
+        return c.universe === targetUniverse;
+      });
+
       if (topicTitle || topicId) {
         const qTitle = (topicTitle || '').toLowerCase().trim();
         const qId = (topicId || '').toLowerCase().trim();
-        result = data.filter((c) => {
+        result = result.filter((c) => {
           const t = (c.topicTitle || '').toLowerCase().trim();
           const id = (c.topicId || '').toLowerCase().trim();
           return (qTitle && t === qTitle) || (qId && id === qId);
@@ -752,13 +770,14 @@ router.post("/api/bulletin/:id/comments", async (req, res) => {
 
       const postUniverse = (post.pt || pt || 'TBP').toUpperCase().includes('GTS') ? 'GTS' : 'TBP';
       const commentUniverse = postUniverse === 'GTS' ? 'GTS' : 'TBP_GPS';
+      const derivedSection = section || post.category || post.department || null;
 
       const inserted = await db.insert(bulletinComments).values({
         postId,
         topicTitle: topicTitle || null,
         topicId: topicId || null,
-        section: section || null,
-        category: category || null,
+        section: derivedSection,
+        category: category || post.title || null,
         statusUpdate: statusUpdate || null,
         authorNik: authorNik || null,
         authorName: authorName || 'Seseorang',
