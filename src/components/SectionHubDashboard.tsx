@@ -515,13 +515,14 @@ export function SectionHubDashboard({
         cachedContent = localStorage.getItem(`preplab_logbook_content_${currentUniverse.toLowerCase()}_${logbookId}`) || localStorage.getItem(`preplab_logbook_content_${logbookId}`) || '';
       } catch {}
       const defaultContent = `# ${logbookTitle}\n\n*Integrated Section Logbook (${sectionTitle}): Active Routine & Non-Routine tasks.*\n\n| Number | Activity Name | Description | Created Time | Completion Date | Remarks | Due Date | Status | PIC | Priority | Activity | Period | Source Page |\n| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n`;
-      const target = findPost(item.searchKeywords || logbookTitle) || {
+      const target = {
         id: logbookId,
         title: logbookTitle,
         department: 'Prep & Lab',
         category: sectionTitle,
         isLogbook: true,
-        content: (cachedContent && cachedContent.includes('|')) ? cachedContent : defaultContent
+        content: (cachedContent && cachedContent.includes('|')) ? cachedContent : defaultContent,
+        pt: currentUniverse
       };
       onSelectPost(target);
       return;

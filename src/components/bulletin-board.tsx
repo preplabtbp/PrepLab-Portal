@@ -217,6 +217,10 @@ export function BulletinBoard({
     } catch {}
     return null;
   });
+  const selectedPostRef = useRef<any>(selectedPost);
+  useEffect(() => {
+    selectedPostRef.current = selectedPost;
+  }, [selectedPost]);
   const [navHistory, setNavHistory] = useState<any[]>([]);
   const [forwardHistory, setForwardHistory] = useState<any[]>([]);
 
@@ -781,6 +785,84 @@ export function BulletinBoard({
     return false;
   }, []);
 
+  // Canonical Section Mapping for Known Section Routine Posts
+  const KNOWN_SECTION_POST_MAPPING: Record<number, string> = {
+    // Administrasi
+    425: 'ADMINISTRATION',
+    517: 'ADMINISTRATION',
+    519: 'ADMINISTRATION',
+    520: 'ADMINISTRATION',
+    521: 'ADMINISTRATION',
+    522: 'ADMINISTRATION',
+    523: 'ADMINISTRATION',
+    // Maintenance
+    412: 'MAINTENANCE',
+    427: 'MAINTENANCE',
+    424: 'MAINTENANCE',
+    663: 'MAINTENANCE',
+    422: 'MAINTENANCE',
+    664: 'MAINTENANCE',
+    428: 'MAINTENANCE',
+    665: 'MAINTENANCE',
+    465: 'MAINTENANCE',
+    464: 'MAINTENANCE',
+    // Laboratory
+    535: 'LABORATORY',
+    414: 'LABORATORY',
+    541: 'LABORATORY',
+    450: 'LABORATORY',
+    538: 'LABORATORY',
+    542: 'LABORATORY',
+    418: 'LABORATORY',
+    543: 'LABORATORY',
+    413: 'LABORATORY',
+    545: 'LABORATORY',
+    415: 'LABORATORY',
+    549: 'LABORATORY',
+    474: 'LABORATORY',
+    564: 'LABORATORY',
+    473: 'LABORATORY',
+    // Preparasi
+    637: 'PREPARASI',
+    447: 'PREPARASI',
+    638: 'PREPARASI',
+    417: 'PREPARASI',
+    639: 'PREPARASI',
+    416: 'PREPARASI',
+    640: 'PREPARASI',
+    445: 'PREPARASI',
+    641: 'PREPARASI',
+    472: 'PREPARASI',
+    642: 'PREPARASI',
+    471: 'PREPARASI',
+    // Quality Assurance
+    586: 'QUALITY ASSURANCE',
+    448: 'QUALITY ASSURANCE',
+    587: 'QUALITY ASSURANCE',
+    419: 'QUALITY ASSURANCE',
+    588: 'QUALITY ASSURANCE',
+    420: 'QUALITY ASSURANCE',
+    589: 'QUALITY ASSURANCE',
+    421: 'QUALITY ASSURANCE',
+    590: 'QUALITY ASSURANCE',
+    475: 'QUALITY ASSURANCE',
+    591: 'QUALITY ASSURANCE',
+    470: 'QUALITY ASSURANCE',
+    // Inventory / Warehouse
+    669: 'WAREHOUSE / INVENTORY CONTROL',
+    463: 'WAREHOUSE / INVENTORY CONTROL',
+    670: 'WAREHOUSE / INVENTORY CONTROL',
+    466: 'WAREHOUSE / INVENTORY CONTROL',
+    671: 'WAREHOUSE / INVENTORY CONTROL',
+    467: 'WAREHOUSE / INVENTORY CONTROL',
+    672: 'WAREHOUSE / INVENTORY CONTROL',
+    468: 'WAREHOUSE / INVENTORY CONTROL',
+    673: 'WAREHOUSE / INVENTORY CONTROL',
+    469: 'WAREHOUSE / INVENTORY CONTROL',
+    674: 'WAREHOUSE / INVENTORY CONTROL',
+    476: 'WAREHOUSE / INVENTORY CONTROL',
+  };
+
   // Find parent post dynamically only for true subpages within the same PT universe
   const findParentPost = useCallback(
     (currentPost: any): any | null => {
@@ -789,6 +871,13 @@ export function BulletinBoard({
 
       const currentUniverse = currentPost.pt === "GTS" ? "GTS" : "TBP";
       const samePtPosts = posts.filter((p) => (p.pt === "GTS" ? "GTS" : "TBP") === currentUniverse);
+
+      // 0. Explicit canonical mapping for known section routine posts (e.g. 425 -> ADMINISTRATION)
+      const mappedSection = currentPost.id ? KNOWN_SECTION_POST_MAPPING[Number(currentPost.id)] : undefined;
+      if (mappedSection) {
+        const canonicalHub = samePtPosts.find((p) => isSectionHubPost(p) && isSameSection(getPostTitle(p), mappedSection));
+        if (canonicalHub) return canonicalHub;
+      }
 
       const currentTitle = getPostTitle(currentPost).toLowerCase();
       const currentCategory = (currentPost.category || currentPost.section || "").toLowerCase().trim();
@@ -805,17 +894,20 @@ export function BulletinBoard({
       });
       if (sectionHub) return sectionHub;
 
-      // 2. Check if a parent post explicitly links to this markdown title (e.g. ## Title) within same PT
-      for (const p of samePtPosts) {
-        if (p.id === currentPost.id) continue;
-        if (!isSectionHubPost(p) && !isFolderPost(p)) continue;
-        if (
-          p.content &&
-          (p.content.includes(`## ${getPostTitle(currentPost)}`) ||
-            p.content.includes(`### ${getPostTitle(currentPost)}`) ||
-            p.content.includes(`[${getPostTitle(currentPost)}]`))
-        ) {
-          return p;
+      // 2. Check if a parent post explicitly links to this markdown title (e.g. ## Title or [Title]) within same PT
+      const curT = getPostTitle(currentPost).trim();
+      if (curT.length > 1) {
+        const escaped = curT.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        // Match exact line heading to prevent "## Daily" from false-matching "## Daily Maintenance"
+        const headingRegex = new RegExp(`^(?:##|###)\\s+${escaped}\\s*$`, 'm');
+        const linkRegex = new RegExp(`\\[${escaped}\\]`, 'i');
+
+        for (const p of samePtPosts) {
+          if (p.id === currentPost.id) continue;
+          if (!isSectionHubPost(p) && !isFolderPost(p)) continue;
+          if (p.content && (headingRegex.test(p.content) || linkRegex.test(p.content))) {
+            return p;
+          }
         }
       }
 
@@ -883,6 +975,7 @@ export function BulletinBoard({
     setIsLibraryActive(false);
     if (post === null) {
       setNavHistory([]);
+      selectedPostRef.current = null;
       setSelectedPost(null);
       setIsEditing(false);
       setIsLibraryActive(false);
@@ -938,6 +1031,7 @@ export function BulletinBoard({
       return [...prev, freshPost];
     });
 
+    selectedPostRef.current = freshPost;
     setSelectedPost(freshPost);
     setIsEditing(false);
 
@@ -958,7 +1052,9 @@ export function BulletinBoard({
       if (freshPost?.id) {
         localStorage.setItem("preplab_active_bulletin_page", String(freshPost.id));
         const targetPt = selectedPtFilter !== 'ALL' ? selectedPtFilter : (freshPost.pt || pt || userUniverse || 'TBP');
-        navigate(`/bulletin/${targetPt}?page=${encodeURIComponent(String(freshPost.id))}`, { replace: true });
+        const targetUrl = `/bulletin/${targetPt}?page=${encodeURIComponent(String(freshPost.id))}`;
+        window.history.replaceState({}, "", targetUrl);
+        navigate(targetUrl, { replace: true });
       }
     } catch {}
   };
@@ -1050,7 +1146,8 @@ export function BulletinBoard({
 
       // If user accesses the root Labnote page with no parameters, always show the initial dashboard
       if (!urlPostId && !urlLogbook) {
-        if (selectedPost !== null) {
+        if (selectedPostRef.current !== null) {
+          selectedPostRef.current = null;
           setSelectedPost(null);
           setNavHistory([]);
           setIsLibraryActive(false);
@@ -1067,7 +1164,19 @@ export function BulletinBoard({
       // 1. Explicit Post ID from URL (e.g. from notification click ?postId=123&topic=...)
       // Always prioritize urlPostId even if another post was previously active
       if (urlPostId) {
-        if (!selectedPost || String(selectedPost.id) !== String(urlPostId)) {
+        // Skip if already viewing this post
+        if (selectedPostRef.current && String(selectedPostRef.current.id) === String(urlPostId)) {
+          return;
+        }
+
+        // Direct deep link to section logbook
+        if (String(urlPostId).startsWith('logbook-')) {
+          const cleanSec = String(urlPostId).replace(/^logbook-/, '').replace(/-/g, ' ').trim();
+          openSectionLogbook(cleanSec);
+          return;
+        }
+
+        if (!selectedPostRef.current || String(selectedPostRef.current.id) !== String(urlPostId)) {
           let target = posts.find((p) => String(p.id) === String(urlPostId));
           if (!target && String(urlPostId).startsWith('section-')) {
             const cleanSec = String(urlPostId).replace(/^section-/, '').replace(/-/g, ' ').trim();
@@ -1123,8 +1232,13 @@ export function BulletinBoard({
       }
 
       // Check if current selectedPost is a dummy fallback (e.g. doc-* or section-*) or not set
-      const isDummySelectedPost = selectedPost && (String(selectedPost.id).startsWith('doc-') || String(selectedPost.id).startsWith('section-'));
-      if (targetId && (!selectedPost || isDummySelectedPost)) {
+      const isDummySelectedPost = selectedPostRef.current && (String(selectedPostRef.current.id).startsWith('doc-') || String(selectedPostRef.current.id).startsWith('section-'));
+      if (targetId && (!selectedPostRef.current || isDummySelectedPost)) {
+        if (String(targetId).startsWith('logbook-')) {
+          const cleanSec = String(targetId).replace(/^logbook-/, '').replace(/-/g, ' ').trim();
+          openSectionLogbook(cleanSec);
+          return;
+        }
         let target = posts.find((p) => String(p.id) === String(targetId));
 
         // If not found by direct ID and targetId is a doc-* slug (e.g. doc-daily-laboratory)
@@ -1220,7 +1334,7 @@ export function BulletinBoard({
         }
       }
     } catch (e) {}
-  }, [posts, location.search, addRecentPost, selectedPost, openSectionLogbook, canAccessAllSections, userAllowedSections, userProfile]);
+  }, [posts, location.search, addRecentPost, openSectionLogbook, canAccessAllSections, userAllowedSections, userProfile]);
 
   // Listen for direct custom event from notification bell when user clicks while already in bulletin
   useEffect(() => {
@@ -1708,7 +1822,11 @@ export function BulletinBoard({
         }),
       });
       setSelectedPost((prev: any) => prev ? { ...prev, content: newContent } : null);
-      setPosts((prev) => prev.map((p) => p.id === selectedPost.id ? { ...p, content: newContent } : p));
+      selectedPostRef.current = { ...selectedPost, content: newContent };
+      try {
+        sessionStorage.setItem("preplab_cached_selected_post", JSON.stringify(selectedPostRef.current));
+      } catch {}
+      setPosts((prev) => prev.map((p) => String(p.id) === String(selectedPost.id) ? { ...p, content: newContent } : p));
       toast.success("Tabel topik berhasil dibuat!", { id: "init-table" });
     } catch (e) {
       toast.error("Gagal membuat tabel", { id: "init-table" });
@@ -3623,12 +3741,26 @@ ${aiMeetingNotes
                       localStorage.setItem(`preplab_logbook_content_${activeUni}_${logbookId}`, newContent);
                     } catch {}
                   }
-                  setSelectedPost((prev: any) => (prev ? { ...prev, content: newContent } : null));
-                  setPosts((prev) =>
-                    prev.map((p) =>
-                      p.id === selectedPost.id ? { ...p, content: newContent } : p
-                    )
-                  );
+                  setSelectedPost((prev: any) => {
+                    const updated = prev ? { ...prev, content: newContent } : null;
+                    selectedPostRef.current = updated;
+                    try {
+                      if (updated?.id) {
+                        sessionStorage.setItem("preplab_cached_selected_post", JSON.stringify(updated));
+                      }
+                    } catch {}
+                    return updated;
+                  });
+                  setPosts((prev) => {
+                    const updated = prev.map((p) =>
+                      String(p.id) === String(selectedPost.id) ? { ...p, content: newContent } : p
+                    );
+                    try {
+                      const activeUniverse = isDev ? 'ALL' : (userPt || 'TBP');
+                      localStorage.setItem(`preplab_cached_bulletin_posts_${activeUniverse}`, JSON.stringify(updated));
+                    } catch {}
+                    return updated;
+                  });
                 }}
               />
 

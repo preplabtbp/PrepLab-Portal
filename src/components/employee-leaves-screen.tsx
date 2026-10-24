@@ -361,13 +361,13 @@ export interface LeaveColumnDef {
   align?: 'left' | 'center' | 'right';
 }
 
-export const LEAVE_COL_STORAGE_KEY = 'preplab_leave_table_col_widths_v1';
+export const LEAVE_COL_STORAGE_KEY = 'preplab_leave_table_col_widths_v2';
 
 export const LEAVE_COLUMNS: LeaveColumnDef[] = [
   { id: 'no', label: 'No', defaultWidth: 55, minWidth: 42, align: 'center' },
   { id: 'karyawan', label: 'Karyawan', defaultWidth: 190, minWidth: 120, align: 'left' },
   { id: 'jabatan', label: 'Jabatan', defaultWidth: 170, minWidth: 100, align: 'left' },
-  { id: 'tempatTinggal', label: 'Tempat Tinggal', defaultWidth: 160, minWidth: 110, align: 'left' },
+  { id: 'tempatTinggal', label: 'Tempat Tinggal', defaultWidth: 230, minWidth: 160, align: 'left' },
   { id: 'bagianShift', label: 'Bagian & Shift', defaultWidth: 175, minWidth: 120, align: 'left' },
   { id: 'tanggalIzin', label: 'Tanggal Izin', defaultWidth: 155, minWidth: 120, align: 'left' },
   { id: 'jumlahIzin', label: 'Jumlah Izin', defaultWidth: 120, minWidth: 95, align: 'center' },
@@ -503,10 +503,21 @@ export function EmployeeLeavesScreen({
   // Interactive Column Widths State & Handlers
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>(() => {
     try {
-      const saved = localStorage.getItem(LEAVE_COL_STORAGE_KEY);
-      if (saved) return JSON.parse(saved);
+      let saved = localStorage.getItem(LEAVE_COL_STORAGE_KEY);
+      if (!saved) {
+        saved = localStorage.getItem('preplab_leave_table_col_widths_v1');
+      }
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === 'object') {
+          if (!parsed.tempatTinggal || parsed.tempatTinggal < 220) {
+            parsed.tempatTinggal = 230;
+          }
+          return parsed;
+        }
+      }
     } catch {}
-    return {};
+    return { tempatTinggal: 230 };
   });
 
   const [resizingCol, setResizingCol] = useState<string | null>(null);
@@ -2688,9 +2699,8 @@ export function EmployeeLeavesScreen({
                       </td>
 
                       {/* Tempat Tinggal - Inline Editable */}
-                      <td className="py-3 px-3.5 overflow-hidden" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center gap-1.5 w-full min-w-0">
-                          <Building2 className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                      <td className="py-3 px-3.5" onClick={(e) => e.stopPropagation()}>
+                        <div className="w-full min-w-0">
                           <input
                             type="text"
                             defaultValue={item.tempatTinggal || ''}
@@ -2707,7 +2717,7 @@ export function EmployeeLeavesScreen({
                               }
                             }}
                             placeholder="Isi tempat tinggal..."
-                            className="w-full min-w-0 px-2 py-1 text-xs font-semibold rounded bg-transparent hover:bg-slate-100 dark:hover:bg-slate-800 focus:bg-white dark:focus:bg-slate-800 border border-transparent hover:border-slate-300 dark:hover:border-slate-700 focus:border-indigo-500 text-slate-800 dark:text-slate-200 outline-none transition-all truncate"
+                            className="w-full min-w-0 px-2 py-1 text-xs font-semibold rounded bg-transparent hover:bg-slate-100 dark:hover:bg-slate-800 focus:bg-white dark:focus:bg-slate-800 border border-transparent hover:border-slate-300 dark:hover:border-slate-700 focus:border-slate-400 text-slate-800 dark:text-slate-200 outline-none transition-all whitespace-nowrap overflow-x-auto"
                             title={item.tempatTinggal || 'Edit tempat tinggal langsung di tabel'}
                           />
                         </div>

@@ -2026,13 +2026,13 @@ export function resolveOriginPostId(
       if (secMatch) return String(secMatch.id);
     }
 
-    // 1C. Substring match across all posts (guaranteeing non-empty strings)
+    // 1C. High-fidelity substring match across all posts (minimum 8 characters to avoid false matches like "GPS")
     const postByTitle = allPosts.find(p => {
       const pTitle = (p.title || '').trim().toLowerCase();
-      if (!pTitle || pTitle.length < 3) return false;
+      if (!pTitle || pTitle.length < 8) return false;
       const cleanPTitle = cleanFrontEndText(pTitle).toLowerCase();
-      return (asal.length > 4 && pTitle.includes(asal)) || (pTitle.length > 4 && asal.includes(pTitle)) ||
-             (cleanPTitle.length > 4 && cleanPTitle.includes(asal));
+      return (asal.length >= 8 && pTitle.includes(asal)) || (pTitle.length >= 8 && asal.includes(pTitle)) ||
+             (cleanPTitle.length >= 8 && cleanPTitle.includes(asal));
     });
     if (postByTitle) return String(postByTitle.id);
   }
