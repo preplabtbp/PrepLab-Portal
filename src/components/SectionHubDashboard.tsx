@@ -1,3 +1,4 @@
+import { NotionContextMenu, NotionContextMenuData, isPostFavorite, togglePostFavorite } from './notion/NotionContextMenu';
 import { translateDisplayText } from './notion/logbook-section-utils';
 import { VerifiedBadge } from './VerifiedBadge';
 import React, { useState, useMemo, useCallback } from 'react';
@@ -63,6 +64,8 @@ interface SectionHubDashboardProps {
   posts: any[];
   activePt?: string;
   onSelectPost: (post: any) => void;
+  onOpenInNewNotionTab?: (post: any) => void;
+  onDuplicatePost?: (post: any) => void;
   onGoHome: () => void;
   agendaEvents?: any[];
   onOpenCalendar?: () => void;
@@ -129,11 +132,100 @@ export function SectionHubDashboard({
   posts,
   activePt,
   onSelectPost,
+  onOpenInNewNotionTab,
+  onDuplicatePost,
   onGoHome,
   agendaEvents = [],
   onOpenCalendar
 }: SectionHubDashboardProps) {
   const sectionTitle = (post?.title || '').toUpperCase().trim();
+
+  // Notion Context Menu state
+  const [contextMenu, setContextMenu] = useState<NotionContextMenuData | null>(null);
+
+  const handleItemContextMenu = (e: React.MouseEvent, item: HubItem) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    // Resolve target post or construct target
+    let targetPost: any = null;
+    if (item.isLogbook || item.title.toLowerCase().includes('logbook')) {
+      const logbookTitle = item.title;
+      const logbookId = `logbook-${sectionTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+      let cachedContent = '';
+      try {
+        cachedContent = localStorage.getItem(`preplab_logbook_content_${logbookId}`) || '';
+      } catch {}
+      const defaultContent = `# ${logbookTitle}\n\n*Integrated Section Logbook (${sectionTitle}): Active Routine & Non-Routine tasks.*\n\n| Number | Activity Name | Description | Created Time | Completion Date | Remarks | Due Date | Status | PIC | Priority | Activity | Period | Source Page |\n| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n`;
+      targetPost = findPost(item.searchKeywords || logbookTitle) || {
+        id: logbookId,
+        title: logbookTitle,
+        department: 'Prep & Lab',
+        category: sectionTitle,
+        isLogbook: true,
+        content: (cachedContent && cachedContent.includes('|')) ? cachedContent : defaultContent,
+        pt: currentUniverse
+      };
+    } else {
+      targetPost = findPost(item.searchKeywords || item.title);
+      if (!targetPost) {
+        const numericId = (item.searchKeywords || []).find((k) => /^\d+$/.test(k));
+        targetPost = {
+          id: numericId ? parseInt(numericId, 10) : `doc-${item.title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+          title: item.title,
+          department: 'Prep & Lab',
+          category: sectionTitle,
+          content: `### ${item.title}\n\n*Halaman dokumentasi untuk ${item.title} (${sectionTitle}).*`,
+          pt: currentUniverse
+        };
+      }
+    }
+
+    const postId = targetPost?.id;
+    const isFav = postId ? isPostFavorite(postId) : false;
+
+    setContextMenu({
+      x: e.clientX,
+      y: e.clientY,
+      title: item.title,
+      icon: item.icon,
+      post: targetPost,
+      linkUrl: item.linkUrl,
+      isLogbook: item.isLogbook,
+      sectionName: sectionTitle,
+      isFavorite: isFav,
+      onOpen: () => handleItemClick(item),
+      onOpenInNewNotionTab: onOpenInNewNotionTab ? () => onOpenInNewNotionTab(targetPost) : undefined,
+      onOpenInNewBrowserTab: () => {
+        if (item.linkUrl) {
+          window.open(item.linkUrl, '_blank');
+        } else if (targetPost) {
+          const pt = targetPost.pt || currentUniverse;
+          const pId = targetPost.id;
+          const url = pId ? `/bulletin/${pt}?page=${encodeURIComponent(String(pId))}` : `/bulletin/${pt}`;
+          window.open(url, '_blank');
+        }
+      },
+      onCopyLink: () => {
+        if (item.linkUrl) {
+          navigator.clipboard.writeText(item.linkUrl);
+          toast.success('Tautan berhasil disalin!');
+        } else {
+          const pt = targetPost?.pt || currentUniverse;
+          const pId = targetPost?.id;
+          const fullUrl = `${window.location.origin}/bulletin/${pt}?page=${encodeURIComponent(String(pId || item.title))}`;
+          navigator.clipboard.writeText(fullUrl);
+          toast.success('Tautan halaman disalin ke clipboard!');
+        }
+      },
+      onToggleFavorite: postId ? () => {
+        const next = togglePostFavorite(postId, item.title);
+        setContextMenu(prev => prev ? { ...prev, isFavorite: next } : null);
+      } : undefined,
+      onDuplicate: onDuplicatePost && targetPost ? () => onDuplicatePost(targetPost) : undefined
+    });
+  };
+
 
   // Strict PT universe isolation: GTS vs TBP/GPS
   const currentUniverse = (activePt === 'GTS' || post?.pt === 'GTS' || post?.universe === 'GTS') ? 'GTS' : 'TBP';
@@ -1775,6 +1867,7 @@ export function SectionHubDashboard({
                     <button
                       key={idx}
                       onClick={() => handleItemClick(item)}
+                      onContextMenu={(e) => handleItemContextMenu(e, item)}
                       className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-gradient-to-r from-teal-50 via-emerald-50 to-teal-50/50 hover:from-teal-100 hover:via-emerald-100 hover:to-teal-100/70 border-2 border-teal-500/40 hover:border-teal-500/70 text-slate-900 text-sm font-semibold transition-all group shadow-xs text-left cursor-pointer mb-2"
                     >
                       <div className="flex items-center gap-3 truncate">
@@ -1803,6 +1896,7 @@ export function SectionHubDashboard({
                     <button
                       key={idx}
                       onClick={() => handleItemClick(item)}
+                      onContextMenu={(e) => handleItemContextMenu(e, item)}
                       className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl bg-[#f0f6fc] hover:bg-[#e4effa] border border-[#dcecfb] hover:border-sky-300 text-slate-800 text-sm font-medium transition-all group shadow-2xs hover:shadow-xs text-left cursor-pointer"
                     >
                       <div className="flex items-center gap-3 truncate">
@@ -2002,6 +2096,7 @@ export function SectionHubDashboard({
                     <button
                       key={idx}
                       onClick={() => handleItemClick(item)}
+                      onContextMenu={(e) => handleItemContextMenu(e, item)}
                       className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl bg-[#fdfbf6] hover:bg-[#f6f0df] border border-[#f5ecd5] hover:border-amber-300 text-slate-800 text-sm font-medium transition-all group shadow-2xs hover:shadow-xs text-left cursor-pointer"
                     >
                       <div className="flex items-center gap-3 truncate">
@@ -2211,6 +2306,7 @@ export function SectionHubDashboard({
                   <button
                     key={idx}
                     onClick={() => handleItemClick(item)}
+                    onContextMenu={(e) => handleItemContextMenu(e, item)}
                     className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-gradient-to-r from-teal-50 via-emerald-50 to-teal-50/50 hover:from-teal-100 hover:via-emerald-100 hover:to-teal-100/70 border-2 border-teal-500/40 hover:border-teal-500/70 text-slate-900 text-sm font-semibold transition-all group shadow-xs text-left cursor-pointer mb-2"
                   >
                     <div className="flex items-center gap-3 truncate">
@@ -2239,6 +2335,7 @@ export function SectionHubDashboard({
                   <button
                     key={idx}
                     onClick={() => handleItemClick(item)}
+                    onContextMenu={(e) => handleItemContextMenu(e, item)}
                     className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl bg-[#f0f6fc] hover:bg-[#e4effa] border border-[#dcecfb] hover:border-sky-300 text-slate-800 text-sm font-medium transition-all group shadow-2xs hover:shadow-xs text-left cursor-pointer"
                   >
                     <div className="flex items-center gap-3 truncate">

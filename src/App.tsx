@@ -241,6 +241,7 @@ export default function App() {
   const [isSidebarPeeked, setIsSidebarPeeked] = useState(false);
   const isBulletin = location.pathname.startsWith('/bulletin');
   const isEmployeeDatabase = location.pathname.startsWith('/employee-database');
+  const isQuiz = location.pathname.startsWith('/quiz');
   const [bulletinFocusMode, setBulletinFocusMode] = useState(true);
   const [hoveredNav, setHoveredNav] = useState<string | null>(null);
 
@@ -1970,7 +1971,7 @@ export default function App() {
       {/* Header */}
       <header 
         className={`px-4 md:px-6 lg:px-8 py-3 sticky top-0 z-40 backdrop-blur-md border-b w-full flex justify-center transition-all duration-300 ${
-          (isBulletin && bulletinFocusMode) || isEmployeeDatabase || isEmbedMode ? 'hidden' : ''
+          (isBulletin && bulletinFocusMode) || isEmployeeDatabase || isEmbedMode || isQuiz ? 'hidden' : ''
         }`}
         style={{
           backgroundColor: 'var(--header-bg, var(--card-bg, #FFFFFF))',
@@ -2258,7 +2259,7 @@ export default function App() {
           </motion.div>
         )}
       </AnimatePresence>
-      {!isCrewRole && !(isBulletin && bulletinFocusMode) && (
+      {!isCrewRole && !(isBulletin && bulletinFocusMode) && !isQuiz && (
         <nav 
           className="fixed bottom-0 w-full md:hidden backdrop-blur-xl border-t z-40 flex items-center justify-around h-[4.5rem] pb-safe transition-colors" 
           style={{ 
@@ -2449,25 +2450,29 @@ export default function App() {
       />
 
       {/* Floating Feedback & Suggestions Button */}
-      <FloatingFeedbackButton
-        inspectorNik={inspectorNik}
-        inspectorName={inspectorName}
-        userProfile={userProfile}
-        isHome={activeTab === 'home'}
-        isBulletin={isBulletin}
-        isBulletinFocusMode={bulletinFocusMode}
-        isCrewRole={isCrewRole}
-        currentPath={location.pathname}
-        onNavigate={handleNav}
-      />
+      {!isQuiz && (
+        <FloatingFeedbackButton
+          inspectorNik={inspectorNik}
+          inspectorName={inspectorName}
+          userProfile={userProfile}
+          isHome={activeTab === 'home'}
+          isBulletin={isBulletin}
+          isBulletinFocusMode={bulletinFocusMode}
+          isCrewRole={isCrewRole}
+          currentPath={location.pathname}
+          onNavigate={handleNav}
+        />
+      )}
 
       {/* Floating Google Gemini AI Assistant Button */}
-      <FloatingGeminiButton
-        isCrewRole={isCrewRole}
-        isBulletin={isBulletin}
-        isBulletinFocusMode={bulletinFocusMode}
-        currentPath={location.pathname}
-      />
+      {!isQuiz && (
+        <FloatingGeminiButton
+          isCrewRole={isCrewRole}
+          isBulletin={isBulletin}
+          isBulletinFocusMode={bulletinFocusMode}
+          currentPath={location.pathname}
+        />
+      )}
 
     </div>
   );

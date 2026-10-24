@@ -1,3 +1,4 @@
+import { NotionContextMenu, NotionContextMenuData, isPostFavorite, togglePostFavorite } from './notion/NotionContextMenu';
 import React, { useState, useEffect, useMemo, useCallback, useRef, Suspense } from "react";
 import { translateDisplayText, isSameSection } from './notion/logbook-section-utils';
 import { TbpDashboard } from "./TbpDashboard";
@@ -266,6 +267,9 @@ export function BulletinBoard({
     }
     return [{ tabId: 'tab_1', postId: null, title: 'Dashboard', icon: '🏠' }];
   });
+
+    // Notion Right-Click Context Menu State
+  const [notionContextMenu, setNotionContextMenu] = useState<NotionContextMenuData | null>(null);
 
   const [activeTabId, setActiveTabId] = useState<string>(() => {
     try {
@@ -1348,6 +1352,166 @@ export function BulletinBoard({
 
     setActiveTabId(newTabId);
     navigateToPost(null, true);
+  };
+
+  
+  // Open post in a new Notion-style in-app tab
+  const openInNewNotionTab = (targetPost: any) => {
+    if (!targetPost) return;
+    const newTabId = 'tab_' + Date.now();
+    const title = getPostTitle(targetPost) || targetPost.title || 'Dokumen';
+    const icon = getNotionIcon(targetPost) || targetPost.icon || '📝';
+    const newTab = {
+      tabId: newTabId,
+      postId: targetPost.id,
+      title: typeof title === 'string' ? title : 'Dokumen',
+      icon: typeof icon === 'string' ? icon : '📝',
+      post: targetPost
+    };
+
+    setOpenTabs(prev => {
+      const existing = prev.find(t => String(t.postId) === String(targetPost.id));
+      if (existing) {
+        setActiveTabId(existing.tabId);
+        navigateToPost(targetPost, true);
+        return prev;
+      }
+      if (prev.length >= 12) {
+        toast.info('Maksimal 12 tab dapat dibuka bersamaan');
+        return prev;
+      }
+      return [...prev, newTab];
+    });
+
+    setActiveTabId(newTabId);
+    navigateToPost(targetPost, true);
+  };
+
+  // Duplicate document handler
+  const handleDuplicatePost = async (sourcePost: any) => {
+    if (!sourcePost) return;
+    const toastId = toast.loading('Menduplikasi dokumen...');
+    try {
+      const copyTitle = `${getPostTitle(sourcePost)} (Salinan)`;
+      const res = await fetch('/api/bulletin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...sourcePost,
+          id: undefined,
+          title: copyTitle,
+          createdAt: new Date().toISOString()
+        })
+      });
+      const json = await res.json();
+      if (json.status === 'success' && json.data) {
+        toast.dismiss(toastId);
+        toast.success(`Berhasil menduplikasi "${copyTitle}"`);
+        setPosts(prev => [json.data, ...prev]);
+        openInNewNotionTab(json.data);
+      } else {
+        toast.dismiss(toastId);
+        toast.error('Gagal menduplikasi dokumen');
+      }
+    } catch {
+      toast.dismiss(toastId);
+      toast.error('Gagal menduplikasi dokumen');
+    }
+  };
+
+  // Right-click context menu on Horizontal Notion Tab
+  const handleTabContextMenu = (e: React.MouseEvent, tab: { tabId: string; postId: string | number | null; title: string; icon?: string; post?: any }) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const targetPost = tab.post || posts.find(p => String(p.id) === String(tab.postId));
+    const isFav = targetPost?.id ? isPostFavorite(targetPost.id) : false;
+
+    setNotionContextMenu({
+      x: e.clientX,
+      y: e.clientY,
+      title: tab.title,
+      icon: tab.icon || '📝',
+      post: targetPost,
+      isTabContext: true,
+      isFavorite: isFav,
+      onOpen: () => handleSelectTab(tab),
+      onOpenInNewBrowserTab: () => {
+        if (targetPost) {
+          const pt = targetPost.pt || 'TBP';
+          const pId = targetPost.id;
+          const url = pId ? `/bulletin/${pt}?page=${encodeURIComponent(String(pId))}` : `/bulletin/${pt}`;
+          window.open(url, '_blank');
+        } else if (tab.postId) {
+          window.open(`/bulletin/TBP?page=${encodeURIComponent(String(tab.postId))}`, '_blank');
+        } else {
+          window.open('/bulletin/TBP', '_blank');
+        }
+      },
+      onCopyLink: () => {
+        const pt = targetPost?.pt || 'TBP';
+        const pId = targetPost?.id || tab.postId;
+        const fullUrl = pId
+          ? `${window.location.origin}/bulletin/${pt}?page=${encodeURIComponent(String(pId))}`
+          : `${window.location.origin}/bulletin/${pt}`;
+        navigator.clipboard.writeText(fullUrl);
+        toast.success('Tautan tab disalin ke clipboard!');
+      },
+      onCloseTab: () => handleCloseTab(tab.tabId),
+      onCloseOtherTabs: () => {
+        setOpenTabs([tab]);
+        setActiveTabId(tab.tabId);
+        toast.info('Tab lainnya telah ditutup');
+      }
+    });
+  };
+
+  // Right-click context menu on Sidebar Post / Document
+  const handleSidebarPostContextMenu = (e: React.MouseEvent, postItem: any) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const isFav = postItem?.id ? isPostFavorite(postItem.id) : false;
+    const title = getPostTitle(postItem);
+    const icon = getNotionIcon(postItem);
+
+    setNotionContextMenu({
+      x: e.clientX,
+      y: e.clientY,
+      title: title,
+      icon: typeof icon === 'string' ? icon : '📄',
+      post: postItem,
+      isFavorite: isFav,
+      onOpen: () => {
+        addRecentPost(postItem.id);
+        navigateToPost(postItem);
+      },
+      onOpenInNewNotionTab: () => openInNewNotionTab(postItem),
+      onOpenInNewBrowserTab: () => {
+        const pt = postItem.pt || 'TBP';
+        const pId = postItem.id;
+        const url = pId ? `/bulletin/${pt}?page=${encodeURIComponent(String(pId))}` : `/bulletin/${pt}`;
+        window.open(url, '_blank');
+      },
+      onCopyLink: () => {
+        const pt = postItem.pt || 'TBP';
+        const pId = postItem.id;
+        const fullUrl = `${window.location.origin}/bulletin/${pt}?page=${encodeURIComponent(String(pId))}`;
+        navigator.clipboard.writeText(fullUrl);
+        toast.success('Tautan disalin ke clipboard!');
+      },
+      onToggleFavorite: postItem.id ? () => {
+        const next = togglePostFavorite(postItem.id, title);
+        setNotionContextMenu(prev => prev ? { ...prev, isFavorite: next } : null);
+      } : undefined,
+      onDuplicate: () => handleDuplicatePost(postItem),
+      canDelete: Boolean(isDev || postItem.authorName === userProfile?.name || postItem.authorNik === inspectorNik),
+      onDelete: () => {
+        if (typeof postItem.id === 'number') {
+          deletePost(postItem.id);
+        }
+      }
+    });
   };
 
   const goBack = () => {
@@ -2459,6 +2623,7 @@ ${aiMeetingNotes
                         addRecentPost(post.id);
                         navigateToPost(post);
                       }}
+                      onContextMenu={(e) => handleSidebarPostContextMenu(e, post)}
                       className={`flex items-center gap-2.5 px-2 py-1.5 text-xs rounded-md cursor-pointer transition-all ${
                         isSelected
                           ? "font-medium shadow-xs"
@@ -2576,6 +2741,7 @@ ${aiMeetingNotes
                   <div
                     key={tab.tabId}
                     onClick={() => handleSelectTab(tab)}
+                    onContextMenu={(e) => handleTabContextMenu(e, tab)}
                     className={`group relative h-8 px-3 rounded-t-lg flex items-center gap-1.5 text-xs transition-all cursor-pointer border-t border-x shrink-0 max-w-[210px] ${
                       isActive
                         ? 'bg-[var(--card-bg,#ffffff)] text-[var(--text-main,#1e293b)] font-semibold border-[var(--border-main,#e2e8f0)] shadow-2xs z-10'
@@ -3167,6 +3333,8 @@ ${aiMeetingNotes
                 posts={posts}
                 activePt={selectedPtFilter !== 'ALL' ? selectedPtFilter : (selectedPost.pt || 'TBP')}
                 onSelectPost={(p) => navigateToPost(p)}
+                onOpenInNewNotionTab={openInNewNotionTab}
+                onDuplicatePost={handleDuplicatePost}
                 onGoHome={() => navigateToPost(null)}
                 agendaEvents={agendaEventsList}
                 onOpenCalendar={() => navigate('/agenda')}
@@ -4350,6 +4518,8 @@ ${aiMeetingNotes
           />
         </Suspense>
       )}
+      {/* Notion-Style Right-Click Context Menu */}
+      <NotionContextMenu data={notionContextMenu} onClose={() => setNotionContextMenu(null)} />
     </div>
   );
 }

@@ -302,25 +302,25 @@ export const KATEGORI_IZIN_CONFIG: Record<string, KategoriIzinMeta> = {
   'I': {
     code: 'I',
     label: 'Izin Biasa',
-    badgeClass: 'bg-sky-50 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300 border-sky-300 dark:border-sky-700',
-    dotColor: '#0284c7'
+    badgeClass: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200 border-slate-200 dark:border-slate-700',
+    dotColor: '#64748b'
   },
   'IK': {
     code: 'IK',
     label: 'Izin Khusus',
-    badgeClass: 'bg-purple-50 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300 border-purple-300 dark:border-purple-700',
-    dotColor: '#9333ea'
+    badgeClass: 'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-200 border-slate-300 dark:border-slate-700',
+    dotColor: '#475569'
   },
   'SS': {
     code: 'SS',
     label: 'Sakit Site',
-    badgeClass: 'bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300 border-rose-300 dark:border-rose-700',
+    badgeClass: 'bg-rose-50/70 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300 border-rose-200/80 dark:border-rose-800/60',
     dotColor: '#e11d48'
   },
   'SL': {
     code: 'SL',
     label: 'Sakit Luar Site',
-    badgeClass: 'bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 border-amber-300 dark:border-amber-700',
+    badgeClass: 'bg-amber-50/70 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 border-amber-200/80 dark:border-amber-800/60',
     dotColor: '#d97706'
   }
 };
@@ -1987,13 +1987,13 @@ export function EmployeeLeavesScreen({
                     <span className="text-xs sm:text-sm font-black text-slate-900 dark:text-white">
                       Ringkasan & Keterangan Rekap Izin
                     </span>
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10.5px] font-semibold bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700">
                       {summary?.total || leaves.length} Total Izin
                     </span>
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10.5px] font-semibold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
                       {summary?.approvedCount || 0} Terverifikasi
                     </span>
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10.5px] font-semibold bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700">
                       {summary?.sakitCount || 0} Sakit
                     </span>
                   </div>
@@ -2441,42 +2441,39 @@ export function EmployeeLeavesScreen({
                       </td>
 
                       {/* Tempat Tinggal - Inline Editable */}
-                      <td className="py-3 px-3.5" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center gap-1.5">
-                          <Building2 className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
-                          <input
-                            type="text"
-                            defaultValue={item.tempatTinggal || ''}
-                            key={`${item.id}-tt-${item.tempatTinggal}`}
-                            onBlur={(e) => {
-                              const val = e.target.value.trim();
-                              if (val !== (item.tempatTinggal || '')) {
-                                handleInlineUpdate(item.id, 'tempatTinggal', val);
-                              }
-                            }}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                (e.target as HTMLInputElement).blur();
-                              }
-                            }}
-                            placeholder="Isi tempat tinggal..."
-                            className="w-full max-w-[140px] px-2 py-1 text-xs font-semibold rounded bg-transparent hover:bg-slate-100 dark:hover:bg-slate-800 focus:bg-white dark:focus:bg-slate-800 border border-transparent hover:border-slate-300 dark:hover:border-slate-700 focus:border-indigo-500 text-slate-800 dark:text-slate-200 outline-none transition-all"
-                            title="Edit tempat tinggal langsung di tabel"
-                          />
-                        </div>
+                      <td className="py-2.5 px-3.5" onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="text"
+                          defaultValue={item.tempatTinggal || ''}
+                          key={`${item.id}-tt-${item.tempatTinggal}`}
+                          onBlur={(e) => {
+                            const val = e.target.value.trim();
+                            if (val !== (item.tempatTinggal || '')) {
+                              handleInlineUpdate(item.id, 'tempatTinggal', val);
+                            }
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              (e.target as HTMLInputElement).blur();
+                            }
+                          }}
+                          placeholder="-"
+                          className="w-full max-w-[140px] px-1.5 py-1 text-xs text-slate-700 dark:text-slate-300 rounded bg-transparent hover:bg-slate-100/70 dark:hover:bg-slate-800/60 focus:bg-white dark:focus:bg-slate-800 border border-transparent focus:border-slate-300 dark:focus:border-slate-600 outline-none transition-all"
+                          title="Edit tempat tinggal"
+                        />
                       </td>
 
                       {/* Bagian & Shift - Inline Editable */}
-                      <td className="py-3 px-3.5" onClick={(e) => e.stopPropagation()}>
-                        <div className="font-semibold text-slate-800 dark:text-slate-200">
+                      <td className="py-2.5 px-3.5" onClick={(e) => e.stopPropagation()}>
+                        <div className="font-medium text-slate-800 dark:text-slate-200">
                           {item.penempatan || item.section}
                         </div>
-                        <div className="text-[10.5px] text-slate-500 mt-1 flex items-center gap-1.5 flex-wrap">
+                        <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 flex items-center gap-1.5 flex-wrap">
                           <select
                             value={item.shift || 'Shift A'}
                             onChange={(e) => handleInlineUpdate(item.id, 'shift', e.target.value)}
-                            className="px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 font-bold text-[10px] border border-indigo-200 dark:border-indigo-800 cursor-pointer focus:ring-1 focus:ring-indigo-500 outline-none"
-                            title="Ubah shift langsung di tabel"
+                            className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-medium text-[10.5px] border border-slate-200 dark:border-slate-700 cursor-pointer focus:ring-1 focus:ring-slate-400 outline-none"
+                            title="Ubah shift"
                           >
                             <option value="Shift A">Shift A</option>
                             <option value="Shift B">Shift B</option>
@@ -2489,14 +2486,11 @@ export function EmployeeLeavesScreen({
                       </td>
 
                       {/* Tanggal Izin - Format [$-id-id] dd-mmm-yyyy & Inline Editable */}
-                      <td className="py-3 px-3.5 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                      <td className="py-2.5 px-3.5 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                         <div className="relative inline-flex items-center group">
-                          <div className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold font-mono bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/80 border border-slate-200 dark:border-slate-700 hover:border-teal-400 dark:hover:border-teal-500 text-slate-800 dark:text-slate-100 shadow-2xs transition-all cursor-pointer">
-                            <Calendar className="w-3.5 h-3.5 text-[#135e69] dark:text-teal-400 shrink-0 group-hover:scale-110 transition-transform" />
-                            <span className="tracking-wide">
-                              {formatLeaveDateIndo(item.awalAbsensi)}
-                            </span>
-                          </div>
+                          <span className="text-xs font-mono font-medium text-slate-700 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-white cursor-pointer px-1.5 py-0.5 rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+                            {formatLeaveDateIndo(item.awalAbsensi)}
+                          </span>
                           <input
                             type="date"
                             value={toIsoDate(item.awalAbsensi)}
@@ -2508,36 +2502,33 @@ export function EmployeeLeavesScreen({
                               }
                             }}
                             className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-                            title="Klik untuk memilih / mengubah tanggal izin (dd-mmm-yyyy)"
+                            title="Klik untuk memilih / mengubah tanggal izin"
                           />
                         </div>
                       </td>
 
                       {/* Jumlah Izin - Kolom Terpisah & Inline Editable */}
-                      <td className="py-3 px-3.5 text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                        <div className="inline-flex items-center justify-center gap-1.5 px-2.5 py-1 rounded-lg bg-purple-50 dark:bg-purple-950/40 border border-purple-200/80 dark:border-purple-800/60 shadow-2xs">
-                          <Clock className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400 shrink-0" />
-                          <input
-                            type="text"
-                            defaultValue={item.lamanyaIzin || `${item.jumlah || 1} Hari`}
-                            key={`${item.id}-dur-${item.lamanyaIzin}`}
-                            onBlur={(e) => {
-                              const val = e.target.value.trim();
-                              if (val && val !== item.lamanyaIzin) {
-                                handleInlineUpdate(item.id, 'lamanyaIzin', val);
-                              }
-                            }}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
-                            }}
-                            className="w-16 px-1 py-0.5 text-xs font-bold text-center text-purple-700 dark:text-purple-300 rounded bg-white dark:bg-slate-800/90 border border-purple-200 dark:border-purple-700 focus:border-purple-500 focus:ring-1 focus:ring-purple-400 outline-none transition-all"
-                            title="Edit jumlah / durasi izin (contoh: 1 Hari, 2 Hari)"
-                          />
-                        </div>
+                      <td className="py-2.5 px-3.5 text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="text"
+                          defaultValue={item.lamanyaIzin || `${item.jumlah || 1} Hari`}
+                          key={`${item.id}-dur-${item.lamanyaIzin}`}
+                          onBlur={(e) => {
+                            const val = e.target.value.trim();
+                            if (val && val !== item.lamanyaIzin) {
+                              handleInlineUpdate(item.id, 'lamanyaIzin', val);
+                            }
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                          }}
+                          className="w-16 px-1.5 py-0.5 text-xs font-medium text-center text-slate-700 dark:text-slate-300 rounded bg-transparent hover:bg-slate-100 dark:hover:bg-slate-800 focus:bg-white dark:focus:bg-slate-800 border border-transparent focus:border-slate-300 dark:focus:border-slate-600 outline-none transition-all"
+                          title="Edit durasi izin"
+                        />
                       </td>
 
                       {/* Kategori Izin - Sinkronisasi Google Sheet Database Rooster Prep & Lab */}
-                      <td className="py-3 px-3 text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                      <td className="py-2.5 px-3 text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                         <div className="inline-flex items-center justify-center">
                           <select
                             value={item.kategoriIzin || 'I'}
@@ -2545,26 +2536,26 @@ export function EmployeeLeavesScreen({
                               const val = e.target.value;
                               handleInlineUpdate(item.id, 'kategoriIzin', val);
                             }}
-                            className={`px-2.5 py-1 text-xs font-black rounded-lg border shadow-2xs cursor-pointer transition-all ${
-                              KATEGORI_IZIN_CONFIG[item.kategoriIzin || 'I']?.badgeClass || 'bg-slate-50 text-slate-700 border-slate-200'
+                            className={`px-2 py-0.5 text-[11px] font-semibold rounded-md border cursor-pointer transition-all outline-none ${
+                              KATEGORI_IZIN_CONFIG[item.kategoriIzin || 'I']?.badgeClass || 'bg-slate-100 text-slate-700 border-slate-200'
                             }`}
                             title={
-                              item.kategoriIzin === 'IK' ? 'IK = Izin Khusus (Sinkron Database Rooster)' :
-                              item.kategoriIzin === 'SS' ? 'SS = Sakit Site (Sinkron Database Rooster)' :
-                              item.kategoriIzin === 'SL' ? 'SL = Sakit Luar Site (Sinkron Database Rooster)' :
-                              'I = Izin Biasa (Sinkron Database Rooster)'
+                              item.kategoriIzin === 'IK' ? 'IK = Izin Khusus' :
+                              item.kategoriIzin === 'SS' ? 'SS = Sakit Site' :
+                              item.kategoriIzin === 'SL' ? 'SL = Sakit Luar Site' :
+                              'I = Izin Biasa'
                             }
                           >
-                            <option value="I" className="font-bold text-sky-700 bg-white dark:bg-slate-800 dark:text-sky-300">I = Izin Biasa</option>
-                            <option value="IK" className="font-bold text-purple-700 bg-white dark:bg-slate-800 dark:text-purple-300">IK = Izin Khusus</option>
-                            <option value="SS" className="font-bold text-rose-700 bg-white dark:bg-slate-800 dark:text-rose-300">SS = Sakit Site</option>
-                            <option value="SL" className="font-bold text-amber-700 bg-white dark:bg-slate-800 dark:text-amber-300">SL = Sakit Luar Site</option>
+                            <option value="I" className="text-slate-800 bg-white dark:bg-slate-800 dark:text-slate-200">I = Izin Biasa</option>
+                            <option value="IK" className="text-slate-800 bg-white dark:bg-slate-800 dark:text-slate-200">IK = Izin Khusus</option>
+                            <option value="SS" className="text-slate-800 bg-white dark:bg-slate-800 dark:text-slate-200">SS = Sakit Site</option>
+                            <option value="SL" className="text-slate-800 bg-white dark:bg-slate-800 dark:text-slate-200">SL = Sakit Luar Site</option>
                           </select>
                         </div>
                       </td>
 
                       {/* Alasan Izin - Inline Editable */}
-                      <td className="py-3 px-3.5 max-w-xs" onClick={(e) => e.stopPropagation()}>
+                      <td className="py-2.5 px-3.5 max-w-xs" onClick={(e) => e.stopPropagation()}>
                         <input
                           type="text"
                           defaultValue={item.alasanAbsensi || ''}
@@ -2580,76 +2571,74 @@ export function EmployeeLeavesScreen({
                               (e.target as HTMLInputElement).blur();
                             }
                           }}
-                          placeholder="Ketik alasan izin..."
-                          className="w-full px-2.5 py-1 text-xs font-medium rounded bg-slate-50/60 dark:bg-slate-800/60 hover:bg-white dark:hover:bg-slate-800 focus:bg-white dark:focus:bg-slate-800 border border-slate-200/80 dark:border-slate-700 focus:border-indigo-500 text-slate-800 dark:text-slate-200 outline-none transition-all shadow-2xs"
-                          title="Edit alasan izin langsung di tabel (Excel-style)"
+                          placeholder="-"
+                          className="w-full px-2 py-1 text-xs text-slate-700 dark:text-slate-300 rounded bg-transparent hover:bg-slate-100/70 dark:hover:bg-slate-800/60 focus:bg-white dark:focus:bg-slate-800 border border-transparent focus:border-slate-300 dark:focus:border-slate-600 outline-none transition-all"
+                          title="Edit alasan izin"
                         />
                       </td>
 
                       {/* Pengawas Mengetahui - Kolom Otomatis Melebar & Inline Editable */}
-                      <td className="py-3 px-3.5 whitespace-nowrap min-w-[200px]" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center gap-1.5 w-auto">
-                          <ShieldCheck className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400 shrink-0" />
-                          <input
-                            type="text"
-                            defaultValue={item.pengawasMengetahui || ''}
-                            key={`${item.id}-pm-${item.pengawasMengetahui}`}
-                            onBlur={(e) => {
-                              const val = e.target.value.trim();
-                              if (val !== (item.pengawasMengetahui || '')) {
-                                handleInlineUpdate(item.id, 'pengawasMengetahui', val);
-                              }
-                            }}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                (e.target as HTMLInputElement).blur();
-                              }
-                            }}
-                            placeholder="Pengawas..."
-                            style={{ width: `${Math.max(16, (item.pengawasMengetahui || 'Pengawas...').length + 2)}ch` }}
-                            className="max-w-[340px] px-2.5 py-1 text-xs font-semibold rounded bg-slate-50/70 dark:bg-slate-800/60 hover:bg-white dark:hover:bg-slate-800 focus:bg-white dark:focus:bg-slate-800 border border-slate-200/80 dark:border-slate-700 focus:border-teal-500 text-slate-800 dark:text-slate-200 outline-none transition-all shadow-2xs"
-                            title="Edit pengawas mengetahui langsung di tabel (Excel-style)"
-                          />
-                        </div>
+                      <td className="py-2.5 px-3.5 whitespace-nowrap min-w-[180px]" onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="text"
+                          defaultValue={item.pengawasMengetahui || ''}
+                          key={`${item.id}-pm-${item.pengawasMengetahui}`}
+                          onBlur={(e) => {
+                            const val = e.target.value.trim();
+                            if (val !== (item.pengawasMengetahui || '')) {
+                              handleInlineUpdate(item.id, 'pengawasMengetahui', val);
+                            }
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              (e.target as HTMLInputElement).blur();
+                            }
+                          }}
+                          placeholder="Pengawas..."
+                          style={{ width: `${Math.max(14, (item.pengawasMengetahui || 'Pengawas...').length + 2)}ch` }}
+                          className="max-w-[300px] px-2 py-1 text-xs font-medium text-slate-800 dark:text-slate-200 rounded bg-transparent hover:bg-slate-100/70 dark:hover:bg-slate-800/60 focus:bg-white dark:focus:bg-slate-800 border border-transparent focus:border-slate-300 dark:focus:border-slate-600 outline-none transition-all"
+                          title="Edit pengawas mengetahui"
+                        />
                         {isSheetSource && (
-                          <span className="text-[9px] text-slate-400 font-medium block mt-0.5 whitespace-nowrap">
-                            Google Sheet Verified
+                          <span className="text-[9.5px] text-slate-400 block px-2 whitespace-nowrap">
+                            Sheet Verified
                           </span>
                         )}
                       </td>
 
                       {/* Bukti Lampiran */}
-                      <td className="py-3 px-3.5 text-center" onClick={(e) => e.stopPropagation()}>
+                      <td className="py-2.5 px-3.5 text-center" onClick={(e) => e.stopPropagation()}>
                         {item.lampiran ? (
                           <a
                             href={item.lampiran}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/60 text-indigo-600 dark:text-indigo-400 text-[11px] font-bold transition-colors"
+                            className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200 hover:underline transition-colors"
+                            title="Buka lampiran bukti"
                           >
-                            <Paperclip className="w-3 h-3" />
-                            <span>Lihat Bukti</span>
+                            <Paperclip className="w-3 h-3 text-slate-400" />
+                            <span>Bukti</span>
                           </a>
                         ) : (
-                          <span className="text-[10px] text-slate-400">-</span>
+                          <span className="text-[11px] text-slate-300 dark:text-slate-600">-</span>
                         )}
                       </td>
 
                       {/* Keterangan - Manual Dropdown Selector */}
-                      <td className="py-3 px-3.5 text-center" onClick={(e) => e.stopPropagation()}>
+                      <td className="py-2.5 px-3.5 text-center" onClick={(e) => e.stopPropagation()}>
                         <select
                           value={item.acc || 'Pending'}
                           onChange={(e) => handleInlineUpdate(item.id, 'acc', e.target.value)}
-                          className={`px-2.5 py-1 rounded-lg text-[10.5px] font-bold border cursor-pointer outline-none transition-all shadow-2xs ${
+                          className={`px-2 py-0.5 rounded-md text-[10.5px] font-semibold border cursor-pointer outline-none transition-all ${
                             item.acc === 'Izin Selesai'
-                              ? 'bg-emerald-50 text-emerald-800 border-emerald-300 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-700'
+                              ? 'bg-slate-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800'
                               : item.acc === 'Disetujui' || item.acc?.toLowerCase().includes('setuju')
-                              ? 'bg-sky-50 text-sky-800 border-sky-300 dark:bg-sky-950/60 dark:text-sky-300 dark:border-sky-700'
+                              ? 'bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700'
                               : item.acc === 'Ditolak'
-                              ? 'bg-rose-50 text-rose-800 border-rose-300 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-700'
-                              : 'bg-amber-50 text-amber-800 border-amber-300 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-700'
+                              ? 'bg-rose-50/60 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800'
+                              : 'bg-amber-50/60 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800'
                           }`}
-                          title="Ubah Keterangan izin secara manual"
+                          title="Ubah Keterangan"
                         >
                           <option value="Pending">Pending</option>
                           <option value="Disetujui">Disetujui</option>
@@ -2659,19 +2648,19 @@ export function EmployeeLeavesScreen({
                       </td>
 
                       {/* Kolom Warning: Muncul jika belum 'Izin Selesai' dalam 2 hari dari tanggal izin */}
-                      <td className="py-3 px-3.5 text-center" onClick={(e) => e.stopPropagation()}>
+                      <td className="py-2.5 px-3.5 text-center" onClick={(e) => e.stopPropagation()}>
                         {isOverdue2Days && item.acc !== 'Izin Selesai' ? (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300 border border-rose-200 dark:border-rose-800 shadow-2xs whitespace-nowrap animate-pulse">
-                            <AlertTriangle className="w-3 h-3 text-rose-600 dark:text-rose-400 shrink-0" />
-                            <span>Izin telah lewat 2 Hari</span>
+                          <span className="inline-flex items-center gap-1 text-[11px] font-medium text-rose-600 dark:text-rose-400 whitespace-nowrap" title="Izin telah lewat 2 hari">
+                            <AlertTriangle className="w-3 h-3 shrink-0" />
+                            <span>&gt; 2 Hari</span>
                           </span>
                         ) : item.acc === 'Izin Selesai' ? (
-                          <span className="inline-flex items-center gap-1 text-[10.5px] font-semibold text-emerald-600 dark:text-emerald-400">
-                            <CheckCircle2 className="w-3.5 h-3.5" />
+                          <span className="inline-flex items-center gap-1 text-[11px] text-slate-400 dark:text-slate-500">
+                            <CheckCircle2 className="w-3 h-3 text-emerald-500" />
                             <span>Selesai</span>
                           </span>
                         ) : (
-                          <span className="text-slate-400 text-xs">-</span>
+                          <span className="text-slate-300 dark:text-slate-600 text-xs">-</span>
                         )}
                       </td>
 
