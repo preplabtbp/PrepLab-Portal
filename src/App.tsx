@@ -128,6 +128,18 @@ import { LabBotWidget } from './components/LabBotWidget';
 import { HeaderModuleSearchBar } from './components/HeaderModuleSearchBar';
 import { DailySplashScreen } from './components/DailySplashScreen';
 
+// Idle background pre-loader for high-frequency modules (Labnote / Bulletin Board)
+if (typeof window !== 'undefined') {
+  const preloadCriticalModules = () => {
+    import('./components/bulletin-board').catch(() => {});
+  };
+  if ('requestIdleCallback' in window) {
+    (window as any).requestIdleCallback(() => preloadCriticalModules(), { timeout: 2500 });
+  } else {
+    setTimeout(preloadCriticalModules, 1500);
+  }
+}
+
 export default function App() {
 
   // Global WhatsApp & Inspection Completion modal state — lifted here so it survives route changes

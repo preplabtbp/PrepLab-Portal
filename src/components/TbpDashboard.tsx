@@ -74,6 +74,28 @@ const WeatherIcon = ({ code, className }: { code: number, className?: string }) 
   return <CloudRain className={`text-blue-400 ${className}`} />;
 };
 
+const GalleryCardImage = ({ src, alt }: { src: string; alt: string }) => {
+  const [loaded, setLoaded] = useState(false);
+  return (
+    <>
+      {!loaded && (
+        <div className="absolute inset-0 bg-slate-100 dark:bg-slate-800 flex items-center justify-center animate-pulse z-0">
+          <ImageIcon className="w-6 h-6 text-slate-300 dark:text-slate-600" />
+        </div>
+      )}
+      <img 
+        src={src} 
+        alt={alt} 
+        loading="lazy"
+        onLoad={() => setLoaded(true)}
+        className={`w-full h-full object-cover group-hover:scale-108 transition-all duration-500 relative z-1 ${
+          loaded ? 'opacity-100' : 'opacity-0'
+        }`} 
+      />
+    </>
+  );
+};
+
 interface TbpDashboardProps {
   posts: any[];
   onSelectPost: (post: any) => void;
@@ -1409,10 +1431,9 @@ export function TbpDashboard({
                   borderColor: 'var(--border-main, rgba(51, 65, 85, 0.5))'
                 }}
               >
-                <img 
+                <GalleryCardImage 
                   src={imgSrc} 
                   alt={currentLabel || `Gallery ${num}`} 
-                  className="w-full h-full object-cover group-hover:scale-108 transition-transform duration-700" 
                 />
                 
                 {/* Subtle dark gradient overlay at bottom if label is shown */}

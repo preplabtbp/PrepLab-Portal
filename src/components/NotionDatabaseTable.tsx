@@ -2278,19 +2278,19 @@ export function NotionDatabaseTable({
 
   // Column templates definition
   const POPULAR_COLUMN_TEMPLATES = [
+    { name: 'Files & media', icon: '📎', defaultValue: '', desc: 'Lampiran berkas foto, PDF, dokumen, atau media tugas' },
     { name: 'Created Time', icon: '🕒', defaultValue: '-', desc: 'Tanggal pembuatan tugas (otomatis saat dibuat)' },
     { name: 'Status', icon: '🏷️', defaultValue: 'Open', desc: 'Dropdown status progress tugas' },
     { name: 'Completed Time', icon: '✓', defaultValue: '-', desc: 'Tanggal atau waktu penyelesaian tugas' },
+    { name: 'Due Date', icon: '🎯', defaultValue: '-', desc: 'Batas tanggal penyelesaian tugas (Parameter Wajib KPI SLA)' },
     { name: 'Priority', icon: '⚡', defaultValue: 'Normal', desc: 'Tingkat urgensi kegiatan' },
     { name: 'PIC', icon: '👤', defaultValue: '', desc: 'Personil penanggung jawab' },
     { name: 'Activity (routine/non routine)', icon: '🔄', defaultValue: 'Routine', desc: 'Klasifikasi aktivitas rutin/non-rutin' },
     { name: 'period', icon: '⏱️', defaultValue: 'Weekly', desc: 'Periode waktu kegiatan' },
-    { name: 'Due Date', icon: '🎯', defaultValue: '-', desc: 'Batas tanggal penyelesaian tugas (Parameter Wajib KPI SLA)' },
     { name: 'Lokasi / Area', icon: '📍', defaultValue: 'Site Obi', desc: 'Lokasi fisik pelaksanaan tugas' },
     { name: 'Departemen', icon: '🏢', defaultValue: 'Laboratorium', desc: 'Seksi atau departemen pelaksana' },
     { name: 'Catatan Tambahan', icon: '📝', defaultValue: '-', desc: 'Rincian atau catatan ekstra' },
     { name: 'Estimasi Biaya', icon: '💰', defaultValue: '-', desc: 'Anggaran atau estimasi biaya (opsional)' },
-    { name: 'Files & media', icon: '📎', defaultValue: '', desc: 'Lampiran berkas foto, PDF, dokumen, atau media tugas' },
   ];
 
   // Canonical order weight for explicitly resetting column order via 'Rapikan Urutan Kolom'
@@ -8943,6 +8943,53 @@ export function NotionDatabaseTable({
                         <span>Tambah Kolom Baru</span>
                       </div>
 
+                      {/* Featured Quick Add: Files & Media */}
+                      {(() => {
+                        const hasFilesCol = tableHeaders.some(h => {
+                          const l = h.toLowerCase().trim();
+                          return l.includes('file') || l.includes('media') || l.includes('lampiran') || l.includes('attachment') || l.includes('berkas');
+                        });
+                        return (
+                          <div 
+                            className="p-2 mb-2 rounded-xl border flex items-center justify-between transition-colors shadow-2xs"
+                            style={{
+                              backgroundColor: hasFilesCol 
+                                ? (isNotionLight ? '#f1f5f9' : '#1e293b') 
+                                : (isNotionLight ? '#f0fdfa' : 'rgba(20, 184, 166, 0.12)'),
+                              borderColor: hasFilesCol 
+                                ? (isNotionLight ? '#e2e8f0' : '#334155') 
+                                : 'rgba(20, 184, 166, 0.4)'
+                            }}
+                          >
+                            <div className="flex items-center gap-2 min-w-0 pr-1">
+                              <div className="w-7 h-7 rounded-lg bg-teal-500/20 text-teal-600 dark:text-teal-400 flex items-center justify-center shrink-0">
+                                <Paperclip className="w-4 h-4" />
+                              </div>
+                              <div className="min-w-0">
+                                <p className="font-bold text-xs truncate" style={{ color: 'var(--text-main, #0f172a)' }}>
+                                  Files &amp; media
+                                </p>
+                                <p className="text-[10px] truncate" style={{ color: 'var(--text-muted, #64748b)' }}>
+                                  Upload foto, PDF &amp; dokumen
+                                </p>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              disabled={hasFilesCol}
+                              onClick={() => handleAddColumn('Files & media')}
+                              className={`px-2.5 py-1 rounded-lg text-xs font-bold shrink-0 transition-all cursor-pointer ${
+                                hasFilesCol
+                                  ? 'opacity-50 cursor-not-allowed bg-slate-200 dark:bg-slate-700 text-slate-500'
+                                  : 'bg-teal-600 hover:bg-teal-500 text-white shadow-xs'
+                              }`}
+                            >
+                              {hasFilesCol ? 'Ada' : '+ Tambah'}
+                            </button>
+                          </div>
+                        );
+                      })()}
+
                       {/* Custom Column Input */}
                       <div 
                         className="p-1.5 mb-2 rounded-xl border"
@@ -8995,7 +9042,13 @@ export function NotionDatabaseTable({
                       </div>
                       <div className="space-y-0.5 max-h-48 overflow-y-auto pr-1">
                         {POPULAR_COLUMN_TEMPLATES.map((tmpl) => {
-                          const isAlreadyAdded = tableHeaders.some(h => h.toLowerCase() === tmpl.name.toLowerCase());
+                          const isAlreadyAdded = tableHeaders.some(h => {
+                            const l = h.toLowerCase().trim();
+                            if (tmpl.name === 'Files & media') {
+                              return l.includes('file') || l.includes('media') || l.includes('lampiran') || l.includes('attachment') || l.includes('berkas');
+                            }
+                            return l === tmpl.name.toLowerCase();
+                          });
                           return (
                             <button
                               key={tmpl.name}

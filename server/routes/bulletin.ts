@@ -25,11 +25,46 @@ interface BulletinListCache {
   timestamp: number;
 }
 const bulletinListCache = new Map<string, BulletinListCache>();
-const BULLETIN_CACHE_TTL_MS = 60 * 1000; // 60 seconds
+const BULLETIN_CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes cache TTL for instant responses
 
 export function clearBulletinCache() {
   bulletinListCache.clear();
 }
+
+// Background pre-warmer to eliminate cold-start DB latency for all users
+export async function warmBulletinCache() {
+  try {
+    for (const targetPt of ['ALL', 'TBP', 'GTS']) {
+      const conditions: any[] = [];
+      if (targetPt === 'GTS') {
+        conditions.push(eq(bulletinPosts.pt, 'GTS'));
+      } else if (targetPt !== 'ALL') {
+        conditions.push(or(
+          eq(bulletinPosts.pt, 'TBP'),
+          eq(bulletinPosts.pt, 'GPS'),
+          eq(bulletinPosts.pt, 'TBP_GPS'),
+          isNull(bulletinPosts.pt)
+        ));
+      }
+      let baseQuery = db.select().from(bulletinPosts);
+      if (conditions.length > 0) {
+        baseQuery = baseQuery.where(and(...conditions)) as any;
+      }
+      const data = await (baseQuery as any).orderBy(bulletinPosts.createdAt);
+      if (Array.isArray(data) && data.length > 0) {
+        bulletinListCache.set(`${targetPt}_ALL_ALL`, { data, timestamp: Date.now() });
+      }
+    }
+    console.log('[Bulletin Cache] Pre-warming completed successfully.');
+  } catch (err: any) {
+    console.warn('[Bulletin Cache] Pre-warming notice:', err?.message);
+  }
+}
+
+// Warm cache automatically in background shortly after startup
+setTimeout(() => {
+  warmBulletinCache();
+}, 2000);
 
 router.get("/api/bulletin", async (req, res) => {
     try {
@@ -37,8 +72,9 @@ router.get("/api/bulletin", async (req, res) => {
       
       const isSuperUser = nik === '02D24000043' || nik === '02D25000055' || nik === 'M0403240177' || nik === 'preplabadmin';
 
-      // Fast in-memory cache lookup
-      const cacheKey = `${pt || 'DEFAULT'}_${nik || 'ALL'}_${page || 'ALL'}_${limit || 'ALL'}`;
+      // Normalize effective universe so all users for the same universe share the high-speed cache
+      const effectivePt = (pt === 'ALL' || (isSuperUser && !pt)) ? 'ALL' : (pt === 'GTS' ? 'GTS' : 'TBP');
+      const cacheKey = `${effectivePt}_${page || 'ALL'}_${limit || 'ALL'}`;
       const cached = bulletinListCache.get(cacheKey);
       if (cached && (Date.now() - cached.timestamp < BULLETIN_CACHE_TTL_MS)) {
         return res.json({ status: "success", data: cached.data });
