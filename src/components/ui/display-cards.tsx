@@ -46,6 +46,35 @@ export function DisplayCard({
   );
 }
 
+// Versi HP: kartu datar selebar layar (tumpukan 3D bergantung pada hover & terlalu lebar untuk layar sentuh)
+function DisplayCardMobile({
+  icon = <Sparkles className="size-5 text-teal-600" />,
+  title = "Featured",
+  description = "Discover amazing content",
+  date = "Just now",
+  iconClassName = "text-teal-600",
+  titleClassName = "text-teal-800",
+  onClick,
+}: DisplayCardProps) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="w-full flex items-center gap-3 rounded-2xl border border-slate-200/90 bg-white/95 backdrop-blur-md px-4 py-3.5 text-left shadow-md active:scale-[0.98] active:border-teal-500/70 transition-all cursor-pointer"
+    >
+      <span className={cn("shrink-0 rounded-xl bg-slate-100 p-2.5 border border-slate-200/80 shadow-2xs", iconClassName)}>
+        {icon}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className={cn("block text-base font-black text-slate-900 tracking-tight leading-tight", titleClassName)}>{title}</span>
+        <span className="block text-xs font-semibold text-slate-700 leading-snug mt-0.5 line-clamp-2">{description}</span>
+        <span className="block text-[11px] font-semibold text-slate-500 mt-1 truncate">{date}</span>
+      </span>
+      <span className="shrink-0 text-teal-600 text-lg font-bold">›</span>
+    </button>
+  );
+}
+
 export interface DisplayCardsProps {
   cards?: DisplayCardProps[];
   className?: string;
@@ -73,18 +102,28 @@ export default function DisplayCards({ cards, className }: DisplayCardsProps) {
   const displayCards = cards || defaultCards;
 
   return (
-    <div className={cn("grid [grid-template-areas:'stack'] place-items-center opacity-100 animate-in fade-in-0 duration-700 min-h-[380px] sm:min-h-[440px] pt-4 pb-16 sm:pb-24 px-4 overflow-visible", className)}>
-      {displayCards.map((cardProps, index) => {
-        const hasStackClass = cardProps.className && cardProps.className.includes("[grid-area:stack]");
-        const stackClass = hasStackClass ? "" : defaultPositions[index % defaultPositions.length];
-        return (
-          <DisplayCard
-            key={index}
-            {...cardProps}
-            className={cn(stackClass, cardProps.className)}
-          />
-        );
-      })}
-    </div>
+    <>
+      {/* HP: daftar kartu vertikal */}
+      <div className="sm:hidden w-full max-w-md mx-auto flex flex-col gap-3 animate-in fade-in-0 duration-500">
+        {displayCards.map(({ className: _stack, ...cardProps }, index) => (
+          <DisplayCardMobile key={index} {...cardProps} />
+        ))}
+      </div>
+
+      {/* Tablet & desktop: tumpukan kartu 3D */}
+      <div className={cn("hidden sm:grid [grid-template-areas:'stack'] place-items-center opacity-100 animate-in fade-in-0 duration-700 min-h-[380px] sm:min-h-[440px] pt-4 pb-16 sm:pb-24 px-4 overflow-visible", className)}>
+        {displayCards.map((cardProps, index) => {
+          const hasStackClass = cardProps.className && cardProps.className.includes("[grid-area:stack]");
+          const stackClass = hasStackClass ? "" : defaultPositions[index % defaultPositions.length];
+          return (
+            <DisplayCard
+              key={index}
+              {...cardProps}
+              className={cn(stackClass, cardProps.className)}
+            />
+          );
+        })}
+      </div>
+    </>
   );
 }

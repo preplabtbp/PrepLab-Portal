@@ -12,6 +12,7 @@ import { BungkusRecapSheet, buildBungkusRecap, downloadBungkusRecapPdf, recapTit
 import { mealCounts, bungkusCount, MEAL_SLOT_BY_GROUP, type MealSlot } from '../utils/meal-bungkus-counts';
 import { MealBungkusStats } from './meal-bungkus-stats';
 import DisplayCards, { DisplayCardProps } from './ui/display-cards';
+import { MenuTabBackdrop } from './ui/menu-tab-backdrop';
 
 // Posisi tumpukan 3D untuk 4 kartu landing (DisplayCards bawaan hanya 3 posisi)
 const MEAL_CARD_POSITIONS = [
@@ -744,6 +745,9 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
 
       let jenisMeal = '-';
       if (isCuti) {
+        jenisMeal = 'Bungkusan';
+      } else if (isRowBelumLapor(r) && !hasKantin && !hasBungkus) {
+        // PERMINTAAN USER: Wajib Lapor dengan orderan kosong → Jenis Meal tetap "Bungkusan" pada Export Excel
         jenisMeal = 'Bungkusan';
       } else if (isOffWithMealCR) {
         jenisMeal = 'Kantin';
@@ -1533,7 +1537,8 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
               </div>
             )}
 
-            <div className="bg-white rounded-3xl border border-slate-200/90 p-6 sm:p-12 shadow-sm text-center space-y-8 animate-in fade-in duration-500 relative overflow-hidden">
+            <div className="min-h-[calc(100vh-11rem)] flex flex-col justify-center bg-white rounded-3xl px-4 sm:px-8 py-10 sm:py-14 text-center space-y-8 sm:space-y-10 animate-in fade-in duration-500 relative overflow-hidden">
+            <MenuTabBackdrop />
               <div className="max-w-2xl mx-auto space-y-3 relative z-10">
                 <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full text-[11px] font-extrabold uppercase tracking-wider bg-emerald-50 text-emerald-800 border border-emerald-200/80 shadow-2xs">
                   <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
@@ -1553,9 +1558,9 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                 <DisplayCards cards={mealDisplayCards} className="min-h-[460px] sm:min-h-[540px]" />
               </div>
 
-              <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold text-slate-500 bg-slate-50 border border-slate-200/70 shadow-2xs relative z-10">
+              <div className="self-center inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold text-slate-500 bg-slate-50 border border-slate-200/70 shadow-2xs relative z-10">
                 <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Arahkan kursor &amp; klik salah satu kartu di atas untuk membuka lembar kerja secara instan</span>
+                <span>Klik salah satu kartu untuk membuka lembar kerja</span>
               </div>
             </div>
           </div>

@@ -650,3 +650,28 @@ h4,
   background-color: #0e7490;
   color: #f8fafc;
 }
+/* Menu Tab dengan background gelap (lihat src/components/ui/menu-tab-backdrop.tsx):
+   judul & deskripsi otomatis putih agar tetap terbaca */
+:has(> .menu-tab-backdrop[data-dark="true"]) > div > h2 {
+  color: #ffffff;
+  text-shadow: 0 2px 12px rgba(2, 6, 23, 0.55);
+}
+:has(> .menu-tab-backdrop[data-dark="true"]) > div > h2 + p {
+  color: rgba(255, 255, 255, 0.88);
+  text-shadow: 0 1px 8px rgba(2, 6, 23, 0.5);
+}
+/* Elemen bertanda di halaman ber-background (mis. Zona Administrasi) */
+:has(> .menu-tab-backdrop[data-dark="true"]) .menu-tab-title {
+  color: #ffffff;
+  text-shadow: 0 2px 12px rgba(2, 6, 23, 0.55);
+}
+:has(> .menu-tab-backdrop[data-dark="true"]) .menu-tab-subtitle {
+  color: rgba(255, 255, 255, 0.88);
+  text-shadow: 0 1px 8px rgba(2, 6, 23, 0.5);
+}
+:has(> .menu-tab-backdrop[data-dark="true"]) .menu-tab-on-dark {
+  color: #ffffff;
+}
+:has(> .menu-tab-backdrop[data-dark="true"]) > .menu-tab-glow {
+  opacity: 0;
+}

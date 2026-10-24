@@ -39,6 +39,7 @@ import * as XLSX from 'xlsx';
 import { toast } from 'sonner';
 import { EmployeeTardinessDiagram } from './employee-tardiness-diagram';
 import DisplayCards, { DisplayCardProps } from './ui/display-cards';
+import { MenuTabBackdrop } from './ui/menu-tab-backdrop';
 import { useTableColumnResize, ColumnResizeHandle, ColumnDef } from '../hooks/useTableColumnResize';
 
 export const TARDINESS_COLUMNS: ColumnDef[] = [
@@ -636,7 +637,8 @@ export function EmployeeTardinessScreen({
         </div>
       )}
       {viewTab === 'landing' && (
-        <div className="bg-white rounded-3xl border border-slate-200/90 p-6 sm:p-12 shadow-sm text-center space-y-8 animate-in fade-in duration-500 relative overflow-hidden">
+        <div className="min-h-[calc(100vh-11rem)] flex flex-col justify-center bg-white rounded-3xl px-4 sm:px-8 py-10 sm:py-14 text-center space-y-8 sm:space-y-10 animate-in fade-in duration-500 relative overflow-hidden">
+            <MenuTabBackdrop />
           <div className="max-w-2xl mx-auto space-y-3 relative z-10">
             <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full text-[11px] font-extrabold uppercase tracking-wider bg-rose-50 text-rose-800 border border-rose-200/80 shadow-2xs">
               <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
@@ -656,9 +658,9 @@ export function EmployeeTardinessScreen({
             <DisplayCards cards={tardinessDisplayCards} />
           </div>
 
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold text-slate-500 bg-slate-50 border border-slate-200/70 shadow-2xs relative z-10">
+          <div className="self-center inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold text-slate-500 bg-slate-50 border border-slate-200/70 shadow-2xs relative z-10">
             <Sparkles className="w-3.5 h-3.5 text-rose-600" />
-            <span>Arahkan kursor &amp; klik salah satu kartu di atas untuk membuka lembar kerja secara instan</span>
+            <span>Klik salah satu kartu untuk membuka lembar kerja</span>
           </div>
         </div>
       )}

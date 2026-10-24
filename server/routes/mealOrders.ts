@@ -1017,29 +1017,49 @@ async function loadRosterForDate(date: string): Promise<{ emps: RosterEmp[]; sou
     for (const [mNik, mProf] of masterProfiles.entries()) {
       if (mProf.nama) masterByName.set(norm(mProf.nama), { nik: mNik, nama: mProf.nama });
     }
+    // Pencocokan roster → orderan HANYA lewat nama karyawan: NIK & nama resmi diambil dari orderan terbaru
+    // Urutan: orderan tanggal ini dulu, lalu tanggal terdekat sebelumnya — agar NIK orderan tidak pernah berubah
+    const orderNameRows = await db.select({ nik: mealOrders.nik, nama: mealOrders.nama })
+      .from(mealOrders)
+      .orderBy(
+        sql`CASE WHEN ${mealOrders.orderDate} = ${date} THEN 0 WHEN ${mealOrders.orderDate} < ${date} THEN 1 ELSE 2 END`,
+        sql`ABS(${mealOrders.orderDate} - ${date}::date)`
+      );
+    const orderByName = new Map<string, { nik: string; nama: string }>();
+    const orderNamaByNik = new Map<string, string>();
+    for (const r of orderNameRows) {
+      const nik = String(r.nik || '').toUpperCase().trim();
+      if (!nik || !r.nama) continue;
+      const key = norm(r.nama);
+      if (!orderByName.has(key)) orderByName.set(key, { nik, nama: r.nama });
+      if (!orderNamaByNik.has(nik)) orderNamaByNik.set(nik, r.nama);
+    }
 
   try {
     const sheet = await fetchRosterSheetForDate(dateFormats);
     if (sheet.dateFound && sheet.entries.length > 0) {
       return {
         source: 'sheet',
-        emps: sheet.entries.filter(e => !isInactive(e.nik.toUpperCase())).map(e => {
+        emps: sheet.entries.map(e => {
           const rawNik = e.nik.toUpperCase().trim();
           const nameKey = norm(e.name);
-          const matchedEmp = dbByNik.get(rawNik) || empByName.get(nameKey);
-          const matchedMasterByNik = masterProfiles.get(rawNik);
+          const matchedOrderByName = orderByName.get(nameKey);
           const matchedMasterByName = masterByName.get(nameKey);
+          const matchedEmpByName = empByName.get(nameKey);
 
-          // PENGUNCIAN NIK: Utamakan NIK resmi dari Database Karyawan atau Master Orderan Makanan
-          // JANGAN PERNAH menimpa NIK dengan NIK dari Google Sheet Roster!
-          const canonicalNik = matchedEmp?.nik
-            ? matchedEmp.nik.trim().toUpperCase()
-            : (matchedMasterByName ? matchedMasterByName.nik : (matchedMasterByNik ? rawNik : rawNik));
-          const canonicalName = matchedMasterByNik?.nama || matchedMasterByName?.nama || matchedEmp?.name || e.name;
+          // PENGUNCIAN NIK: roster dicocokkan ke orderan HANYA berdasarkan NAMA karyawan.
+          // NIK diambil dari Orderan Makanan → Master Orderan → Database Karyawan; NIK sheet roster hanya cadangan
+          // untuk karyawan yang namanya belum pernah ada di mana pun. JANGAN PERNAH menimpa NIK dari Google Sheet Roster!
+          const canonicalNik = matchedOrderByName?.nik
+            || (orderNamaByNik.has(rawNik) ? rawNik : null)
+            || matchedMasterByName?.nik
+            || (matchedEmpByName?.nik ? matchedEmpByName.nik.trim().toUpperCase() : null)
+            || rawNik;
+          const canonicalName = orderNamaByNik.get(canonicalNik) || matchedMasterByName?.nama || matchedEmpByName?.name || e.name;
 
           const profile = profileOf(canonicalNik, { statusMess: e.statusMess || null, pt: e.pt || null, shift: e.shift || null, section: e.section || null, tempatTinggal: null });
           return { nik: canonicalNik, name: canonicalName, ...profile, gol: e.gol || null, status: e.status };
-        }),
+        }).filter(e => !isInactive(e.nik)),
       };
     }
     console.warn(`[MealOrders] Tanggal ${date} belum ada di sheet Database Rooster — pakai tabel roster database`);
@@ -1062,12 +1082,17 @@ async function loadRosterForDate(date: string): Promise<{ emps: RosterEmp[]; sou
   return {
     source: 'database',
     emps: emps.map(e => {
-      const nik = e.nik.toUpperCase().trim();
+      const empNik = e.nik.toUpperCase().trim();
+      // NIK orderan dikunci: cocokkan lewat nama ke orderan, NIK Database Karyawan hanya cadangan
+      const nik = orderByName.get(norm(e.name))?.nik || empNik;
       const profile = profileOf(nik, { statusMess: e.statusMess, pt: e.pt, shift: e.shift, section: e.section, tempatTinggal: null });
-      return { nik: e.nik, name: e.name, ...profile, gol: e.gol, status: rosterByNik.get(nik) || '-' };
+      return { nik, name: orderNamaByNik.get(nik) || e.name, ...profile, gol: e.gol, status: rosterByNik.get(empNik) || '-' };
     }),
   };
 }
+
+// Kolom profil orderan yang tidak boleh ditimpa sinkronisasi roster (hanya via Edit pribadi / "Perbarui Profil Karyawan")
+const PROFILE_LOCKED_FIELDS = ['nama', 'statusMess', 'pt', 'shift', 'section', 'tempatTinggal'];
 
 export async function syncMealOrdersFromRoster(date: string, updatedBy = 'system', overwrite = false): Promise<{ synced: number; removed: number; source: RosterSource }> {
   await ensureMealOrdersTable();
@@ -1087,7 +1112,7 @@ export async function syncMealOrdersFromRoster(date: string, updatedBy = 'system
   // 2. Karyawan yang sudah ada di tanggal tsb: profilnya (Status Mess, PT, Shift, Section, Tempat Tinggal) tidak disinkronkan
   //    dari roster — yang dipakai dari roster hanya kode kehadiran; aturan makan dihitung dari profil di orderan.
   const existingRows = await db.select({
-    nik: mealOrders.nik, sortNo: mealOrders.sortNo, statusMess: mealOrders.statusMess, pt: mealOrders.pt, shift: mealOrders.shift,
+    nik: mealOrders.nik, nama: mealOrders.nama, sortNo: mealOrders.sortNo, statusMess: mealOrders.statusMess, pt: mealOrders.pt, shift: mealOrders.shift,
     section: mealOrders.section, tempatTinggal: mealOrders.tempatTinggal,
     pilihanPagi: mealOrders.pilihanPagi, pilihanSore: mealOrders.pilihanSore, pagiLapangan: mealOrders.pagiLapangan, soreLapangan: mealOrders.soreLapangan,
     shiftKerja: mealOrders.shiftKerja,
@@ -1108,7 +1133,7 @@ export async function syncMealOrdersFromRoster(date: string, updatedBy = 'system
 
   // Riwayat profil terdekat dari tanggal lain agar PT & Residence karyawan tidak pernah berubah/hilang
   const lastOrders = await db.select({
-    nik: mealOrders.nik, pt: mealOrders.pt, tempatTinggal: mealOrders.tempatTinggal,
+    nik: mealOrders.nik, nama: mealOrders.nama, pt: mealOrders.pt, tempatTinggal: mealOrders.tempatTinggal,
     statusMess: mealOrders.statusMess, shift: mealOrders.shift, section: mealOrders.section,
   }).from(mealOrders)
     .where(sql`${mealOrders.orderDate} <> ${date}`)
@@ -1156,10 +1181,16 @@ export async function syncMealOrdersFromRoster(date: string, updatedBy = 'system
     // 2. Master PT resmi Orderan Makanan (masterProfiles acuan 2026-10-14)
     // 3. Riwayat PT orderan terdekat (lastOrdersByNik)
     // 4. Database Karyawan (empDbByNik)
-    const lockedStatusMess = current?.statusMess || master?.statusMess || empDbByNik.get(nik)?.statusMess || lastOrdersByNik.get(nik)?.statusMess || rosterEmp.statusMess || null;
-    const lockedPt = current?.pt || master?.pt || (lastOrdersByNik.get(nik)?.pt && lastOrdersByNik.get(nik)?.pt !== '-' ? lastOrdersByNik.get(nik)!.pt : null) || empDbByNik.get(nik)?.pt || rosterEmp.pt || null;
-    const lockedShift = current?.shift || master?.shift || lastOrdersByNik.get(nik)?.shift || empDbByNik.get(nik)?.shift || rosterEmp.shift || null;
-    const lockedSection = current?.section || master?.section || lastOrdersByNik.get(nik)?.section || empDbByNik.get(nik)?.section || rosterEmp.section || null;
+    // Profil TIDAK PERNAH diambil/ditimpa dari roster. Prioritas:
+    // 1. Baris orderan tanggal ini (current)
+    // 2. Riwayat orderan terdekat (memuat hasil Edit pribadi & "Perbarui Profil Karyawan")
+    // 3. Master Orderan Makanan → Database Karyawan → roster (hanya untuk karyawan yang belum pernah ada di orderan)
+    const last = lastOrdersByNik.get(nik);
+    const lockedStatusMess = current?.statusMess || last?.statusMess || master?.statusMess || empDbByNik.get(nik)?.statusMess || rosterEmp.statusMess || null;
+    const lockedPt = current?.pt || (last?.pt && last.pt !== '-' ? last.pt : null) || master?.pt || empDbByNik.get(nik)?.pt || rosterEmp.pt || null;
+    const lockedShift = current?.shift || last?.shift || master?.shift || empDbByNik.get(nik)?.shift || rosterEmp.shift || null;
+    const lockedSection = current?.section || last?.section || master?.section || empDbByNik.get(nik)?.section || rosterEmp.section || null;
+    const lockedNama = current?.nama || last?.nama || master?.nama || rosterEmp.name;
     const lockedTt = (current?.tempatTinggal && current.tempatTinggal.length <= 25 ? current.tempatTinggal : null)
       || (lastOrdersByNik.get(nik)?.tempatTinggal && lastOrdersByNik.get(nik)!.tempatTinggal!.length <= 25 ? lastOrdersByNik.get(nik)!.tempatTinggal : null)
       || masterTtByNik.get(nik)
@@ -1213,7 +1244,7 @@ export async function syncMealOrdersFromRoster(date: string, updatedBy = 'system
 
     const emp = {
       ...rosterEmp,
-      nama: master?.nama || rosterEmp.name,
+      nama: lockedNama,
       statusMess: lockedStatusMess,
       pt: lockedPt,
       shift: lockedShift,
@@ -1357,7 +1388,8 @@ export async function syncMealOrdersFromRoster(date: string, updatedBy = 'system
     await db.insert(mealOrders).values(chunk)
       .onConflictDoUpdate({
         target: [mealOrders.orderDate, mealOrders.nik],
-        // Menjaga konsistensi identitas profil master + menyelaraskan kehadiran dan porsi
+        // Profil (Urutan, Nama, Status Mess, PT, Shift, Section, Residence) yang sudah tersimpan TIDAK ditimpa roster —
+        // hanya diisi bila masih kosong. Kehadiran & porsi tetap diselaraskan dengan roster.
         set: Object.fromEntries([
           'sortNo', 'nama', 'statusMess', 'pt', 'shift', 'section', 'tempatTinggal',
           'statusKerja', 'shiftKerja',
@@ -1366,10 +1398,10 @@ export async function syncMealOrdersFromRoster(date: string, updatedBy = 'system
           'updatedBy', 'updatedAt'
         ].map(f => [f, f === 'catatan'
           ? sql.raw(`CASE WHEN excluded.keterangan_lapor ILIKE '%lapor%' THEN NULL ELSE COALESCE(NULLIF(TRIM(excluded.catatan), ''), meal_orders.catatan) END`)
-          : f === 'pt'
-          ? sql.raw(`COALESCE(NULLIF(TRIM(meal_orders.pt), ''), excluded.pt)`)
-          : f === 'tempatTinggal'
-          ? sql.raw(`COALESCE(NULLIF(TRIM(meal_orders.tempat_tinggal), ''), excluded.tempat_tinggal)`)
+          : f === 'sortNo'
+          ? sql.raw(`COALESCE(meal_orders.sort_no, excluded.sort_no)`)
+          : PROFILE_LOCKED_FIELDS.includes(f)
+          ? sql.raw(`COALESCE(NULLIF(TRIM(meal_orders.${toSnake(f)}), ''), excluded.${toSnake(f)})`)
           : sql.raw(`excluded.${toSnake(f)}`)]))
       });
   }
@@ -1397,7 +1429,7 @@ export async function syncSingleEmployeeMealOrder(nik: string, dateStr: string, 
 
     // Profil dari orderan tanggal tsb (Status Mess, Shift, Tempat Tinggal, Keterangan Lapor, Catatan) — dari roster hanya kode kehadiran
     const [current] = await db.select({
-      statusMess: mealOrders.statusMess, shift: mealOrders.shift, tempatTinggal: mealOrders.tempatTinggal,
+      statusMess: mealOrders.statusMess, shift: mealOrders.shift, section: mealOrders.section, tempatTinggal: mealOrders.tempatTinggal,
       pilihanPagi: mealOrders.pilihanPagi, pilihanSore: mealOrders.pilihanSore, pagiLapangan: mealOrders.pagiLapangan, soreLapangan: mealOrders.soreLapangan,
       shiftKerja: mealOrders.shiftKerja,
       keteranganLapor: mealOrders.keteranganLapor,
@@ -1411,9 +1443,11 @@ export async function syncSingleEmployeeMealOrder(nik: string, dateStr: string, 
     const prevStatuses = await loadPreviousRosterStatuses(ymd, cleanNik);
     const prevStatus = prevStatuses.get(cleanNik);
     const refCatatanMap = await loadReferenceCatatanMap(ymd);
-    const lockedStatusMess = master?.statusMess || current.statusMess;
-    const lockedShift = master?.shift || current.shift;
-    const lockedSection = master?.section || emp.section;
+    // Profil (Status Mess, Shift, Section, Residence) dikunci dari baris orderan itu sendiri — roster tidak pernah menimpanya.
+    // Hanya Edit pribadi atau tombol "Perbarui Profil Karyawan" yang boleh merubah profil.
+    const lockedStatusMess = current.statusMess || master?.statusMess || null;
+    const lockedShift = current.shift || master?.shift || null;
+    const lockedSection = current.section || master?.section || emp.section;
     const lockedTt = (current.tempatTinggal && current.tempatTinggal.length <= 25 ? current.tempatTinggal : null) || master?.tempatTinggal || null;
     const currentCatatan = current.catatan && current.catatan !== '-' && !current.catatan.startsWith('Cuti') ? current.catatan : null;
     let lockedCatatan = currentCatatan || refCatatanMap.get(cleanNik) || null;
@@ -1547,14 +1581,8 @@ export async function syncSingleEmployeeMealOrder(nik: string, dateStr: string, 
       finalCatatan = null;
     }
 
+    // Kolom profil (Urutan, Nama, NIK, Status Mess, PT, Shift, Section, Residence) sengaja TIDAK ikut diperbarui
     const updateValues: any = {
-      ...(master?.sortNo != null ? { sortNo: master.sortNo } : {}),
-      ...(master?.nama ? { nama: master.nama } : {}),
-      ...(lockedStatusMess ? { statusMess: lockedStatusMess } : {}),
-      ...(master?.pt ? { pt: master.pt } : {}),
-      ...(lockedShift ? { shift: lockedShift } : {}),
-      ...(lockedSection ? { section: lockedSection } : {}),
-      ...(lockedTt ? { tempatTinggal: lockedTt } : {}),
       statusKerja: computed.statusKerja,
       shiftKerja: computed.shiftKerja,
       pagiKantin: computed.pagiKantin,
@@ -1697,8 +1725,8 @@ async function getMealOrderRowsWithLatestProfiles(date: string) {
       const nKey = norm(r.nama);
       const master = masterProfiles.get(k);
       const emp = empByNik.get(k) || empByName.get(nKey);
-      // NIK & Nama dikunci sesuai master / data tanggal terdekat yang sudah tersimpan
-      const canonicalNik = emp?.nik ? emp.nik.trim().toUpperCase() : r.nik;
+      // NIK & Nama dikunci sesuai data orderan tanggal terdekat (berganti hari tidak merubah profil)
+      const canonicalNik = r.nik || (emp?.nik ? emp.nik.trim().toUpperCase() : r.nik);
       const canonicalNama = r.nama || master?.nama || emp?.name;
       const pt = r.pt || master?.pt || emp?.pt || null;
       const tempatTinggal = (r.tempatTinggal && r.tempatTinggal.length <= 25 ? r.tempatTinggal : null) || master?.tempatTinggal || null;
@@ -1883,7 +1911,16 @@ mealOrdersRouter.post("/api/meal-orders", requireMealManager, async (req, res) =
       return res.status(400).json({ status: "error", message: `${emp.name} berstatus ${emp.statusKaryawan || 'Nonaktif'} di Database Karyawan — tidak bisa ditambahkan ke Orderan Makanan.` });
     }
     const fields = pickFields(req.body);
-    const nama = fields.nama || emp?.name;
+    // Profil karyawan yang pernah ada di orderan diambil dari orderan terakhirnya (hasil Edit pribadi /
+    // "Perbarui Profil Karyawan"), bukan dari Database Karyawan — berganti hari tidak merubah profil.
+    const [lastOrder] = await db.select({
+      nama: mealOrders.nama, statusMess: mealOrders.statusMess, pt: mealOrders.pt, shift: mealOrders.shift,
+      section: mealOrders.section, tempatTinggal: mealOrders.tempatTinggal,
+    }).from(mealOrders)
+      .where(and(sql`UPPER(TRIM(${mealOrders.nik})) = ${nik}`, sql`${mealOrders.orderDate} <> ${date}`))
+      .orderBy(sql`CASE WHEN ${mealOrders.orderDate} < ${date} THEN 0 ELSE 1 END`, sql`ABS(${mealOrders.orderDate} - ${date}::date)`)
+      .limit(1);
+    const nama = fields.nama || lastOrder?.nama || emp?.name;
     if (!nama) return res.status(400).json({ status: "error", message: "Nama karyawan wajib diisi (NIK tidak ditemukan di Database Karyawan)." });
 
     if (fields.keteranganLapor && /belum\s*lapor|wajib\s*lapor/i.test(String(fields.keteranganLapor || ''))) {
@@ -1910,10 +1947,11 @@ mealOrdersRouter.post("/api/meal-orders", requireMealManager, async (req, res) =
       orderDate: date,
       nik,
       sortNo: fields.sortNo ?? maxNo + 1,
-      statusMess: emp?.statusMess ?? null,
-      pt: emp?.pt ?? null,
-      shift: emp?.shift ?? null,
-      section: emp?.section ?? null,
+      statusMess: lastOrder?.statusMess || emp?.statusMess || null,
+      pt: lastOrder?.pt || emp?.pt || null,
+      shift: lastOrder?.shift || emp?.shift || null,
+      section: lastOrder?.section || emp?.section || null,
+      ...(lastOrder?.tempatTinggal ? { tempatTinggal: lastOrder.tempatTinggal } : {}),
       ...fields,
       nama,
       updatedBy: updatedByOf(req),

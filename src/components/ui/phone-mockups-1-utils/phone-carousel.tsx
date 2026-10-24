@@ -162,8 +162,8 @@ export function PhoneCarousel({ images, initialIndex = 0, className, onActiveCha
       <div className={cn("flex flex-col items-center gap-3", frame === "box" ? "mt-8 sm:mt-10" : "mt-2")}>
         {(current.label || current.description) && (
           <div className="text-center px-4 min-h-[44px]">
-            {current.label && <p className="text-base sm:text-lg font-black tracking-tight text-foreground">{current.label}</p>}
-            {current.description && <p className="text-xs sm:text-sm font-medium text-[#64748b]">{current.description}</p>}
+            {current.label && <p className="menu-tab-title text-base sm:text-lg font-black tracking-tight text-foreground">{current.label}</p>}
+            {current.description && <p className="menu-tab-subtitle text-xs sm:text-sm font-medium text-[#64748b]">{current.description}</p>}
           </div>
         )}
         <div className="flex items-center gap-3">

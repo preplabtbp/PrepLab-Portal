@@ -607,7 +607,8 @@ export function ActionCenterBar({
         try { localStorage.setItem('p2h_cached_training_alerts', JSON.stringify(alerts)); } catch {}
       }
 
-      // Process Overdue Leaves Warning for Supervisor (> 2 hari belum Izin Selesai)
+      // Process Overdue Leaves Warning for Supervisor (>= 1 hari belum Izin Selesai / Approval HR;
+      // izin >= 5 hari ke belakang otomatis Approval HR kecuali Ditolak — sama dengan modul Rekapan Izin)
       if (leavesData && Array.isArray(leavesData.data)) {
         const todayWit = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jayapura' }).format(new Date());
         const myOverdue = leavesData.data.filter((l: any) => {
@@ -633,7 +634,8 @@ export function ActionCenterBar({
             dStart.setHours(0, 0, 0, 0);
             dToday.setHours(0, 0, 0, 0);
             const diffDays = Math.floor((dToday.getTime() - dStart.getTime()) / (1000 * 60 * 60 * 24));
-            return diffDays >= 2;
+            if (diffDays >= 5 && status !== 'ditolak') return false;
+            return diffDays >= 1;
           } catch {
             return false;
           }
@@ -1057,13 +1059,13 @@ export function ActionCenterBar({
     }
 
     // ==========================================
-    // 8. PERINGATAN IZIN KARYAWAN LEWAT 2 HARI (Pengawas Mengetahui)
+    // 8. PERINGATAN IZIN BELUM APPROVAL HR (Pengawas Mengetahui)
     // ==========================================
     if (overdueLeaves.length > 0) {
       list.push({
         id: 'leave_warning',
-        title: 'Peringatan Izin Karyawan Lewat 2 Hari',
-        subtitle: `${overdueLeaves.length} izin bawahan belum berstatus 'Izin Selesai' (> 2 hari)`,
+        title: 'Peringatan Izin Belum Approval HR',
+        subtitle: `${overdueLeaves.length} izin bawahan belum Approval HR (>= 1 hari)`,
         count: overdueLeaves.length,
         isPending: true,
         icon: <AlertTriangle className="w-4 h-4" />,
@@ -1498,7 +1500,7 @@ export function ActionCenterBar({
                         <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
                           <span className="px-2 py-0.5 rounded-full text-[10.5px] font-black bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30 flex items-center gap-1 animate-pulse">
                             <span>{cat.count}</span>
-                            <span className="hidden sm:inline font-bold text-[9.5px]">Lewat 2 Hari</span>
+                            <span className="hidden sm:inline font-bold text-[9.5px]">Belum Approval HR</span>
                           </span>
 
                           <button

@@ -44,6 +44,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { toast } from 'sonner';
 import { EmployeeLeavesAnalyticsChart } from './employee-leaves-analytics-chart';
 import DisplayCards, { DisplayCardProps } from './ui/display-cards';
+import { MenuTabBackdrop } from './ui/menu-tab-backdrop';
 
 export type DownloadScopeType = 'filtered' | 'today' | 'last_4_days' | 'last_7_days' | 'this_month' | 'all';
 export type PeriodShortcut = 'ALL' | 'TODAY' | 'WEEK' | 'MONTH' | 'YEAR' | 'CUSTOM';
@@ -101,26 +102,47 @@ export const isLeaveExpired = (item: { awalAbsensi?: string; akhirAbsensi?: stri
   return false;
 };
 
-// Helper: Cek apakah izin telah lewat 2 hari dan keterangan belum "Izin Selesai"
+// Label tampilan Keterangan izin. Nilai tersimpan (database & sheet) tetap 'Pending' / 'Izin Selesai'.
+export const LEAVE_ACC_LABELS: Record<string, string> = {
+  'Pending': 'Belum Ada Form Izin',
+  'Disetujui': 'Disetujui',
+  'Izin Selesai': 'Approval HR',
+  'Ditolak': 'Ditolak',
+};
+export const leaveAccLabel = (acc?: string | null): string => LEAVE_ACC_LABELS[acc || 'Pending'] || String(acc);
+
+// Batas hari: warning "Izin Belum Approval HR" & otomatis "Approval HR"
+export const LEAVE_WARNING_DAYS = 1;
+export const LEAVE_AUTO_APPROVAL_DAYS = 5;
+
+// Jumlah hari sejak tanggal mulai izin (null bila tanggal tidak valid)
+const daysSinceLeaveStart = (item: { awalAbsensi?: string; createdAt?: string }, todayStr: string): number | null => {
+  const dateStr = item.awalAbsensi || (item.createdAt ? String(item.createdAt).slice(0, 10) : '');
+  if (!dateStr) return null;
+  const dStart = new Date(dateStr);
+  const dToday = new Date(todayStr);
+  if (isNaN(dStart.getTime()) || isNaN(dToday.getTime())) return null;
+  dStart.setHours(0, 0, 0, 0);
+  dToday.setHours(0, 0, 0, 0);
+  return Math.floor((dToday.getTime() - dStart.getTime()) / (1000 * 60 * 60 * 24));
+};
+
+// Keterangan efektif: izin yang sudah >= 5 hari ke belakang otomatis "Izin Selesai" (Approval HR), kecuali Ditolak
+export const getEffectiveLeaveAcc = (item: { awalAbsensi?: string; createdAt?: string; acc?: string }, todayStr: string): string => {
+  const acc = item.acc || 'Pending';
+  if (acc === 'Ditolak' || acc === 'Izin Selesai') return acc;
+  const days = daysSinceLeaveStart(item, todayStr);
+  return days !== null && days >= LEAVE_AUTO_APPROVAL_DAYS ? 'Izin Selesai' : acc;
+};
+
+// Helper: Cek apakah izin telah lewat batas warning dan keterangan belum "Izin Selesai" (Approval HR)
 export const checkLeaveOverdue2Days = (item: { awalAbsensi?: string; createdAt?: string; acc?: string }, todayStr: string): boolean => {
-  const status = String(item.acc || '').trim().toLowerCase();
+  const status = getEffectiveLeaveAcc(item, todayStr).trim().toLowerCase();
   if (status === 'izin selesai' || status.includes('selesai')) {
     return false;
   }
-  const dateStr = item.awalAbsensi || (item.createdAt ? String(item.createdAt).slice(0, 10) : '');
-  if (!dateStr) return false;
-  try {
-    const dStart = new Date(dateStr);
-    const dToday = new Date(todayStr);
-    if (isNaN(dStart.getTime()) || isNaN(dToday.getTime())) return false;
-    dStart.setHours(0, 0, 0, 0);
-    dToday.setHours(0, 0, 0, 0);
-    const diffMs = dToday.getTime() - dStart.getTime();
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-    return diffDays >= 2;
-  } catch {
-    return false;
-  }
+  const days = daysSinceLeaveStart(item, todayStr);
+  return days !== null && days >= LEAVE_WARNING_DAYS;
 };
 
 const INDO_MONTHS_SHORT = [
@@ -797,7 +819,8 @@ export function EmployeeLeavesScreen({
       if (['i', 'ik', 'ss', 'sl'].includes(val)) {
         result = result.filter(item => (item.kategoriIzin || 'I').toLowerCase() === val);
       } else {
-        result = result.filter(item => (item.acc || '').toLowerCase().includes(val));
+        const today = getTodayWitDate();
+        result = result.filter(item => getEffectiveLeaveAcc(item, today).toLowerCase().includes(val));
       }
     }
 
@@ -1192,8 +1215,8 @@ export function EmployeeLeavesScreen({
       'Durasi Izin': item.lamanyaIzin || `${item.jumlah || 1} Hari`,
       'Alasan Izin': item.alasanAbsensi,
       'Pengawas Mengetahui (Gol II-V)': item.pengawasMengetahui || '-',
-      'Status ACC': item.acc || 'Pending',
-      'Status / Ket': isLeaveExpired(item, getTodayWitDate()) ? 'Izin Selesai' : (item.acc || 'Pending'),
+      'Status ACC': leaveAccLabel(getEffectiveLeaveAcc(item, getTodayWitDate())),
+      'Status / Ket': leaveAccLabel(isLeaveExpired(item, getTodayWitDate()) ? 'Izin Selesai' : getEffectiveLeaveAcc(item, getTodayWitDate())),
       'Disetujui Oleh': item.accBy || '-',
       'Lampiran Link': item.lampiran || '-',
       'Sumber Data': item.source === 'google_sheet' ? 'Google Sheet PrepLab Cloud' : 'Web Portal'
@@ -1289,7 +1312,7 @@ export function EmployeeLeavesScreen({
       formatLeaveDateIndo(item.akhirAbsensi) || item.akhirAbsensi || '',
       `"${(item.alasanAbsensi || '').replace(/"/g, '""')}"`,
       `"${(item.pengawasMengetahui || '').replace(/"/g, '""')}"`,
-      `"${item.acc || 'Pending'}"`
+      `"${leaveAccLabel(getEffectiveLeaveAcc(item, getTodayWitDate()))}"`
     ]);
 
     const csvContent = '\uFEFF' + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
@@ -1408,7 +1431,7 @@ export function EmployeeLeavesScreen({
                   <td style="padding: 6px; border: 1px solid #cbd5e1;">${r.alasanAbsensi}</td>
                   <td style="padding: 6px; border: 1px solid #cbd5e1; font-weight: 600;">${r.pengawasMengetahui || '-'}</td>
                   <td style="padding: 6px; border: 1px solid #cbd5e1; text-align: center; font-weight: bold; color: ${r.acc === 'Disetujui' ? '#15803d' : '#b45309'};">
-                    ${r.acc || 'Pending'}
+                    ${leaveAccLabel(getEffectiveLeaveAcc(r, getTodayWitDate()))}
                   </td>
                 </tr>
               `).join('')}
@@ -1647,7 +1670,7 @@ export function EmployeeLeavesScreen({
             <div style="background: #ffffff; border: 1px solid #e2e8f0; border-left: 4px solid #10b981; border-radius: 8px; padding: 8px 12px;">
               <div style="font-size: 10px; color: #64748b; font-weight: 700; text-transform: uppercase;">Status Approval</div>
               <div style="font-size: 14px; font-weight: 900; color: #15803d; margin-top: 2px;">
-                ${accCount} <span style="font-size: 10px; font-weight: 600; color: #16a34a;">ACC</span> &bull; ${pendingCount} <span style="font-size: 10px; font-weight: 600; color: #d97706;">Pending</span>
+                ${accCount} <span style="font-size: 10px; font-weight: 600; color: #16a34a;">ACC</span> &bull; ${pendingCount} <span style="font-size: 10px; font-weight: 600; color: #d97706;">Belum Ada Form Izin</span>
               </div>
             </div>
           </div>
@@ -1701,7 +1724,7 @@ export function EmployeeLeavesScreen({
                     </td>
                     <td style="padding: 5px 4px; border: 1px solid #cbd5e1; text-align: center;">
                       <span style="display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 9px; font-weight: 800; background: ${badgeBg}; color: ${badgeColor};">
-                        ${r.acc || 'Pending'}
+                        ${leaveAccLabel(getEffectiveLeaveAcc(r, getTodayWitDate()))}
                       </span>
                     </td>
                   </tr>
@@ -1826,8 +1849,9 @@ export function EmployeeLeavesScreen({
       )}
 
       {/* ==================================================== */}
-      {/* TOP HEADER & ACTION BAR                             */}
+      {/* TOP HEADER & ACTION BAR (hanya di dalam tab)         */}
       {/* ==================================================== */}
+      {activeSheet !== 'landing' && (
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-4 sm:p-6 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-800">
         <div>
           <div className="flex items-center gap-2 mb-1">
@@ -1846,17 +1870,9 @@ export function EmployeeLeavesScreen({
             ) : (
               <button
                 type="button"
-                onClick={() => {
-                  if (activeSheet !== 'landing') {
-                    setActiveSheet('landing');
-                    return;
-                  }
-                  if (onBack) onBack();
-                  else if (onNav) onNav('home');
-                  else window.history.back();
-                }}
+                onClick={() => setActiveSheet('landing')}
                 className="p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 hover:text-slate-900 transition-colors mr-1 cursor-pointer"
-                title={activeSheet !== 'landing' ? "Kembali ke Menu Tab (3D)" : "Kembali"}
+                title="Kembali ke Menu Tab"
               >
                 <ArrowLeft className="w-5 h-5" />
               </button>
@@ -2101,17 +2117,8 @@ export function EmployeeLeavesScreen({
         </div>
 
         {/* ================= BAR NAVIGASI LEMBAR KERJA ================= */}
-        {activeSheet !== 'landing' && (
-          <div className="w-full flex items-center justify-between gap-2 mt-2 pt-3 border-t border-slate-100 dark:border-slate-800">
-            <button
-              type="button"
-              onClick={() => setActiveSheet('landing')}
-              className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-bold rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-teal-50/60 dark:hover:bg-teal-950/40 hover:border-teal-300 transition-all cursor-pointer shadow-2xs"
-              title="Kembali ke Menu Tab (3D)"
-            >
-              <ChevronLeft className="w-4 h-4 text-teal-600 dark:text-teal-400" />
-              <span>← Kembali ke Menu Tab (3D)</span>
-            </button>
+        {(
+          <div className="w-full flex items-center justify-end gap-2 mt-2 pt-3 border-t border-slate-100 dark:border-slate-800">
             <div className="flex items-center gap-2">
               <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
                 Lembar Kerja:
@@ -2125,6 +2132,27 @@ export function EmployeeLeavesScreen({
           </div>
         )}
       </div>
+      )}
+
+      {/* Landing: tombol kembali (header & tombol aksi hanya tampil di dalam tab) */}
+      {activeSheet === 'landing' && (
+        <div className="flex items-center justify-between">
+          <button
+            type="button"
+            onClick={() => {
+              if (returnToUrl) window.location.href = returnToUrl;
+              else if (onBack) onBack();
+              else if (onNav) onNav('home');
+              else window.history.back();
+            }}
+            className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-bold rounded-xl border border-slate-200 bg-white text-slate-700 hover:text-teal-700 hover:bg-teal-50/60 hover:border-teal-300 transition-all cursor-pointer shadow-2xs"
+            title={returnToUrl ? 'Kembali ke Labnote' : 'Kembali ke Zona Administrasi'}
+          >
+            <ChevronLeft className="w-4 h-4 text-teal-600" />
+            <span>{returnToUrl ? 'Kembali ke Labnote' : 'Kembali ke Zona Administrasi'}</span>
+          </button>
+        </div>
+      )}
 
       {/* ==================================================== */}
       {/* SHEET TABS: DAFTAR IZIN vs DIAGRAM & ANALITIK        */}
@@ -2184,7 +2212,8 @@ export function EmployeeLeavesScreen({
       {/* ==================================================== */}
       {activeSheet === 'landing' ? (
         <div className="w-full py-4">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/90 dark:border-slate-800 p-6 sm:p-12 shadow-sm text-center space-y-8 animate-in fade-in duration-500 relative overflow-hidden">
+          <div className="min-h-[calc(100vh-11rem)] flex flex-col justify-center bg-white rounded-3xl px-4 sm:px-8 py-10 sm:py-14 text-center space-y-8 sm:space-y-10 animate-in fade-in duration-500 relative overflow-hidden">
+            <MenuTabBackdrop />
             <div className="max-w-2xl mx-auto space-y-3 relative z-10">
               <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full text-[11px] font-extrabold uppercase tracking-wider bg-teal-50 dark:bg-teal-950/60 text-teal-800 dark:text-teal-300 border border-teal-200/80 dark:border-teal-800 shadow-2xs">
                 <span className="w-2 h-2 rounded-full bg-[#2298A7] animate-pulse" />
@@ -2204,9 +2233,9 @@ export function EmployeeLeavesScreen({
               <DisplayCards cards={leaveDisplayCards} />
             </div>
 
-            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/60 border border-slate-200/70 dark:border-slate-700 shadow-2xs relative z-10">
+            <div className="self-center inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/60 border border-slate-200/70 dark:border-slate-700 shadow-2xs relative z-10">
               <Sparkles className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
-              <span>Arahkan kursor &amp; klik salah satu kartu di atas untuk membuka lembar kerja secara instan</span>
+              <span>Klik salah satu kartu untuk membuka lembar kerja</span>
             </div>
           </div>
         </div>
@@ -2453,10 +2482,10 @@ export function EmployeeLeavesScreen({
               <option value="IK">IK = Izin Khusus</option>
               <option value="SS">SS = Sakit Site</option>
               <option value="SL">SL = Sakit Luar Site</option>
-              <option value="Disetujui">Disetujui</option>
-              <option value="Izin Selesai">Izin Selesai</option>
-              <option value="Pending">Pending</option>
-              <option value="Ditolak">Ditolak</option>
+              <option value="Disetujui">{LEAVE_ACC_LABELS['Disetujui']}</option>
+              <option value="Izin Selesai">{LEAVE_ACC_LABELS['Izin Selesai']}</option>
+              <option value="Pending">{LEAVE_ACC_LABELS['Pending']}</option>
+              <option value="Ditolak">{LEAVE_ACC_LABELS['Ditolak']}</option>
             </select>
           </div>
 
@@ -2918,7 +2947,7 @@ export function EmployeeLeavesScreen({
                       {/* Keterangan - Manual Dropdown Selector */}
                       <td className="py-3 px-3.5 text-center overflow-hidden" onClick={(e) => e.stopPropagation()}>
                         <select
-                          value={item.acc || 'Pending'}
+                          value={getEffectiveLeaveAcc(item, todayStr)}
                           onChange={(e) => handleInlineUpdate(item.id, 'acc', e.target.value)}
                           className={`px-2 py-1 rounded-lg text-[10.5px] font-semibold border cursor-pointer outline-none transition-all shadow-2xs max-w-full ${
                             item.acc === 'Ditolak'
@@ -2927,24 +2956,24 @@ export function EmployeeLeavesScreen({
                           }`}
                           title="Ubah Keterangan izin secara manual"
                         >
-                          <option value="Pending">Pending</option>
-                          <option value="Disetujui">Disetujui</option>
-                          <option value="Izin Selesai">Izin Selesai</option>
-                          <option value="Ditolak">Ditolak</option>
+                          <option value="Pending">{LEAVE_ACC_LABELS['Pending']}</option>
+                          <option value="Disetujui">{LEAVE_ACC_LABELS['Disetujui']}</option>
+                          <option value="Izin Selesai">{LEAVE_ACC_LABELS['Izin Selesai']}</option>
+                          <option value="Ditolak">{LEAVE_ACC_LABELS['Ditolak']}</option>
                         </select>
                       </td>
 
-                      {/* Kolom Warning: Muncul jika belum 'Izin Selesai' dalam 2 hari dari tanggal izin */}
+                      {/* Kolom Warning: Muncul jika belum 'Izin Selesai' (Approval HR) dalam 1 hari dari tanggal izin */}
                       <td className="py-3 px-3.5 text-center overflow-hidden" onClick={(e) => e.stopPropagation()}>
-                        {isOverdue2Days && item.acc !== 'Izin Selesai' ? (
+                        {isOverdue2Days ? (
                           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300 border border-rose-200 dark:border-rose-800 shadow-2xs whitespace-nowrap animate-pulse">
                             <AlertTriangle className="w-3 h-3 text-rose-600 dark:text-rose-400 shrink-0" />
-                            <span>Izin telah lewat 2 Hari</span>
+                            <span>Izin Belum Approval HR</span>
                           </span>
-                        ) : item.acc === 'Izin Selesai' ? (
+                        ) : getEffectiveLeaveAcc(item, todayStr) === 'Izin Selesai' ? (
                           <span className="inline-flex items-center gap-1 text-[10.5px] font-semibold text-emerald-600 dark:text-emerald-400 whitespace-nowrap">
                             <CheckCircle2 className="w-3.5 h-3.5" />
-                            <span>Selesai</span>
+                            <span>Approval HR</span>
                           </span>
                         ) : (
                           <span className="text-slate-400 text-xs">-</span>
@@ -2964,7 +2993,7 @@ export function EmployeeLeavesScreen({
                           </button>
 
                           {/* Quick ACC if pending */}
-                          {(!item.acc || item.acc === 'Pending') && (
+                          {getEffectiveLeaveAcc(item, todayStr) === 'Pending' && (
                             <button
                               type="button"
                               onClick={() => handleAccStatus(item.id, 'Disetujui')}
@@ -3991,9 +4020,10 @@ export function EmployeeLeavesScreen({
                     onChange={(e) => setEditForm(prev => ({ ...prev, acc: e.target.value }))}
                     className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500 outline-none font-bold"
                   >
-                    <option value="Disetujui">Disetujui</option>
-                    <option value="Pending">Pending</option>
-                    <option value="Ditolak">Ditolak</option>
+                    <option value="Disetujui">{LEAVE_ACC_LABELS['Disetujui']}</option>
+                    <option value="Pending">{LEAVE_ACC_LABELS['Pending']}</option>
+                    <option value="Izin Selesai">{LEAVE_ACC_LABELS['Izin Selesai']}</option>
+                    <option value="Ditolak">{LEAVE_ACC_LABELS['Ditolak']}</option>
                   </select>
                 </div>
               </div>
