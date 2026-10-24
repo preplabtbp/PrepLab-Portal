@@ -484,7 +484,8 @@ const app = express();
   const io = new Server(httpServer, {
     cors: {
       origin: (origin, callback) => {
-        if (!origin || allowedSocketOrigins.includes(origin) || origin.endsWith('.preplabtbp.com')) {
+        const isLan = origin ? /^http:\/\/(192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)(:\d+)?$/.test(origin) : false;
+        if (!origin || allowedSocketOrigins.includes(origin) || origin.endsWith('.preplabtbp.com') || isLan) {
           callback(null, true);
         } else {
           console.warn(`[Socket.IO CORS] Rejected connection from unauthorized origin: ${origin}`);

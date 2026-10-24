@@ -38,18 +38,19 @@ import {
 import * as XLSX from 'xlsx';
 import { toast } from 'sonner';
 import { EmployeeTardinessDiagram } from './employee-tardiness-diagram';
+import DisplayCards, { DisplayCardProps } from './ui/display-cards';
 import { useTableColumnResize, ColumnResizeHandle, ColumnDef } from '../hooks/useTableColumnResize';
 
 export const TARDINESS_COLUMNS: ColumnDef[] = [
   { id: 'no', label: 'No', defaultWidth: 55, minWidth: 42, align: 'center' },
-  { id: 'tanggal', label: 'Tanggal', defaultWidth: 140, minWidth: 100, align: 'left' },
+  { id: 'tanggal', label: 'Tanggal', defaultWidth: 140, minWidth: 100, align: 'center' },
   { id: 'waktu', label: 'Waktu', defaultWidth: 100, minWidth: 80, align: 'center' },
   { id: 'nama', label: 'Nama Karyawan', defaultWidth: 190, minWidth: 120, align: 'left' },
-  { id: 'jabatan', label: 'Jabatan', defaultWidth: 170, minWidth: 110, align: 'left' },
+  { id: 'jabatan', label: 'Jabatan', defaultWidth: 170, minWidth: 110, align: 'center' },
   { id: 'section', label: 'Section', defaultWidth: 140, minWidth: 100, align: 'center' },
   { id: 'shift', label: 'Shift', defaultWidth: 110, minWidth: 85, align: 'center' },
   { id: 'kategori', label: 'Kategori', defaultWidth: 150, minWidth: 110, align: 'center' },
-  { id: 'alasan', label: 'Alasan', defaultWidth: 220, minWidth: 130, align: 'left' },
+  { id: 'alasan', label: 'Alasan', defaultWidth: 220, minWidth: 130, align: 'center' },
   { id: 'warning', label: 'Status Peringatan', defaultWidth: 220, minWidth: 130, align: 'center' },
   { id: 'bukti', label: 'Bukti Finger', defaultWidth: 130, minWidth: 95, align: 'center' },
   { id: 'aksi', label: 'Aksi', defaultWidth: 90, minWidth: 70, align: 'center' },
@@ -120,7 +121,8 @@ export function EmployeeTardinessScreen({
   onBack
 }: Props) {
   // View tab: 'tabel' | 'diagram'
-  const [viewTab, setViewTab] = useState<'tabel' | 'diagram'>('tabel');
+  // 'landing' = Pusat Menu Tab (3D DisplayCards), sama seperti modul Rekapan Izin & Finger
+  const [viewTab, setViewTab] = useState<'landing' | 'tabel' | 'diagram'>('landing');
 
   // Data state
   const [records, setRecords] = useState<TardinessRecord[]>([]);
@@ -250,6 +252,41 @@ export function EmployeeTardinessScreen({
       setEndDate('');
     }
   };
+
+  // Kartu DisplayCards untuk Landing View Modul Rekapan Keterlambatan & Pulang Cepat
+  const tardinessDisplayCards: DisplayCardProps[] = useMemo(() => {
+    const masukCount = records.filter(r => r.statusFinger === 'Masuk').length;
+    const pulangCount = records.length - masukCount;
+    return [
+      {
+        icon: <TableIcon className="w-4 h-4 text-rose-600" />,
+        title: "Tabel Rekapan",
+        description: "Rekap terlambat masuk & pulang cepat, dapat diedit seperti Google Sheet",
+        date: `${masukCount} Terlambat · ${pulangCount} Pulang Cepat`,
+        iconClassName: "bg-slate-100 text-rose-600",
+        titleClassName: "text-rose-800",
+        onClick: () => setViewTab('tabel')
+      },
+      {
+        icon: <BarChart3 className="w-4 h-4 text-indigo-600" />,
+        title: "Diagram & Analitik",
+        description: "Rekapan visual per minggu, per bulan & per tahun",
+        date: `${records.length} Data Laporan`,
+        iconClassName: "bg-slate-100 text-indigo-600",
+        titleClassName: "text-indigo-800",
+        onClick: () => setViewTab('diagram')
+      },
+      {
+        icon: <FileText className="w-4 h-4 text-amber-600" />,
+        title: "Form Keterlambatan",
+        description: "Laporkan keterlambatan masuk atau pulang cepat karyawan",
+        date: "Form Pelaporan Online",
+        iconClassName: "bg-slate-100 text-amber-600",
+        titleClassName: "text-amber-800",
+        onClick: () => onNav?.('form-keterlambatan')
+      }
+    ];
+  }, [records, onNav]);
 
   // 1. KPI Card Click Handler (Makes summary cards interactive & filterable)
   const handleKpiCardClick = (type: 'Masuk' | 'Pulang' | 'BulanIni' | 'All') => {
@@ -518,19 +555,18 @@ export function EmployeeTardinessScreen({
 
   return (
     <div className="min-h-screen bg-slate-50/60 dark:bg-slate-950 p-3 sm:p-6 lg:p-8 space-y-6">
-      {/* ── HEADER BAR ── */}
+      {/* ── HEADER BAR (hanya di dalam tab, tidak di Menu Tab) ── */}
+      {viewTab !== 'landing' && (
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 sm:p-6 shadow-xs">
         <div className="flex items-start sm:items-center gap-3 sm:gap-4">
-          {onBack && (
-            <button
-              type="button"
-              onClick={onBack}
-              className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition-all cursor-pointer"
-              title="Kembali"
-            >
-              <ArrowLeft className="w-5 h-5" />
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={() => setViewTab('landing')}
+            className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition-all cursor-pointer"
+            title="Kembali ke Menu Tab"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </button>
           <div>
             <div className="flex items-center gap-2">
               <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800">
@@ -583,9 +619,63 @@ export function EmployeeTardinessScreen({
           </button>
         </div>
       </div>
+      )}
 
+      {/* ── LANDING: PUSAT MENU TAB (3D) ── */}
+      {viewTab === 'landing' && onBack && (
+        <div className="flex items-center justify-between">
+          <button
+            type="button"
+            onClick={onBack}
+            className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-bold rounded-xl border border-slate-200 bg-white text-slate-700 hover:text-rose-600 hover:bg-rose-50/60 hover:border-rose-300 transition-all cursor-pointer shadow-2xs"
+            title="Kembali ke Zona Administrasi"
+          >
+            <ChevronLeft className="w-4 h-4 text-rose-600" />
+            <span>Kembali ke Zona Administrasi</span>
+          </button>
+        </div>
+      )}
+      {viewTab === 'landing' && (
+        <div className="bg-white rounded-3xl border border-slate-200/90 p-6 sm:p-12 shadow-sm text-center space-y-8 animate-in fade-in duration-500 relative overflow-hidden">
+          <div className="max-w-2xl mx-auto space-y-3 relative z-10">
+            <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full text-[11px] font-extrabold uppercase tracking-wider bg-rose-50 text-rose-800 border border-rose-200/80 shadow-2xs">
+              <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
+              PORTAL OPERASIONAL PREPLAB • NAVIGASI MODUL
+            </div>
+            <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
+              Pusat Rekapan Keterlambatan &amp; Pulang Cepat
+            </h2>
+            <p className="text-xs sm:text-sm text-slate-500 leading-relaxed max-w-xl mx-auto">
+              Pilih lembar kerja interaktif di bawah untuk membuka tabel rekapan, diagram analitik, atau form pelaporan keterlambatan.
+            </p>
+          </div>
+
+          {/* Ambient Soft Blur Behind Cards */}
+          <div className="relative pt-2 pb-6 flex justify-center overflow-x-auto z-10">
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[30rem] sm:w-[42rem] h-60 sm:h-72 bg-gradient-to-r from-rose-200/50 via-amber-100/40 to-teal-100/50 rounded-full blur-3xl pointer-events-none -z-10" />
+            <DisplayCards cards={tardinessDisplayCards} />
+          </div>
+
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold text-slate-500 bg-slate-50 border border-slate-200/70 shadow-2xs relative z-10">
+            <Sparkles className="w-3.5 h-3.5 text-rose-600" />
+            <span>Arahkan kursor &amp; klik salah satu kartu di atas untuk membuka lembar kerja secara instan</span>
+          </div>
+        </div>
+      )}
+
+      {viewTab !== 'landing' && (<>
       {/* ── TAB SWITCHER: TABEL REKAP VS SHEET DIAGRAM ── */}
       <div className="flex items-center justify-between gap-4">
+        <div className="inline-flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setViewTab('landing')}
+          className="inline-flex items-center gap-2 px-3.5 py-2.5 text-xs font-bold rounded-2xl border border-slate-200 bg-white text-slate-700 hover:text-rose-600 hover:bg-rose-50/60 hover:border-rose-300 transition-all cursor-pointer shadow-xs"
+          title="Kembali ke Menu Tab"
+        >
+          <ChevronLeft className="w-4 h-4 text-rose-600" />
+          <span>Menu Tab</span>
+        </button>
         <div className="inline-flex p-1 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
           <button
             type="button"
@@ -615,6 +705,7 @@ export function EmployeeTardinessScreen({
               Baru
             </span>
           </button>
+        </div>
         </div>
 
         <div className="text-xs text-slate-500 hidden sm:block">
@@ -1064,7 +1155,7 @@ export function EmployeeTardinessScreen({
                           </td>
 
                           {/* 1. Tanggal (Inline Editable) */}
-                          <td className="py-2.5 px-4 whitespace-nowrap">
+                          <td className="py-2.5 px-4 text-center whitespace-nowrap">
                             {editingCell?.id === r.id && editingCell?.field === 'tanggal' ? (
                               <input
                                 type="date"
@@ -1076,15 +1167,15 @@ export function EmployeeTardinessScreen({
                                   if (e.key === 'Enter') handleInlineCellUpdate(r.id, 'tanggal', editValue);
                                   if (e.key === 'Escape') setEditingCell(null);
                                 }}
-                                className="w-full text-xs font-semibold px-2 py-1 rounded bg-white dark:bg-slate-800 border border-teal-500 shadow-xs focus:outline-none"
+                                className="w-full text-xs text-center font-semibold px-2 py-1 rounded bg-white dark:bg-slate-800 border border-teal-500 shadow-xs focus:outline-none"
                               />
                             ) : (
                               <div
                                 onClick={() => startEditingCell(r.id, 'tanggal', r.tanggal)}
-                                className="cursor-pointer group flex items-center justify-between gap-1 p-1 -m-1 rounded hover:bg-teal-50/40 dark:hover:bg-teal-950/20 hover:ring-1 hover:ring-teal-400"
+                                className="cursor-pointer group inline-flex items-center justify-center gap-1.5 p-1 -m-1 rounded hover:bg-teal-50/40 dark:hover:bg-teal-950/20 hover:ring-1 hover:ring-teal-400 mx-auto"
                                 title="Klik untuk mengedit tanggal"
                               >
-                                <div>
+                                <div className="text-center">
                                   <div className="font-semibold text-slate-800 dark:text-slate-200">
                                     {formatTardinessDateIndo(r.tanggal)}
                                   </div>
@@ -1155,7 +1246,7 @@ export function EmployeeTardinessScreen({
                           </td>
 
                           {/* 3b. Jabatan (Kolom Terpisah di Samping Nama Karyawan, Inline Editable) */}
-                          <td className="py-2.5 px-4">
+                          <td className="py-2.5 px-4 text-center">
                             {editingCell?.id === r.id && editingCell?.field === 'jabatan' ? (
                               <input
                                 type="text"
@@ -1167,15 +1258,15 @@ export function EmployeeTardinessScreen({
                                   if (e.key === 'Enter') handleInlineCellUpdate(r.id, 'jabatan', editValue);
                                   if (e.key === 'Escape') setEditingCell(null);
                                 }}
-                                className="w-full text-xs font-semibold px-2 py-1 rounded bg-white dark:bg-slate-800 border border-teal-500 shadow-xs focus:outline-none"
+                                className="w-full text-xs text-center font-semibold px-2 py-1 rounded bg-white dark:bg-slate-800 border border-teal-500 shadow-xs focus:outline-none"
                               />
                             ) : (
                               <div
                                 onClick={() => startEditingCell(r.id, 'jabatan', r.jabatan || '')}
-                                className="cursor-pointer group p-1 -m-1 rounded hover:bg-teal-50/40 dark:hover:bg-teal-950/20 hover:ring-1 hover:ring-teal-400 flex items-center justify-between"
+                                className="cursor-pointer group p-1 -m-1 rounded hover:bg-teal-50/40 dark:hover:bg-teal-950/20 hover:ring-1 hover:ring-teal-400 inline-flex items-center justify-center mx-auto"
                                 title="Klik untuk mengedit jabatan"
                               >
-                                <span className="text-xs font-medium text-slate-700 dark:text-slate-300 truncate max-w-[180px]">
+                                <span className="text-xs font-medium text-slate-700 dark:text-slate-300 truncate max-w-[180px] text-center">
                                   {r.jabatan || '-'}
                                 </span>
                                 <Pencil className="w-3 h-3 text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity ml-1 shrink-0" />
@@ -1260,7 +1351,7 @@ export function EmployeeTardinessScreen({
                           </td>
 
                           {/* 7. Alasan (Inline Editable Text) */}
-                          <td className="py-2.5 px-4 max-w-[240px] border-r border-slate-100 dark:border-slate-800">
+                          <td className="py-2.5 px-4 text-center max-w-[240px] border-r border-slate-100 dark:border-slate-800">
                             {editingCell?.id === r.id && editingCell?.field === 'alasan' ? (
                               <input
                                 type="text"
@@ -1272,15 +1363,15 @@ export function EmployeeTardinessScreen({
                                   if (e.key === 'Enter') handleInlineCellUpdate(r.id, 'alasan', editValue);
                                   if (e.key === 'Escape') setEditingCell(null);
                                 }}
-                                className="w-full text-xs px-2 py-1 rounded bg-white dark:bg-slate-800 border border-slate-300 shadow-xs focus:outline-none"
+                                className="w-full text-xs text-center px-2 py-1 rounded bg-white dark:bg-slate-800 border border-slate-300 shadow-xs focus:outline-none"
                               />
                             ) : (
                               <div
                                 onClick={() => startEditingCell(r.id, 'alasan', r.alasan || '')}
-                                className="cursor-pointer group flex items-center justify-between gap-1 p-1 -m-1 rounded hover:bg-slate-100/60 dark:hover:bg-slate-800/60"
+                                className="cursor-pointer group inline-flex items-center justify-center gap-1 p-1 -m-1 rounded hover:bg-slate-100/60 dark:hover:bg-slate-800/60 mx-auto"
                                 title="Klik untuk mengedit alasan"
                               >
-                                <div className="font-medium text-slate-700 dark:text-slate-300 truncate" title={r.alasan || '-'}>
+                                <div className="font-medium text-slate-700 dark:text-slate-300 truncate text-center" title={r.alasan || '-'}>
                                   {r.alasan || '-'}
                                 </div>
                                 <Pencil className="w-3 h-3 text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
@@ -1367,6 +1458,7 @@ export function EmployeeTardinessScreen({
           }}
         />
       )}
+      </>)}
 
       {/* ── MODAL PREVIEW FOTO BUKTI FINGER ── */}
       {previewPhotoUrl && (
