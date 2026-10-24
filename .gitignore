@@ -24,3 +24,6 @@ scratch_prompt.txt
 scratch/
 Claude outputs/
 AI_CONTEXT_AND_CREDENTIALS.md
+
+# Local Codebase Memory Graph Index
+.codebase-memory/
