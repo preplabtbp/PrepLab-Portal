@@ -8,10 +8,7 @@ import { isLogbookPost, getSectionFromPost, getLogbookTableData, aggregateSectio
 import { BannerCover } from "./BannerCover";
 import { Card, Button, Input } from "./ui";
 
-// Code-split heavy interactive components to ensure instantaneous dashboard loading
-const NotionDatabaseTable = React.lazy(() =>
-  import("./NotionDatabaseTable").then((m) => ({ default: m.NotionDatabaseTable }))
-);
+import { NotionDatabaseTable } from "./NotionDatabaseTable";
 const EnterpriseWysiwygEditor = React.lazy(() =>
   import("./notion/EnterpriseWysiwygEditor").then((m) => ({ default: m.EnterpriseWysiwygEditor }))
 );
@@ -246,6 +243,7 @@ export function BulletinBoard({
   }, []);
 
   // Notion-Style Multi-Tab Navigation State
+  const closingTabIdRef = useRef<string | null>(null);
   const [openTabs, setOpenTabs] = useState<Array<{ id: string; title: string; icon?: string; post?: any }>>(() => {
     try {
       const saved = sessionStorage.getItem("preplab_labnote_open_tabs");
@@ -273,10 +271,12 @@ export function BulletinBoard({
   useEffect(() => {
     if (!selectedPost) return;
     const postIdStr = String(selectedPost.id);
+    if (closingTabIdRef.current === postIdStr) return; // Guard: do not re-add tab currently being closed!
     const postTitle = getPostTitle(selectedPost);
     const postIcon = getPostEmoji(selectedPost);
 
     setOpenTabs(prev => {
+      if (closingTabIdRef.current === postIdStr) return prev;
       const existingIdx = prev.findIndex(t => String(t.id) === postIdStr);
       if (existingIdx !== -1) {
         const updated = [...prev];
@@ -631,7 +631,7 @@ export function BulletinBoard({
           }
         }
       } catch (err) {}
-    }, 6000);
+    }, 120000); // 2 minutes interval: drastically cuts down Cloud Run vCPU & egress cost
 
     return () => {
       isMounted = false;
@@ -820,7 +820,7 @@ export function BulletinBoard({
   }, [selectedPost, navHistory, findParentPost, isSectionHubPost]);
 
   // Navigate to specific post and maintain history
-  const navigateToPost = (post: any | null) => {
+  const navigateToPost = (post: any | null, resetHistory: boolean = false) => {
     setIsLibraryActive(false);
     if (post === null) {
       setNavHistory([]);
@@ -852,6 +852,12 @@ export function BulletinBoard({
 
     setForwardHistory([]);
     setNavHistory((prev) => {
+      if (resetHistory) {
+        if (isSectionHubPost(freshPost)) return [freshPost];
+        const parent = findParentPost(freshPost);
+        if (parent && parent.id !== freshPost.id) return [parent, freshPost];
+        return [freshPost];
+      }
       const idx = prev.findIndex((h) => h?.id === freshPost.id);
       if (idx !== -1) {
         // Return to earlier history point
@@ -1188,21 +1194,28 @@ export function BulletinBoard({
   };
 
   // Tab click handler
-  const handleSelectTab = (tab: { id: string; title: string; icon?: string; post?: any }) => {
+  const handleSelectTab = (tab: { id: string; title: string; icon?: string; post?: any }, resetHistory: boolean = false) => {
     if (tab.id === 'dashboard') {
-      navigateToPost(null);
+      navigateToPost(null, resetHistory);
       return;
     }
     if (selectedPost && String(selectedPost.id) === String(tab.id) && !isEditing) return;
 
     if (tab.post) {
-      navigateToPost(tab.post);
+      navigateToPost(tab.post, resetHistory);
       return;
     }
 
     const found = posts.find(p => String(p.id) === String(tab.id));
     if (found) {
-      navigateToPost(found);
+      navigateToPost(found, resetHistory);
+      return;
+    }
+
+    // Check if it's a section hub (e.g. section-preparasi or logbook-preparasi)
+    if (String(tab.id).startsWith('section-') || String(tab.id).startsWith('logbook-')) {
+      const cleanSec = String(tab.id).replace(/^(section-|logbook-)/, '').replace(/-/g, ' ').trim();
+      openSectionLogbook(cleanSec);
       return;
     }
 
@@ -1211,7 +1224,7 @@ export function BulletinBoard({
       .then(res => res.json())
       .then(json => {
         if (json.status === 'success' && json.data) {
-          navigateToPost(json.data);
+          navigateToPost(json.data, resetHistory);
         } else {
           toast.error('Halaman tidak ditemukan');
           handleCloseTab(tab.id);
@@ -1224,29 +1237,57 @@ export function BulletinBoard({
 
   // Tab close handler
   const handleCloseTab = (tabIdToClose: string, e?: React.MouseEvent) => {
-    if (e) e.stopPropagation();
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
     if (tabIdToClose === 'dashboard') return;
 
+    const closeIdStr = String(tabIdToClose);
+    closingTabIdRef.current = closeIdStr;
+
+    // Immediately calculate remaining tabs and next active tab
+    let nextActiveTab: { id: string; title: string; icon?: string; post?: any } | null = null;
+    let shouldSwitch = false;
+
     setOpenTabs(prev => {
-      const targetIdx = prev.findIndex(t => String(t.id) === String(tabIdToClose));
+      const targetIdx = prev.findIndex(t => String(t.id) === closeIdStr);
       if (targetIdx === -1) return prev;
 
-      const remaining = prev.filter(t => String(t.id) !== String(tabIdToClose));
+      const remaining = prev.filter(t => String(t.id) !== closeIdStr);
 
-      // If closing currently active tab, switch to adjacent tab
-      if (selectedPost && String(selectedPost.id) === String(tabIdToClose)) {
-        const nextActive = remaining[Math.max(0, targetIdx - 1)] || remaining[0];
-        setTimeout(() => {
-          if (nextActive && nextActive.id !== 'dashboard') {
-            handleSelectTab(nextActive);
-          } else {
-            navigateToPost(null);
-          }
-        }, 0);
+      // If closing currently active tab, calculate next tab to switch to
+      if (selectedPost && String(selectedPost.id) === closeIdStr) {
+        shouldSwitch = true;
+        nextActiveTab = remaining[Math.max(0, targetIdx - 1)] || remaining[0] || { id: 'dashboard', title: 'Dashboard', icon: '🏠' };
       }
+
+      // Persist remaining tabs to sessionStorage immediately
+      try {
+        const lightweight = remaining.map(t => ({
+          id: String(t.id),
+          title: t.title,
+          icon: t.icon
+        }));
+        sessionStorage.setItem("preplab_labnote_open_tabs", JSON.stringify(lightweight));
+      } catch {}
 
       return remaining;
     });
+
+    if (shouldSwitch && nextActiveTab) {
+      if ((nextActiveTab as any).id !== 'dashboard') {
+        handleSelectTab(nextActiveTab, true);
+      } else {
+        navigateToPost(null, true);
+      }
+    }
+
+    setTimeout(() => {
+      if (closingTabIdRef.current === closeIdStr) {
+        closingTabIdRef.current = null;
+      }
+    }, 400);
   };
 
   const handleNewTab = () => {
@@ -3309,49 +3350,41 @@ ${aiMeetingNotes
               )}
 
               {/* Interactive Notion Database Table */}
-              <Suspense
-                fallback={
-                  <div className="flex flex-col items-center justify-center p-12 bg-white rounded-2xl border border-slate-200 shadow-xs min-h-[350px] gap-3">
-                    <Loader2 className="w-7 h-7 text-teal-600 animate-spin" />
-                    <span className="text-xs font-medium text-slate-500">Memuat tabel database...</span>
-                  </div>
-                }
-              >
-                <NotionDatabaseTable
-                  postId={selectedPost.id}
-                  headers={parsedTableData.headers}
-                  rows={parsedTableData.rows}
-                  title={getPostTitle(selectedPost)}
-                  section={selectedPost.category || selectedPost.department || "Administrasi"}
-                  currentAuthorNik={inspectorNik}
-                  currentAuthorName={inspectorName}
-                  userJabatan={userProfile?.jabatan || localStorage.getItem('p2h_inspector_jabatan') || ''}
-                  userRole={userProfile?.role}
-                  isDeveloper={isDev}
-                  pt={pt || "TBP"}
-                  beforeText={parsedTableData.beforeText}
-                  afterText={parsedTableData.afterText}
-                  initialTopicTitle={deepLinkTopic}
-                  onClearInitialTopic={() => setDeepLinkTopic(undefined)}
-                  allPosts={posts}
-                  onNavigateToPost={(p: any) => navigateToPost(p)}
-                  onPostContentUpdate={(newContent: string) => {
-                    if (selectedPost && String(selectedPost.id).startsWith('logbook-')) {
-                      const logbookId = String(selectedPost.id);
-                      logbookCacheRef.current[logbookId] = newContent;
-                      try {
-                        localStorage.setItem(`preplab_logbook_content_${logbookId}`, newContent);
-                      } catch {}
-                    }
-                    setSelectedPost((prev: any) => (prev ? { ...prev, content: newContent } : null));
-                    setPosts((prev) =>
-                      prev.map((p) =>
-                        p.id === selectedPost.id ? { ...p, content: newContent } : p
-                      )
-                    );
-                  }}
-                />
-              </Suspense>
+              <NotionDatabaseTable
+                key={selectedPost.id}
+                postId={selectedPost.id}
+                headers={parsedTableData.headers}
+                rows={parsedTableData.rows}
+                title={getPostTitle(selectedPost)}
+                section={selectedPost.category || selectedPost.department || "Administrasi"}
+                currentAuthorNik={inspectorNik}
+                currentAuthorName={inspectorName}
+                userJabatan={userProfile?.jabatan || localStorage.getItem('p2h_inspector_jabatan') || ''}
+                userRole={userProfile?.role}
+                isDeveloper={isDev}
+                pt={pt || "TBP"}
+                beforeText={parsedTableData.beforeText}
+                afterText={parsedTableData.afterText}
+                initialTopicTitle={deepLinkTopic}
+                onClearInitialTopic={() => setDeepLinkTopic(undefined)}
+                allPosts={posts}
+                onNavigateToPost={(p: any) => navigateToPost(p)}
+                onPostContentUpdate={(newContent: string) => {
+                  if (selectedPost && String(selectedPost.id).startsWith('logbook-')) {
+                    const logbookId = String(selectedPost.id);
+                    logbookCacheRef.current[logbookId] = newContent;
+                    try {
+                      localStorage.setItem(`preplab_logbook_content_${logbookId}`, newContent);
+                    } catch {}
+                  }
+                  setSelectedPost((prev: any) => (prev ? { ...prev, content: newContent } : null));
+                  setPosts((prev) =>
+                    prev.map((p) =>
+                      p.id === selectedPost.id ? { ...p, content: newContent } : p
+                    )
+                  );
+                }}
+              />
 
               {/* Content After Table */}
               {parsedTableData.afterText.trim() && (

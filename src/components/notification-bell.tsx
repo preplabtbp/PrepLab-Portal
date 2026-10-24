@@ -144,7 +144,7 @@ export function NotificationBell({ userNik, userName, onOpenP5mModal }: Notifica
 
     const startPolling = () => {
       if (intervalId) clearInterval(intervalId);
-      intervalId = setInterval(fetchNotifications, 45000);
+      intervalId = setInterval(fetchNotifications, 120000); // 2 minutes fallback interval
     };
 
     const stopPolling = () => {

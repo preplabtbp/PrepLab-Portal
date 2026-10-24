@@ -369,6 +369,17 @@ router.post("/api/tickets", async (req, res) => {
       }
     } catch(e) { console.error('Ticket push error:', e); }
 
+    // Zero-Miss Realtime Broadcast: Pancarkan event ticket:created dan ticket:updated ke seluruh browser
+    try {
+      const io = getIoInstance();
+      if (io) {
+        io.emit('ticket:created', ticket);
+        io.emit('ticket:updated', ticket);
+      }
+    } catch (wsErr) {
+      console.error('WebSocket emit error on ticket creation:', wsErr);
+    }
+
     res.status(201).json({ ...ticket, waMessageText });
   } catch (error) {
     console.error("Error creating ticket:", error);

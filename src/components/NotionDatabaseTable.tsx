@@ -3971,6 +3971,42 @@ export function NotionDatabaseTable({
     }
   };
 
+  // Helper: compute sort weight for inspection tickets (newest / highest sequence & date first)
+  const getTicketSortWeight = (row: TableRowData): number => {
+    const tktId = extractLinkedTicketId(row);
+    if (tktId) {
+      // 1. Format: TKT-W<week>Y<year>-<seq>, e.g. TKT-W42Y26-245
+      const match = tktId.match(/TKT-W(\d+)Y(\d+)-(\d+)/i);
+      if (match) {
+        const week = parseInt(match[1], 10) || 0;
+        const year = parseInt(match[2], 10) || 0;
+        const seq = parseInt(match[3], 10) || 0;
+        return (year * 10000000) + (week * 100000) + seq;
+      }
+      // 2. Trailing sequence number, e.g. TKT-245 or -245
+      const seqMatch = tktId.match(/(\d+)$/);
+      if (seqMatch) {
+        return parseInt(seqMatch[1], 10) || 0;
+      }
+      const anyNums = tktId.match(/\d+/g);
+      if (anyNums) {
+        return parseInt(anyNums.join(''), 10) || 0;
+      }
+    }
+
+    // 3. Fallback: Parse Created Time (DD-MM-YYYY)
+    const created = row['Created Time'] || row['Tanggal Dibuat'] || '';
+    const dMatch = created.match(/^(\d{2})-(\d{2})-(\d{4})/);
+    if (dMatch) {
+      const day = parseInt(dMatch[1], 10);
+      const month = parseInt(dMatch[2], 10);
+      const year = parseInt(dMatch[3], 10);
+      return (year * 10000) + (month * 100) + day;
+    }
+
+    return 0;
+  };
+
   // Reconcile open/closed findings between /api/tickets and Labnote tasks
   const reconcileFindingsWithTickets = useCallback(async () => {
     if (isReconcilingRef.current) return;
@@ -3985,25 +4021,14 @@ export function NotionDatabaseTable({
         let hasChanges = false;
         const nextRows = [...currentRows];
 
-        // 1. Process "Review temuan SAP"
-        const sapParentIdx = nextRows.findIndex(r => 
-          !isSubItemRow(r) && (
-            (getRowVal(r, 'Jenis kegiatan') || getRowVal(r, 'Name') || '').toLowerCase().includes('review temuan sap') ||
-            (r['Jenis kegiatan'] || r['Name'] || '').toLowerCase().includes('review temuan sap')
-          )
-        );
-
-        // 2. Process "Review temuan inspeksi gabungan"
-        const gabunganParentIdx = nextRows.findIndex(r => 
-          !isSubItemRow(r) && (
-            (getRowVal(r, 'Jenis kegiatan') || getRowVal(r, 'Name') || '').toLowerCase().includes('review temuan inspeksi gabungan') ||
-            (r['Jenis kegiatan'] || r['Name'] || '').toLowerCase().includes('review temuan inspeksi gabungan')
-          )
-        );
-
-        if (sapParentIdx === -1 && gabunganParentIdx === -1) {
-          return currentRows;
-        }
+        const findParentIndex = (searchPattern: string) => {
+          return nextRows.findIndex(r => 
+            !isSubItemRow(r) && (
+              (getRowVal(r, 'Jenis kegiatan') || getRowVal(r, 'Name') || '').toLowerCase().includes(searchPattern) ||
+              (r['Jenis kegiatan'] || r['Name'] || '').toLowerCase().includes(searchPattern)
+            )
+          );
+        };
 
         const syncParentWithTickets = (pIdx: number, targetTickets: any[], parentTitle: string) => {
           if (pIdx === -1) return;
@@ -4031,7 +4056,6 @@ export function NotionDatabaseTable({
           });
 
           const openTickets = targetTickets.filter(t => (t.status || '').toUpperCase() !== 'CLOSED');
-          const closedTickets = targetTickets.filter(t => (t.status || '').toUpperCase() === 'CLOSED');
 
           // A. Mark completed subtasks and backfill metadata (Created Time, Due Date, Completion Date)
           targetTickets.forEach(t => {
@@ -4140,28 +4164,57 @@ export function NotionDatabaseTable({
             }
           });
 
-          if (newSubRowsToAdd.length > 0) {
-            const insertPosition = existingSubIndices.length > 0
-              ? existingSubIndices[existingSubIndices.length - 1] + 1
-              : pIdx + 1;
-            nextRows.splice(insertPosition, 0, ...newSubRowsToAdd);
+          // C. Collect and sort all subtasks (updated existing + newly added) newest first
+          const allSubRows: TableRowData[] = [];
+          existingSubIndices.forEach(idx => {
+            allSubRows.push(nextRows[idx]);
+          });
+          allSubRows.push(...newSubRowsToAdd);
+
+          if (allSubRows.length > 0) {
+            // Sort descending: highest sort weight (newest ticket sequence & date) always at top
+            const sortedSubRows = [...allSubRows].sort((a, b) => getTicketSortWeight(b) - getTicketSortWeight(a));
+            
+            // Check if order changed or new rows were added
+            let orderChanged = allSubRows.length !== existingSubIndices.length;
+            if (!orderChanged) {
+              for (let k = 0; k < sortedSubRows.length; k++) {
+                if (sortedSubRows[k] !== allSubRows[k]) {
+                  orderChanged = true;
+                  break;
+                }
+              }
+            }
+
+            if (orderChanged) {
+              hasChanges = true;
+            }
+
+            // Replace existing subtask range under the parent with sortedSubRows
+            nextRows.splice(pIdx + 1, existingSubIndices.length, ...sortedSubRows);
           }
         };
 
-        // Routine SAP tickets
+        // Routine SAP tickets (filter by source: 'inspeksi' or TKT-* or SAP)
         const sapTickets = allTickets.filter(t => 
-          (t.source === 'inspeksi' || (t.ticketId || '').includes('SAP') || (t.ticketId || '').includes('W42Y26')) && 
+          (t.source === 'inspeksi' || (t.ticketId || '').includes('SAP') || (t.ticketId || '').toUpperCase().startsWith('TKT-')) && 
           (t.category || '').toLowerCase() !== 'inspeksi gabungan' &&
           t.source !== 'sidak_management'
         );
-        syncParentWithTickets(sapParentIdx, sapTickets, 'Review temuan SAP');
+        const sapIdx = findParentIndex('review temuan sap');
+        if (sapIdx !== -1) {
+          syncParentWithTickets(sapIdx, sapTickets, 'Review temuan SAP');
+        }
 
         // Inspeksi Gabungan / Sidak Management tickets
         const gabunganTickets = allTickets.filter(t => 
           (t.category || '').toLowerCase().includes('inspeksi gabungan') || 
           t.source === 'sidak_management'
         );
-        syncParentWithTickets(gabunganParentIdx, gabunganTickets, 'Review temuan inspeksi gabungan');
+        const gabunganIdx = findParentIndex('review temuan inspeksi gabungan');
+        if (gabunganIdx !== -1) {
+          syncParentWithTickets(gabunganIdx, gabunganTickets, 'Review temuan inspeksi gabungan');
+        }
 
         if (hasChanges) {
           saveTableToBackend(nextRows);
@@ -4177,7 +4230,7 @@ export function NotionDatabaseTable({
     }
   }, [saveTableToBackend, onRowsChange, getRowVal]);
 
-  // Real-time WebSocket sync for findings tickets
+  // Real-time WebSocket and Polling sync for findings tickets
   useEffect(() => {
     reconcileFindingsWithTickets();
 
@@ -4222,13 +4275,34 @@ export function NotionDatabaseTable({
     };
 
     socket.on('ticket:closed', handleTicketClosed);
+    socket.on('ticket:created', handleTicketUpdated);
     socket.on('ticket:updated', handleTicketUpdated);
     window.addEventListener('refresh-tickets', handleTicketUpdated);
 
+    // Periodic auto-sync: Poll every 2 minutes (120,000 ms) when tab is active to minimize Google Cloud cost
+    const pollInterval = setInterval(() => {
+      if (!document.hidden) {
+        reconcileFindingsWithTickets();
+      }
+    }, 120000);
+
+    // Immediate sync when browser window or tab becomes active/visible
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        reconcileFindingsWithTickets();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleVisibilityChange);
+
     return () => {
+      clearInterval(pollInterval);
       socket.off('ticket:closed', handleTicketClosed);
+      socket.off('ticket:created', handleTicketUpdated);
       socket.off('ticket:updated', handleTicketUpdated);
       window.removeEventListener('refresh-tickets', handleTicketUpdated);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleVisibilityChange);
     };
   }, [reconcileFindingsWithTickets, saveTableToBackend, getRowVal]);
 

@@ -520,6 +520,7 @@ export function parseTableFromMarkdown(content: string): { headers: string[]; ro
   let currentRow = '';
 
   for (let i = separatorIdx + 1; i < lines.length; i++) {
+    if (rows.length >= 500) break; // Defensive cap to guarantee 60fps responsiveness
     const line = lines[i];
     const trimmed = line.trim();
 
@@ -568,6 +569,16 @@ function parseRowLine(line: string, headers: string[]): TableRowData | null {
   const parts = line.split(/(?<!\\)\|/).map(p => p.replace(/\\\|/g, '|').trim());
   const cellValues = parts.slice(1, parts.length - 1);
   if (cellValues.length === 0) return null;
+
+  // Defensive: Discard completely blank ghost rows to prevent memory explosion & browser freezing
+  const isAllBlank = cellValues.every(c => {
+    const clean = c.replace(/<!--[\s\S]*?-->/g, '').replace(/[-|\s]/g, '');
+    return clean.length === 0;
+  });
+  const hasSpecialMeta = line.includes('<!--task-id:') || line.includes('<!--is-logbook:') || line.includes('<!--origin-id:');
+  if (isAllBlank && !hasSpecialMeta) {
+    return null;
+  }
 
   const rowStr = cellValues.join(' ');
   const taskMatch = rowStr.match(/<!--task-id:([^>]+)-->/);
