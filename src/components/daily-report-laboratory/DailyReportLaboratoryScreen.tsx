@@ -39,6 +39,8 @@ import {
 } from '../daily-performance-v2/daily-performance-v2-types';
 import { BalanceOverrideModal } from './BalanceOverrideModal';
 import { TracebackSchemeModal } from './TracebackSchemeModal';
+import { ExcelClipboardPasteModal } from './ExcelClipboardPasteModal';
+import { ParsedClipboardResult, StandardTableRow } from './excelClipboardParser';
 
 export type LabReportSubMenu = 'weighing_fuse_loi' | 'press_edxrf' | 'wdxrf' | 'qc_data' | 'reporting';
 
@@ -77,7 +79,7 @@ export const DailyReportLaboratoryScreen: React.FC<DailyReportLaboratoryScreenPr
   }, [allRecords, date, shiftType]);
 
   // Track station balance overrides
-  const [overriddenStations, setOverriddenStations] = useState<Record<string, { value: number; by: string; time: string; isReconciled?: boolean }>>({});
+  const [overriddenStations, setOverriddenStations] = useState<Record<string, { value: number; by: string; time: string; rootCause?: DiscrepancyRootCauseType; isReconciled?: boolean }>>({});
 
   // Override Modal State
   const [overrideModalOpen, setOverrideModalOpen] = useState(false);
@@ -88,6 +90,9 @@ export const DailyReportLaboratoryScreen: React.FC<DailyReportLaboratoryScreenPr
 
   // Traceback Scheme Modal
   const [tracebackModalOpen, setTracebackModalOpen] = useState(false);
+
+  // Excel Smart Paste Modal
+  const [isExcelPasteModalOpen, setIsExcelPasteModalOpen] = useState(false);
 
   // Manpower State
   const [rosterRaw, setRosterRaw] = useState<any[]>([]);
@@ -540,6 +545,195 @@ export const DailyReportLaboratoryScreen: React.FC<DailyReportLaboratoryScreenPr
     saveStoredDirectSampleIntakes(updated);
     window.dispatchEvent(new CustomEvent('preplab-batches-updated'));
     toast.info('Penerimaan sampel non-eksplorasi berhasil dihapus.');
+  };
+
+  // Smart Paste Handler from Excel Clipboard
+  const handleApplyExcelData = (result: ParsedClipboardResult, selectedStations: string[]) => {
+    let appliedCount = 0;
+    let batchAddedCount = 0;
+    let directIntakeAddedCount = 0;
+
+    // 1. WEIGHING
+    if (selectedStations.includes('weighing') && result.stations.weighing) {
+      const st = result.stations.weighing;
+      appliedCount++;
+      const nowIso = new Date().toISOString();
+      const newBatches: SampleBatchRecord[] = [];
+      const newDirects: DirectSampleIntakeRecord[] = [];
+
+      st.rows.forEach(r => {
+        const row = r as StandardTableRow;
+        if (!row.sample || row.sample.toUpperCase().includes('TOTAL')) return;
+        const sampleName = row.sample.trim();
+        const group = getSampleGroup(sampleName);
+
+        // Eksplorasi -> daftarkan batch jika received > 0
+        if (group === 'Exploration' && row.received > 0) {
+          const splPerBatch = 24;
+          const batchCount = Math.max(1, Math.ceil(row.received / splPerBatch));
+          const existingCount = batches.filter(b => b.pt.toUpperCase() === sampleName.toUpperCase()).length;
+
+          let remainingSpl = row.received;
+          for (let i = 0; i < batchCount; i++) {
+            const thisCount = i === batchCount - 1 ? remainingSpl : Math.min(splPerBatch, remainingSpl);
+            remainingSpl -= thisCount;
+            const batchNo = existingCount + i + 1;
+            newBatches.push({
+              id: `batch_${Date.now()}_${sampleName}_${batchNo}_${Math.random().toString(36).substring(2, 6)}`,
+              batchName: `Batch ${batchNo} - ${sampleName}`,
+              pt: sampleName,
+              sampleGroup: group,
+              batchNumber: batchNo,
+              sampleCount: thisCount,
+              receivedShift: shiftType,
+              receivedDate: date,
+              station: 'Weighing',
+              isFinished: false,
+              createdAt: nowIso
+            });
+          }
+        } else if (row.received > 0) {
+          // Non-eksplorasi -> direct intake
+          newDirects.push({
+            id: `direct_${Date.now()}_${sampleName}_${Math.random().toString(36).substring(2, 6)}`,
+            code: sampleName,
+            group,
+            sampleCount: row.received,
+            shift: shiftType,
+            date,
+            createdAt: nowIso,
+            notes: `Imported via Excel Paste (OS: ${row.outstanding}, Fin: ${row.finished}, Bal: ${row.balance})`
+          });
+        }
+      });
+
+      if (newBatches.length > 0) {
+        const updatedBatches = [...batches, ...newBatches];
+        setBatches(updatedBatches);
+        saveStoredSampleBatches(updatedBatches);
+        batchAddedCount += newBatches.length;
+      }
+
+      if (newDirects.length > 0) {
+        const updatedDirects = [...directIntakes, ...newDirects];
+        setDirectIntakes(updatedDirects);
+        saveStoredDirectSampleIntakes(updatedDirects);
+        directIntakeAddedCount += newDirects.length;
+      }
+
+      if (newBatches.length > 0 || newDirects.length > 0) {
+        window.dispatchEvent(new CustomEvent('preplab-batches-updated'));
+      }
+    }
+
+    // 2. FUSED
+    if (selectedStations.includes('fused') && result.stations.fused) {
+      const st = result.stations.fused;
+      appliedCount++;
+      const totalFin = st.totals.finished ?? 0;
+      if (totalFin > 0) {
+        let remainingToMark = totalFin;
+        let modified = false;
+        const updated = batches.map(b => {
+          if (!b.isFinished && remainingToMark >= b.sampleCount) {
+            remainingToMark -= b.sampleCount;
+            modified = true;
+            return { ...b, isFinished: true };
+          }
+          return b;
+        });
+        if (modified) {
+          setBatches(updated);
+          saveStoredSampleBatches(updated);
+          window.dispatchEvent(new CustomEvent('preplab-batches-updated'));
+        }
+      }
+    }
+
+    // 3. WD-XRF
+    if (selectedStations.includes('wdxrf') && result.stations.wdxrf) {
+      const st = result.stations.wdxrf;
+      appliedCount++;
+      if (st.extras?.ra !== undefined) setZtmARarr(st.extras.ra);
+      if (st.extras?.verStd !== undefined) setZtmAVer(st.extras.verStd);
+      if (st.extras?.rr !== undefined) setZtmBRarr(st.extras.rr);
+
+      st.rows.forEach(r => {
+        const row = r as StandardTableRow;
+        const s = row.sample.toUpperCase();
+        if (s.includes('PROD')) setZtmAPrd(row.finished);
+        else if (s.includes('EXPL')) setZtmBExp(row.finished);
+        else if (s.includes('SMELTER')) setZtmASml(row.finished);
+        else if (s.includes('GTS')) setZtmAGts(row.finished);
+      });
+    }
+
+    // 4. QC DATA
+    if (selectedStations.includes('qc_data') && result.stations.qc_data) {
+      const st = result.stations.qc_data;
+      appliedCount++;
+      if (st.totals.outstanding !== undefined) setQcOs(st.totals.outstanding);
+      if (st.totals.finished !== undefined) setQcFinish(st.totals.finished);
+    }
+
+    // 5. PRESS POWDER
+    if (selectedStations.includes('press') && result.stations.press) {
+      const st = result.stations.press;
+      appliedCount++;
+      if (st.totals.outstanding !== undefined) setPressOsAwal(st.totals.outstanding);
+      if (st.totals.received !== undefined) setPulpDryReceived(st.totals.received);
+      if (st.totals.finished !== undefined) setPressFinish(st.totals.finished);
+    }
+
+    // 6. ED-XRF
+    if (selectedStations.includes('edxrf') && result.stations.edxrf) {
+      const st = result.stations.edxrf;
+      appliedCount++;
+      if (st.totals.outstanding !== undefined) setEdxrfOsAwal(st.totals.outstanding);
+      const fin = st.totals.finished ?? 0;
+      if (fin > 0) {
+        const base = Math.floor(fin / 6);
+        const rem = fin % 6;
+        setEpsC(base + (rem > 0 ? 1 : 0));
+        setEpsD(0);
+        setEpsE(base + (rem > 1 ? 1 : 0));
+        setEpsF(base + (rem > 2 ? 1 : 0));
+        setEpsG(base + (rem > 3 ? 1 : 0));
+        setEpsH(base + (rem > 4 ? 1 : 0));
+        setS2Puma(base);
+      }
+    }
+
+    // 7. MONITORING BEAD
+    if (selectedStations.includes('monitoring_bead') && result.stations.monitoring_bead) {
+      const st = result.stations.monitoring_bead;
+      appliedCount++;
+      if (st.extras?.stdBlank) {
+        setZtmAStd(st.extras.stdBlank.jadi);
+        setZtmABlk(st.extras.stdBlank.reject);
+      }
+    }
+
+    // 8. LOI
+    if (selectedStations.includes('loi') && result.stations.loi) {
+      const st = result.stations.loi;
+      appliedCount++;
+      if (st.totals.outstanding !== undefined) setLoiOs(st.totals.outstanding);
+      const fin = st.totals.finished ?? 0;
+      if (fin > 0) {
+        const part = Math.floor(fin / 3);
+        const rem = fin % 3;
+        setLoiW2(part + (rem > 0 ? 1 : 0));
+        setLoiW4(part + (rem > 1 ? 1 : 0));
+        setLoiW5(part);
+      }
+    }
+
+    toast.success(
+      `Berhasil menerapkan data ${appliedCount} stasiun dari Excel!` +
+      (batchAddedCount > 0 ? ` ${batchAddedCount} batch antrean eksplorasi dibuat.` : '') +
+      (directIntakeAddedCount > 0 ? ` ${directIntakeAddedCount} sampel direct intake dicatat.` : '')
+    );
   };
 
   // Memoized Traceback Context for the opened station
@@ -1060,6 +1254,16 @@ export const DailyReportLaboratoryScreen: React.FC<DailyReportLaboratoryScreenPr
             <span className="hidden md:inline">Skema Traceback & Audit</span>
           </button>
 
+          <button
+            type="button"
+            onClick={() => setIsExcelPasteModalOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 text-xs font-bold hover:bg-emerald-100 dark:hover:bg-emerald-900/50 cursor-pointer shadow-xs transition-all"
+            title="Smart Paste: Baca & terapkan data tabel Excel (satu per satu atau sekaligus seluruh stasiun)"
+          >
+            <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+            <span className="hidden sm:inline">Smart Paste dari Excel</span>
+          </button>
+
           {onNavigateToDailyPerformance && (
             <button
               onClick={onNavigateToDailyPerformance}
@@ -1251,32 +1455,44 @@ export const DailyReportLaboratoryScreen: React.FC<DailyReportLaboratoryScreenPr
 
       {/* 5 SUB-MENUS TAB NAVIGATION */}
       <nav className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-4 sm:px-6">
-        <div className="max-w-7xl mx-auto flex gap-2 overflow-x-auto scrollbar-none py-2 text-xs font-semibold">
-          {[
-            { id: 'weighing_fuse_loi', label: '1. Weighing, Fuse & LOI', icon: <Flame className="w-4 h-4" />, count: `${batches.length} batch` },
-            { id: 'press_edxrf', label: '2. Press & EDXRF', icon: <Layers className="w-4 h-4" />, count: `${edxrfTotal} scan` },
-            { id: 'wdxrf', label: '3. WDXRF', icon: <Cpu className="w-4 h-4" />, count: `${wdxrfTotal} run` },
-            { id: 'qc_data', label: '4. QC Data', icon: <Shield className="w-4 h-4" />, count: `${qcFinish} lolos` },
-            { id: 'reporting', label: '5. Reporting', icon: <FileCheck className="w-4 h-4" />, count: `${reportDone} CoA` },
-          ].map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveSubMenu(tab.id as any)}
-              className={`flex items-center gap-2 py-2 px-3.5 rounded-xl cursor-pointer transition-all whitespace-nowrap ${
-                activeSubMenu === tab.id
-                  ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/20 font-bold'
-                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
-              }`}
-            >
-              {tab.icon}
-              <span>{tab.label}</span>
-              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
-                activeSubMenu === tab.id ? 'bg-white/20 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-500'
-              }`}>
-                {tab.count}
-              </span>
-            </button>
-          ))}
+        <div className="max-w-7xl mx-auto flex items-center justify-between gap-2 py-2">
+          <div className="flex gap-2 overflow-x-auto scrollbar-none text-xs font-semibold">
+            {[
+              { id: 'weighing_fuse_loi', label: '1. Weighing, Fuse & LOI', icon: <Flame className="w-4 h-4" />, count: `${batches.length} batch` },
+              { id: 'press_edxrf', label: '2. Press & EDXRF', icon: <Layers className="w-4 h-4" />, count: `${edxrfTotal} scan` },
+              { id: 'wdxrf', label: '3. WDXRF', icon: <Cpu className="w-4 h-4" />, count: `${wdxrfTotal} run` },
+              { id: 'qc_data', label: '4. QC Data', icon: <Shield className="w-4 h-4" />, count: `${qcFinish} lolos` },
+              { id: 'reporting', label: '5. Reporting', icon: <FileCheck className="w-4 h-4" />, count: `${reportDone} CoA` },
+            ].map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveSubMenu(tab.id as any)}
+                className={`flex items-center gap-2 py-2 px-3.5 rounded-xl cursor-pointer transition-all whitespace-nowrap ${
+                  activeSubMenu === tab.id
+                    ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/20 font-bold'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                }`}
+              >
+                {tab.icon}
+                <span>{tab.label}</span>
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
+                  activeSubMenu === tab.id ? 'bg-white/20 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-500'
+                }`}>
+                  {tab.count}
+                </span>
+              </button>
+            ))}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setIsExcelPasteModalOpen(true)}
+            className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-emerald-300 bg-emerald-50 text-emerald-800 text-xs font-bold hover:bg-emerald-100 cursor-pointer transition-all whitespace-nowrap shadow-xs"
+            title="Tempel tabel dari Excel"
+          >
+            <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+            <span>Paste dari Excel</span>
+          </button>
         </div>
       </nav>
 
@@ -2418,6 +2634,13 @@ export const DailyReportLaboratoryScreen: React.FC<DailyReportLaboratoryScreenPr
       <TracebackSchemeModal
         isOpen={tracebackModalOpen}
         onClose={() => setTracebackModalOpen(false)}
+      />
+
+      {/* MODAL SMART PASTE CLIPBOARD EXCEL */}
+      <ExcelClipboardPasteModal
+        isOpen={isExcelPasteModalOpen}
+        onClose={() => setIsExcelPasteModalOpen(false)}
+        onApplyData={handleApplyExcelData}
       />
 
     </div>

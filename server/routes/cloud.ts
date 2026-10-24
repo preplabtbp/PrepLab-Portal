@@ -73,31 +73,36 @@ router.post("/api/upload", async (req, res) => {
       };
       
       try {
-        const response = await drive.files.create({
+        // Fast race timeout (5s) for Google Drive to prevent hanging UI
+        const driveTimeout = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Google Drive upload timed out after 5s')), 5000)
+        );
+
+        const driveUploadPromise = drive.files.create({
           requestBody: fileMetadata,
           media: media,
           fields: 'id, webViewLink, webContentLink',
-          supportsAllDrives: true // Wajib untuk Shared Drives
-        });
-
-        const fileId = response.data.id;
-
-        // 5. Ubah permission file agar bisa diakses publik (Anyone with the link can view)
-        await drive.permissions.create({
-          fileId: fileId,
-          requestBody: {
-            role: 'reader',
-            type: 'anyone',
-          },
           supportsAllDrives: true
         });
 
-        // Direct link format for image tags (menggunakan proxy internal portal untuk mencegah 403 Forbidden dari Google Drive)
-        const directUrl = `/api/drive/view/${fileId}`;
-        
-        res.json({ url: directUrl, fileId: fileId });
-      } catch (driveErr) {
-        console.error('Drive upload error, falling back to db:', driveErr.message);
+        const response: any = await Promise.race([driveUploadPromise, driveTimeout]);
+        const fileId = response.data?.id;
+
+        if (fileId) {
+          // Asynchronous non-blocking permission update (never blocks the HTTP response)
+          drive.permissions.create({
+            fileId: fileId,
+            requestBody: { role: 'reader', type: 'anyone' },
+            supportsAllDrives: true
+          }).catch(pErr => console.warn('[Drive Permission Notice]', pErr?.message));
+
+          const directUrl = `/api/drive/view/${fileId}`;
+          return res.json({ url: directUrl, fileId: fileId });
+        } else {
+          throw new Error('No fileId returned from Drive');
+        }
+      } catch (driveErr: any) {
+        console.warn('Drive upload slow or error, instant fallback to database storage:', driveErr?.message);
         const result = await db.insert(uploadedFiles).values({
           filename: filename || 'file',
           mimeType: mimeType || 'application/octet-stream',

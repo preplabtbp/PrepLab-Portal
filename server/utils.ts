@@ -22,7 +22,7 @@ export function getIoInstance() {
 
 export async function sendWebPush(
   notifs: any | any[],
-  options?: { targetNiks?: string[]; skipWebPush?: boolean; senderNik?: string }
+  options?: { targetNiks?: string[]; skipWebPush?: boolean; senderNik?: string; universe?: string | null }
 ) {
   try {
     if (env.VAPID_PUBLIC_KEY && env.VAPID_PRIVATE_KEY) {
@@ -83,7 +83,14 @@ export async function sendWebPush(
           targetNiks = Array.from(new Set([...hardcodedDevs, ...devRows.map(d => d.nik.trim())]));
         } else {
           const allEmployees = await db.select().from(employees);
+          const notifLink = String(notif.link || '');
+          const explicitUniverse = options?.universe || notif.universe || (notifLink.includes('/bulletin/GTS') || notifLink.includes('/bulletin/gts') ? 'GTS' : (notifLink.includes('/bulletin/TBP') || notifLink.includes('/bulletin/tbp') ? 'TBP' : null));
+
           targetNiks = allEmployees.filter((e: any) => {
+            const empPt = String(e.pt || 'TBP').toUpperCase();
+            if (explicitUniverse === 'GTS' && !empPt.includes('GTS')) return false;
+            if (explicitUniverse === 'TBP' && empPt.includes('GTS')) return false;
+
             const d = (e.department || '').toLowerCase();
             const s = (e.section || '').toLowerCase();
             const j = (e.jabatan || '').toLowerCase();
@@ -109,7 +116,22 @@ export async function sendWebPush(
           continue;
         }
       } else {
-        subs = await db.select().from(pushSubscriptions);
+        const notifLink = String(notif.link || '');
+        const explicitUniverse = options?.universe || notif.universe || (notifLink.includes('/bulletin/GTS') || notifLink.includes('/bulletin/gts') ? 'GTS' : (notifLink.includes('/bulletin/TBP') || notifLink.includes('/bulletin/tbp') ? 'TBP' : null));
+        if (explicitUniverse) {
+          const allEmps = await db.select({ nik: employees.nik, pt: employees.pt }).from(employees);
+          const validNiks = allEmps.filter(e => {
+            const empPt = String(e.pt || 'TBP').toUpperCase();
+            return explicitUniverse === 'GTS' ? empPt.includes('GTS') : !empPt.includes('GTS');
+          }).map(e => e.nik);
+          if (validNiks.length > 0) {
+            subs = await db.select().from(pushSubscriptions).where(inArray(pushSubscriptions.nik, validNiks));
+          } else {
+            subs = [];
+          }
+        } else {
+          subs = await db.select().from(pushSubscriptions);
+        }
       }
 
       // Deduplicate push subscriptions by endpoint to avoid sending multiple notifications to the same device
@@ -255,6 +277,8 @@ export async function syncBulletinToAgenda(post: any) {
       const pic = contentData.pic || post.authorName || 'PIC Prep & Lab';
       const kategori = hasAgendaDate ? 'SPV UP' : 'General';
 
+      const postUniverse = (post.pt || 'TBP').toUpperCase().includes('GTS') ? 'GTS' : 'TBP_GPS';
+
       const agendaData = {
         id: agendaId,
         title,
@@ -266,6 +290,7 @@ export async function syncBulletinToAgenda(post: any) {
         creatorNik: post.authorNik || null,
         department: post.department || 'ALL',
         bulletinPostId: post.id,
+        universe: postUniverse,
       };
 
       if (existing.length > 0) {
@@ -317,14 +342,26 @@ export async function getNotificationTargets(dept: string) {
   }
 }
 
-export async function getSectionNotificationTargets(sectionOrDept: string) {
+export async function getSectionNotificationTargets(sectionOrDept: string, universe?: string) {
   try {
     const all = await db.select().from(employees);
     const query = (sectionOrDept || '').toLowerCase().trim();
+    const uniUpper = (universe || '').toUpperCase();
+
+    const universeFiltered = all.filter((e: any) => {
+      const empPt = String(e.pt || 'TBP').toUpperCase();
+      if (uniUpper.includes('GTS')) {
+        return empPt.includes('GTS');
+      } else if (uniUpper.includes('TBP') || uniUpper === 'TBP_GPS') {
+        return !empPt.includes('GTS');
+      }
+      return true;
+    });
+
     if (!query || query === 'all' || query === 'semua' || query === 'prep & lab' || query === 'general') {
-      return all;
+      return universeFiltered;
     }
-    return all.filter((e: any) => {
+    return universeFiltered.filter((e: any) => {
       const d = (e.department || '').toLowerCase();
       const s = (e.section || '').toLowerCase();
       const j = (e.jabatan || '').toLowerCase();

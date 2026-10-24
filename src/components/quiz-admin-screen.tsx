@@ -28,7 +28,36 @@ interface QuizScore {
   timestamp: string;
 }
 
-export function QuizAdminScreen({ onBack, userSection }: { onBack: () => void, userSection: string }) {
+export function QuizAdminScreen({ 
+  onBack, 
+  userSection, 
+  isDeveloper = false 
+}: { 
+  onBack: () => void; 
+  userSection?: string; 
+  isDeveloper?: boolean; 
+}) {
+  const isDev = Boolean(
+    isDeveloper ||
+    localStorage.getItem('preplab_is_developer') === 'true' ||
+    localStorage.getItem('p2h_inspector_role')?.toLowerCase() === 'developer' ||
+    localStorage.getItem('p2h_inspector_nik') === '02D24000043' ||
+    localStorage.getItem('p2h_inspector_nik') === '02D25000055' ||
+    localStorage.getItem('p2h_inspector_nik') === '04D21001047' ||
+    localStorage.getItem('p2h_inspector_nik') === '04D24000042' ||
+    localStorage.getItem('p2h_inspector_nik') === 'M0403240177' ||
+    localStorage.getItem('p2h_inspector_nik') === 'preplabadmin' ||
+    localStorage.getItem('preplab_meeting_room_mode') === 'true'
+  );
+
+  const isQA = Boolean(
+    isDev ||
+    !userSection ||
+    userSection.toLowerCase().includes('qa') ||
+    userSection.toLowerCase().includes('quality assurance') ||
+    userSection.toLowerCase().includes('developer') ||
+    userSection.toLowerCase().includes('admin')
+  );
   const [questions, setQuestions] = useState<Question[]>([]);
   const [scores, setScores] = useState<QuizScore[]>([]);
   const [loading, setLoading] = useState(true);
@@ -280,7 +309,7 @@ export function QuizAdminScreen({ onBack, userSection }: { onBack: () => void, u
               <TrendingUp className="w-4 h-4" /> <span className="hidden sm:inline">Skor Crew</span>
             </Button>
           )}
-          {!selectedCategory && (userSection?.toLowerCase().includes('qa') || userSection?.toLowerCase().includes('quality assurance') || userSection === '') && (
+          {!selectedCategory && isQA && (
             <>
               <Button 
                 variant={isQuizLive ? "primary" : "secondary"} 

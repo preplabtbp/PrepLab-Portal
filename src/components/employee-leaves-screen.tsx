@@ -385,7 +385,7 @@ export interface LeaveColumnDef {
   align?: 'left' | 'center' | 'right';
 }
 
-export const LEAVE_COL_STORAGE_KEY = 'preplab_leave_table_col_widths_v1';
+export const LEAVE_COL_STORAGE_KEY = 'preplab_leave_table_col_widths_v2';
 
 export const LEAVE_COLUMNS: LeaveColumnDef[] = [
   { id: 'no', label: 'No', defaultWidth: 55, minWidth: 42, align: 'center' },
@@ -527,10 +527,21 @@ export function EmployeeLeavesScreen({
   // Interactive Column Widths State & Handlers
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>(() => {
     try {
-      const saved = localStorage.getItem(LEAVE_COL_STORAGE_KEY);
-      if (saved) return JSON.parse(saved);
+      let saved = localStorage.getItem(LEAVE_COL_STORAGE_KEY);
+      if (!saved) {
+        saved = localStorage.getItem('preplab_leave_table_col_widths_v1');
+      }
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === 'object') {
+          if (!parsed.tempatTinggal || parsed.tempatTinggal < 220) {
+            parsed.tempatTinggal = 230;
+          }
+          return parsed;
+        }
+      }
     } catch {}
-    return {};
+    return { tempatTinggal: 230 };
   });
 
   const [isAutofit, setIsAutofit] = useState<boolean>(() => {

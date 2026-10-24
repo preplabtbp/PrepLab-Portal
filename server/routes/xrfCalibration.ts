@@ -932,6 +932,52 @@ xrfRouter.post("/verifications", async (req, res) => {
       };
     });
 
+    // Smart Upsert: jika user menginput verifikasi di tanggal dan alat yang sudah ada,
+    // replace data lama standar tersebut sehingga 1 hari hanya terdapat 1 data per standar & alat
+    const incomingStandardCodes = Array.from(new Set(processedItems.map(p => p.standardCode).filter(Boolean)));
+
+    const existingBatches = await db.select({ id: xrfVerifications.id })
+      .from(xrfVerifications)
+      .where(
+        and(
+          eq(xrfVerifications.instrumentCode, instrumentCode),
+          eq(xrfVerifications.verificationDate, verificationDate)
+        )
+      );
+
+    if (existingBatches.length > 0) {
+      const existingIds = existingBatches.map(b => b.id);
+      
+      // Hapus item-item dengan standar yang sama dari batch yang sudah ada pada tanggal & alat tersebut
+      if (incomingStandardCodes.length > 0) {
+        await db.delete(xrfVerificationItems)
+          .where(
+            and(
+              sql`${xrfVerificationItems.verificationId} IN (${sql.join(existingIds.map(id => sql`${id}`), sql`, `)})`,
+              sql`${xrfVerificationItems.standardCode} IN (${sql.join(incomingStandardCodes.map(s => sql`${s}`), sql`, `)})`
+            )
+          );
+      } else {
+        await db.delete(xrfVerificationItems)
+          .where(sql`${xrfVerificationItems.verificationId} IN (${sql.join(existingIds.map(id => sql`${id}`), sql`, `)})`);
+      }
+
+      // Hapus batch yang sudah kosong setelah item lama dihapus
+      const remainingItems = await db.select({
+        verificationId: xrfVerificationItems.verificationId
+      })
+      .from(xrfVerificationItems)
+      .where(sql`${xrfVerificationItems.verificationId} IN (${sql.join(existingIds.map(id => sql`${id}`), sql`, `)})`)
+      .groupBy(xrfVerificationItems.verificationId);
+
+      const remainingSet = new Set(remainingItems.map(r => r.verificationId));
+      const emptyIds = existingIds.filter(id => !remainingSet.has(id));
+      if (emptyIds.length > 0) {
+        await db.delete(xrfVerifications)
+          .where(sql`${xrfVerifications.id} IN (${sql.join(emptyIds.map(id => sql`${id}`), sql`, `)})`);
+      }
+    }
+
     // Insert Header
     const [insertedHeader] = await db.insert(xrfVerifications).values({
       batchCode,
@@ -1244,6 +1290,40 @@ export function invalidateXrfChartCache() {
   qcChartCache = null;
 }
 
+function normalizeXrfAnalyzedAt(rawAnalyzed?: string | null, batchDate?: string | null): string {
+  const clean = (rawAnalyzed || '').trim();
+  const dateStr = (batchDate || '').trim();
+  if (!clean) return dateStr || '';
+
+  // 1. Purely time "HH:mm" or "HH:mm:ss"
+  if (/^\d{1,2}:\d{2}(:\d{2})?$/.test(clean)) {
+    const timePad = clean.slice(0, 5).padStart(5, '0');
+    return dateStr ? `${dateStr} ${timePad}` : timePad;
+  }
+
+  // 2. "DD/MM/YY HH:mm" or "DD/MM/YYYY HH:mm" or "DD-MM-YYYY HH:mm"
+  const m = clean.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})(\s+(\d{1,2}:\d{2}(:\d{2})?))?$/);
+  if (m) {
+    let day = parseInt(m[1], 10);
+    let month = parseInt(m[2], 10);
+    let year = parseInt(m[3], 10);
+    if (year < 100) year = 2000 + year;
+    const timePart = m[5] ? m[5].slice(0, 5).padStart(5, '0') : '00:00';
+    return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')} ${timePart}`;
+  }
+
+  // 3. Already ISO "YYYY-MM-DD HH:mm"
+  if (/^\d{4}-\d{2}-\d{2}/.test(clean)) {
+    const parts = clean.split(/\s+/);
+    if (parts.length >= 2) {
+      return `${parts[0]} ${parts[1].slice(0, 5).padStart(5, '0')}`;
+    }
+    return parts[0];
+  }
+
+  return dateStr ? `${dateStr} ${clean}` : clean;
+}
+
 // 8. GET QC Control Chart Data (Gambar 6 & 4)
 // High-performance with in-memory cache and precomputed all-elements data
 xrfRouter.get("/qc-chart-data", async (req, res) => {
@@ -1454,21 +1534,35 @@ xrfRouter.get("/qc-chart-data", async (req, res) => {
             || groupedData.get(`${spaceStd}::${inst}`)
             || [];
 
-          const pointsForGrid = matchingRows.map((d, idx) => {
+          // Deduplikasi pintar: hindari double titik jika ada data impor ganda pada tanggal & nilai yang sama
+          const deduplicatedRows: typeof matchingRows = [];
+          const seenKeys = new Set<string>();
+
+          for (const d of matchingRows) {
             const val = getter(d);
-            const rawAnalyzed = (d.analyzedAt || '').trim();
-            let combinedAnalyzed = rawAnalyzed;
-            if (!rawAnalyzed) {
-              combinedAnalyzed = d.verificationDate || '';
-            } else if (/^\d{1,2}:\d{2}(:\d{2})?$/.test(rawAnalyzed) && d.verificationDate) {
-              combinedAnalyzed = `${d.verificationDate} ${rawAnalyzed}`.trim();
+            const valFixed = val !== null && val !== undefined ? Number(val).toFixed(4) : '0';
+            const normAnalyzed = normalizeXrfAnalyzedAt(d.analyzedAt, d.verificationDate);
+            const sampleClean = (d.sampleLabel || '').trim().toLowerCase();
+            
+            // Unique key per sample run
+            const dedupKey = `${normAnalyzed}::${sampleClean}::${valFixed}`;
+            if (seenKeys.has(dedupKey)) {
+              continue; // Abaikan duplicate data identik
             }
+            seenKeys.add(dedupKey);
+            deduplicatedRows.push(d);
+          }
+
+          const pointsForGrid = deduplicatedRows.map((d, idx) => {
+            const val = getter(d);
+            const normAnalyzed = normalizeXrfAnalyzedAt(d.analyzedAt, d.verificationDate);
+            const dateOnly = normAnalyzed.split(/\s+/)[0] || d.verificationDate;
             return {
               index: idx + 1,
               id: d.id,
-              date: d.verificationDate,
+              date: dateOnly,
               week: d.weekNo,
-              analyzedAt: combinedAnalyzed,
+              analyzedAt: normAnalyzed,
               value: val !== null && val !== undefined ? Number(val) : 0,
               status: d.itemStatus,
             };
@@ -2009,23 +2103,47 @@ xrfRouter.post("/bulk-import-paste", async (req, res) => {
       const cleanTime = vTime.replace(/[^0-9]/g, '').padEnd(4, '0').slice(0, 4);
       const batchCode = b.batchCode || `VRF-${dateFormatted}-${instCode.replace('_', '')}-${cleanTime}-${String(i + 1).padStart(3, '0')}`;
 
-      // Smart Upsert: Check if batch on the same date, time, and instrument already exists
+      // Smart Upsert: Check if batch on the same date and instrument already exists -> replace so 1 day 1 data
+      const incomingStdCodes = Array.from(new Set(b.items.map((it: any) => it.standardCode).filter(Boolean)));
+
       const existing = await db.select({ id: xrfVerifications.id })
         .from(xrfVerifications)
         .where(
           and(
             eq(xrfVerifications.instrumentCode, instCode),
-            eq(xrfVerifications.verificationDate, vDate),
-            eq(xrfVerifications.verificationTime, vTime)
+            eq(xrfVerifications.verificationDate, vDate)
           )
         );
 
       if (existing.length > 0) {
         const oldIds = existing.map(e => e.id);
-        await db.delete(xrfVerificationItems)
-          .where(sql`${xrfVerificationItems.verificationId} IN (${sql.join(oldIds.map(id => sql`${id}`), sql`, `)})`);
-        await db.delete(xrfVerifications)
-          .where(sql`${xrfVerifications.id} IN (${sql.join(oldIds.map(id => sql`${id}`), sql`, `)})`);
+        if (incomingStdCodes.length > 0) {
+          await db.delete(xrfVerificationItems)
+            .where(
+              and(
+                sql`${xrfVerificationItems.verificationId} IN (${sql.join(oldIds.map(id => sql`${id}`), sql`, `)})`,
+                sql`${xrfVerificationItems.standardCode} IN (${sql.join(incomingStdCodes.map(s => sql`${s}`), sql`, `)})`
+              )
+            );
+        } else {
+          await db.delete(xrfVerificationItems)
+            .where(sql`${xrfVerificationItems.verificationId} IN (${sql.join(oldIds.map(id => sql`${id}`), sql`, `)})`);
+        }
+
+        // Hapus batch yang sudah kosong setelah item lama dihapus
+        const remainingItems = await db.select({
+          verificationId: xrfVerificationItems.verificationId
+        })
+        .from(xrfVerificationItems)
+        .where(sql`${xrfVerificationItems.verificationId} IN (${sql.join(oldIds.map(id => sql`${id}`), sql`, `)})`)
+        .groupBy(xrfVerificationItems.verificationId);
+
+        const remainingSet = new Set(remainingItems.map(r => r.verificationId));
+        const emptyIds = oldIds.filter(id => !remainingSet.has(id));
+        if (emptyIds.length > 0) {
+          await db.delete(xrfVerifications)
+            .where(sql`${xrfVerifications.id} IN (${sql.join(emptyIds.map(id => sql`${id}`), sql`, `)})`);
+        }
       }
 
       // Evaluate items against standard references
@@ -2045,12 +2163,7 @@ xrfRouter.post("/bulk-import-paste", async (req, res) => {
           standardCode: it.standardCode,
           sampleLabel: it.sampleLabel || it.displayName || it.standardCode,
           sequenceNo: Number(it.sequenceNo) || (itemIdx + 1),
-          analyzedAt: (() => {
-            const raw = (it.analyzedAt || '').trim();
-            if (!raw) return `${vDate} ${vTime}`.trim();
-            if (/^\d{1,2}:\d{2}(:\d{2})?$/.test(raw)) return `${vDate} ${raw}`.trim();
-            return raw;
-          })(),
+          analyzedAt: normalizeXrfAnalyzedAt(it.analyzedAt, vDate),
           ni: Number(it.ni) || 0,
           co: Number(it.co) || 0,
           fe: Number(it.fe) || 0,

@@ -689,7 +689,7 @@ export function QuizScreen({
   const isTimeCritical = timeLeft < 300; // Under 5 minutes
 
   return (
-    <div className="min-h-screen bg-slate-100 text-slate-900 flex flex-col justify-between selection:bg-blue-600 selection:text-white pb-28">
+    <div className="min-h-screen bg-slate-100 text-slate-900 flex flex-col justify-between selection:bg-blue-600 selection:text-white pb-32 sm:pb-28">
       
       {/* 1. ENTERPRISE STICKY HEADER */}
       <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-sm">
@@ -914,7 +914,7 @@ export function QuizScreen({
       </main>
 
       {/* 3. ENTERPRISE STICKY BOTTOM ACTION BAR */}
-      <footer className="fixed bottom-0 left-0 right-0 z-30 bg-white/95 backdrop-blur-lg border-t border-slate-200 px-3 sm:px-6 py-3 shadow-md">
+      <footer className="fixed bottom-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-lg border-t border-slate-200 px-3 sm:px-6 py-2.5 sm:py-3 shadow-lg pb-safe">
         <div className="max-w-3xl mx-auto flex items-center justify-between gap-2.5">
           
           {/* Previous Button */}

@@ -1,3 +1,4 @@
+import { VerifiedBadge } from '../VerifiedBadge';
 import React, { useState, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 import SignatureCanvas from 'react-signature-canvas';
@@ -1691,8 +1692,8 @@ export function P2HLaboratoryAccordionForm({
                       <img src={savedSignatureUrl} alt="TTD Resmi Akun" className="max-h-full max-w-full object-contain" />
                     </div>
                     <div>
-                      <div className="text-xs font-bold text-emerald-800 dark:text-emerald-200 flex items-center gap-1.5">
-                        <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" /> TTD Resmi Terverifikasi
+                      <div className="text-xs font-bold text-sky-800 dark:text-sky-200 flex items-center gap-1.5">
+                        <VerifiedBadge size="sm" /> TTD Resmi Terverifikasi
                       </div>
                       <div className="text-[11px] text-emerald-700/80 dark:text-emerald-300/80 mt-0.5">
                         Tanda tangan resmi dari Pengaturan Akun siap disematkan.

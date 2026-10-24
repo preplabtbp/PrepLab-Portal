@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { User } from 'lucide-react';
+import { VerifiedBadge } from './VerifiedBadge';
 
 export interface PicItem {
   nik?: string;
@@ -296,8 +297,10 @@ export function PicAvatarGroup({
 
                 {/* Right: Info Stack matching screenshot */}
                 <div className="min-w-0 flex-1 space-y-0.5">
-                  <h4 className="font-black text-sm text-slate-950 dark:text-white leading-tight truncate" title={name}>
-                    {name} {isSelf && <span className="font-bold text-teal-600 dark:text-teal-400">(You)</span>}
+                  <h4 className="font-black text-sm text-slate-950 dark:text-white leading-tight truncate flex items-center gap-1.5" title={name}>
+                    <span className="truncate">{name}</span>
+                    {emp && <VerifiedBadge size="xs" title="Personil Terverifikasi Data Roster Resmi" />}
+                    {isSelf && <span className="font-bold text-teal-600 dark:text-teal-400 shrink-0">(You)</span>}
                   </h4>
 
                   <p className="text-xs font-semibold text-slate-600 dark:text-slate-300 truncate">

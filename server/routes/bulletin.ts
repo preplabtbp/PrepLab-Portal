@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db, isDbCircuitBroken } from "../../src/db/index.js";
-import { eq, desc, or, inArray, isNull, and, gte, lte, sql, like } from "drizzle-orm";
+import { eq, desc, or, inArray, isNull, and, gte, lte, sql, like, ilike } from "drizzle-orm";
 import { 
   chatMessages, employees, equipments, workOrders, users, tickets, downtime, 
   spareparts, apdSettings, apdHistory, apdDocuments, roster, inspections, 
@@ -25,11 +25,46 @@ interface BulletinListCache {
   timestamp: number;
 }
 const bulletinListCache = new Map<string, BulletinListCache>();
-const BULLETIN_CACHE_TTL_MS = 60 * 1000; // 60 seconds
+const BULLETIN_CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes cache TTL for instant responses
 
 export function clearBulletinCache() {
   bulletinListCache.clear();
 }
+
+// Background pre-warmer to eliminate cold-start DB latency for all users
+export async function warmBulletinCache() {
+  try {
+    for (const targetPt of ['ALL', 'TBP', 'GTS']) {
+      const conditions: any[] = [];
+      if (targetPt === 'GTS') {
+        conditions.push(eq(bulletinPosts.pt, 'GTS'));
+      } else if (targetPt !== 'ALL') {
+        conditions.push(or(
+          eq(bulletinPosts.pt, 'TBP'),
+          eq(bulletinPosts.pt, 'GPS'),
+          eq(bulletinPosts.pt, 'TBP_GPS'),
+          isNull(bulletinPosts.pt)
+        ));
+      }
+      let baseQuery = db.select().from(bulletinPosts);
+      if (conditions.length > 0) {
+        baseQuery = baseQuery.where(and(...conditions)) as any;
+      }
+      const data = await (baseQuery as any).orderBy(bulletinPosts.createdAt);
+      if (Array.isArray(data) && data.length > 0) {
+        bulletinListCache.set(`${targetPt}_ALL_ALL`, { data, timestamp: Date.now() });
+      }
+    }
+    console.log('[Bulletin Cache] Pre-warming completed successfully.');
+  } catch (err: any) {
+    console.warn('[Bulletin Cache] Pre-warming notice:', err?.message);
+  }
+}
+
+// Warm cache automatically in background shortly after startup
+setTimeout(() => {
+  warmBulletinCache();
+}, 2000);
 
 router.get("/api/bulletin", async (req, res) => {
     try {
@@ -37,8 +72,9 @@ router.get("/api/bulletin", async (req, res) => {
       
       const isSuperUser = nik === '02D24000043' || nik === '02D25000055' || nik === 'M0403240177' || nik === 'preplabadmin';
 
-      // Fast in-memory cache lookup
-      const cacheKey = `${pt || 'DEFAULT'}_${nik || 'ALL'}_${page || 'ALL'}_${limit || 'ALL'}`;
+      // Normalize effective universe so all users for the same universe share the high-speed cache
+      const effectivePt = (pt === 'ALL' || (isSuperUser && !pt)) ? 'ALL' : (pt === 'GTS' ? 'GTS' : 'TBP');
+      const cacheKey = `${effectivePt}_${page || 'ALL'}_${limit || 'ALL'}`;
       const cached = bulletinListCache.get(cacheKey);
       if (cached && (Date.now() - cached.timestamp < BULLETIN_CACHE_TTL_MS)) {
         return res.json({ status: "success", data: cached.data });
@@ -46,8 +82,8 @@ router.get("/api/bulletin", async (req, res) => {
       
       const conditions: any[] = [];
       
-      // If pt === 'ALL' or (isSuperUser and no pt specified), return all bulletin posts
-      if (pt === 'ALL' || (isSuperUser && !pt)) {
+      // If pt === 'ALL', return all bulletin posts across both universes
+      if (pt === 'ALL') {
         // unrestricted access
       } else if (pt === 'GTS') {
         conditions.push(eq(bulletinPosts.pt, 'GTS'));
@@ -213,8 +249,304 @@ router.get("/api/bulletin/search", async (req, res) => {
     }
   });
 
+// GET /api/search/omni - Global Enterprise Omnisearch for Topics, Attachments, and Tasks
+router.get("/api/search/omni", async (req, res) => {
+  try {
+    const rawQ = String(req.query.q || "").trim();
+    if (!rawQ || rawQ.length < 2) {
+      return res.json({
+        status: "success",
+        query: rawQ,
+        data: { topics: [], attachments: [], tasks: [] }
+      });
+    }
+
+    const qLower = rawQ.toLowerCase();
+    const ptParam = String(req.query.pt || "TBP").toUpperCase();
+    const isGts = ptParam === "GTS";
+
+    // 1. Universe filter conditions for posts
+    const postConditions: any[] = [];
+    if (ptParam !== "ALL") {
+      if (isGts) {
+        postConditions.push(eq(bulletinPosts.pt, "GTS"));
+      } else {
+        postConditions.push(or(
+          eq(bulletinPosts.pt, "TBP"),
+          eq(bulletinPosts.pt, "GPS"),
+          eq(bulletinPosts.pt, "TBP_GPS"),
+          isNull(bulletinPosts.pt)
+        ));
+      }
+    }
+
+    const postSearchFilter = or(
+      ilike(bulletinPosts.title, `%${rawQ}%`),
+      ilike(bulletinPosts.category, `%${rawQ}%`),
+      ilike(bulletinPosts.department, `%${rawQ}%`),
+      ilike(bulletinPosts.content, `%${rawQ}%`)
+    );
+
+    const fullPostQuery = postConditions.length > 0
+      ? and(...postConditions, postSearchFilter)
+      : postSearchFilter;
+
+    const matchedPosts = await db
+      .select({
+        id: bulletinPosts.id,
+        title: bulletinPosts.title,
+        department: bulletinPosts.department,
+        category: bulletinPosts.category,
+        content: bulletinPosts.content,
+        authorName: bulletinPosts.authorName,
+        pt: bulletinPosts.pt,
+        createdAt: bulletinPosts.createdAt
+      })
+      .from(bulletinPosts)
+      .where(fullPostQuery)
+      .limit(30);
+
+    // 2. Search attachments in bulletin comments
+    const commentConditions: any[] = [];
+    if (ptParam !== "ALL") {
+      if (isGts) {
+        // Universe GTS: HANYA komentar pada dokumen GTS
+        commentConditions.push(
+          or(
+            eq(bulletinPosts.pt, "GTS"),
+            eq(bulletinComments.universe, "GTS")
+          )
+        );
+      } else {
+        // Universe TBP / GPS: STRICTLY NON-GTS
+        commentConditions.push(
+          and(
+            or(
+              eq(bulletinPosts.pt, "TBP"),
+              eq(bulletinPosts.pt, "GPS"),
+              eq(bulletinPosts.pt, "TBP_GPS"),
+              isNull(bulletinPosts.pt)
+            ),
+            or(
+              eq(bulletinComments.universe, "TBP_GPS"),
+              eq(bulletinComments.universe, "TBP"),
+              isNull(bulletinComments.universe)
+            )
+          )
+        );
+      }
+    }
+
+    const commentSearchFilter = or(
+      ilike(bulletinComments.fileName, `%${rawQ}%`),
+      ilike(bulletinComments.fileUrl, `%${rawQ}%`),
+      ilike(bulletinComments.topicTitle, `%${rawQ}%`),
+      ilike(bulletinComments.content, `%${rawQ}%`)
+    );
+
+    const fullCommentQuery = commentConditions.length > 0
+      ? and(...commentConditions, commentSearchFilter)
+      : commentSearchFilter;
+
+    const matchedComments = await db
+      .select({
+        id: bulletinComments.id,
+        postId: bulletinComments.postId,
+        topicTitle: bulletinComments.topicTitle,
+        section: bulletinComments.section,
+        authorName: bulletinComments.authorName,
+        content: bulletinComments.content,
+        fileUrl: bulletinComments.fileUrl,
+        fileName: bulletinComments.fileName,
+        createdAt: bulletinComments.createdAt,
+        postPt: bulletinPosts.pt,
+        postTitle: bulletinPosts.title
+      })
+      .from(bulletinComments)
+      .leftJoin(bulletinPosts, eq(bulletinComments.postId, bulletinPosts.id))
+      .where(fullCommentQuery)
+      .limit(30);
+
+    // Helper: Determine file type
+    const getFileType = (nameOrUrl: string) => {
+      const lower = nameOrUrl.toLowerCase();
+      if (lower.endsWith(".pdf") || lower.includes(".pdf?")) return "pdf";
+      if (lower.endsWith(".xlsx") || lower.endsWith(".xls") || lower.endsWith(".csv") || lower.includes("spreadsheet")) return "excel";
+      if (lower.endsWith(".docx") || lower.endsWith(".doc")) return "word";
+      if (lower.endsWith(".png") || lower.endsWith(".jpg") || lower.endsWith(".jpeg") || lower.endsWith(".webp") || lower.endsWith(".svg")) return "image";
+      if (lower.endsWith(".zip") || lower.endsWith(".rar")) return "archive";
+      if (lower.includes("drive.google.com")) return "drive";
+      return "file";
+    };
+
+    // Helper: Context snippet around query match
+    const makeSnippet = (text: string, query: string, maxLength = 130) => {
+      if (!text) return "";
+      const clean = text.replace(/<[^>]+>/g, " ").replace(/[#*`|_\-\[\]]/g, " ").replace(/\s+/g, " ").trim();
+      const idx = clean.toLowerCase().indexOf(query.toLowerCase());
+      if (idx === -1) return clean.slice(0, maxLength) + (clean.length > maxLength ? "..." : "");
+      const start = Math.max(0, idx - 35);
+      const end = Math.min(clean.length, idx + query.length + 75);
+      return (start > 0 ? "..." : "") + clean.slice(start, end) + (end < clean.length ? "..." : "");
+    };
+
+    const topicsResult: any[] = [];
+    const tasksResult: any[] = [];
+    const attachmentsResult: any[] = [];
+    const seenAttachmentUrls = new Set<string>();
+
+    for (const post of matchedPosts) {
+      const titleLower = (post.title || "").toLowerCase();
+      const isTitleMatch = titleLower.includes(qLower);
+      const postUniverse = (post.pt || "TBP").toUpperCase().includes("GTS") ? "GTS" : "TBP";
+
+      // Add to Topics list
+      topicsResult.push({
+        id: post.id,
+        title: post.title || "Untitled Document",
+        department: post.department,
+        category: post.category,
+        authorName: post.authorName,
+        pt: postUniverse,
+        createdAt: post.createdAt,
+        snippet: makeSnippet(post.content || "", rawQ),
+        isDirectTitleMatch: isTitleMatch,
+        link: `/bulletin/${postUniverse}?postId=${post.id}`
+      });
+
+      const contentStr = post.content || "";
+
+      // 2A. Scan content for individual tasks in Markdown tables
+      if (contentStr.includes("|")) {
+        const lines = contentStr.split("\n");
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i].trim();
+          if (!line.startsWith("|") || line.includes("---")) continue;
+          if (line.toLowerCase().includes(qLower)) {
+            const rawCells = line.split("|").map(c => c.trim());
+            const cells = rawCells.slice(1, rawCells.length - 1);
+            if (cells.length >= 2) {
+              const taskTitle = cells[1] || cells[0];
+              const desc = cells[2] || "";
+              const pic = cells.find(c => c.toLowerCase().includes("pic:") || (c.length > 2 && c.length < 25 && !c.includes("---"))) || cells[3] || "-";
+              const status = cells.find(c => ["done", "in progress", "pending", "open", "closed", "selesai"].includes(c.toLowerCase())) || cells[5] || "-";
+              const priority = cells.find(c => ["high", "medium", "low", "critical", "tinggi", "sedang"].includes(c.toLowerCase())) || cells[4] || "-";
+
+              const cleanTaskTitle = taskTitle.replace(/<!--.*?-->/g, "").replace(/^[↳\s*]+/, "").trim();
+              if (cleanTaskTitle && cleanTaskTitle.length > 2 && !cleanTaskTitle.toLowerCase().includes("jenis kegiatan")) {
+                tasksResult.push({
+                  id: `task-${post.id}-${i}`,
+                  postId: post.id,
+                  postTitle: post.title,
+                  section: post.category || post.department,
+                  pt: postUniverse,
+                  taskTitle: cleanTaskTitle,
+                  desc: desc.slice(0, 110),
+                  pic: pic.replace(/^pic:\s*/i, "").trim(),
+                  status,
+                  priority,
+                  link: `/bulletin/${postUniverse}?postId=${post.id}&topic=${encodeURIComponent(cleanTaskTitle)}`
+                });
+              }
+            }
+          }
+        }
+      }
+
+      // 2B. Scan content for embedded markdown attachment links [FileName](URL)
+      const linkRegex = /\[([^\]]+)\]\((https?:\/\/[^\s\)]+)\)/g;
+      let match;
+      while ((match = linkRegex.exec(contentStr)) !== null) {
+        const linkName = match[1].trim();
+        const linkUrl = match[2].trim();
+        const combined = `${linkName} ${linkUrl}`.toLowerCase();
+        if (combined.includes(qLower) || getFileType(linkUrl) !== "file") {
+          if (!seenAttachmentUrls.has(linkUrl) && (combined.includes(qLower) || linkName.toLowerCase().includes(qLower))) {
+            seenAttachmentUrls.add(linkUrl);
+            attachmentsResult.push({
+              id: `att-post-${post.id}-${attachmentsResult.length}`,
+              name: linkName,
+              url: linkUrl,
+              fileType: getFileType(linkName || linkUrl),
+              sourcePostId: post.id,
+              sourcePostTitle: post.title,
+              sourceSection: post.category || post.department,
+              uploader: post.authorName,
+              pt: postUniverse,
+              createdAt: post.createdAt,
+              link: `/bulletin/${postUniverse}?postId=${post.id}`
+            });
+          }
+        }
+      }
+
+      // 2C. Scan raw Google Drive Links
+      const driveRegex = /(https:\/\/drive\.google\.com\/[^\s\)\"\'\<\>]+)/g;
+      while ((match = driveRegex.exec(contentStr)) !== null) {
+        const driveUrl = match[1].trim();
+        if (!seenAttachmentUrls.has(driveUrl)) {
+          if (driveUrl.toLowerCase().includes(qLower) || post.title?.toLowerCase().includes(qLower)) {
+            seenAttachmentUrls.add(driveUrl);
+            attachmentsResult.push({
+              id: `att-drive-${post.id}-${attachmentsResult.length}`,
+              name: `Lampiran Dokumen Google Drive (${post.title || "Dokumen"})`,
+              url: driveUrl,
+              fileType: "drive",
+              sourcePostId: post.id,
+              sourcePostTitle: post.title,
+              sourceSection: post.category || post.department,
+              uploader: post.authorName,
+              pt: postUniverse,
+              createdAt: post.createdAt,
+              link: `/bulletin/${postUniverse}?postId=${post.id}`
+            });
+          }
+        }
+      }
+    }
+
+    // 3. Process Comment Attachments
+    for (const c of matchedComments) {
+      if (c.fileUrl && !seenAttachmentUrls.has(c.fileUrl)) {
+        seenAttachmentUrls.add(c.fileUrl);
+        const commentUniverse = (c.postPt || "TBP").toUpperCase().includes("GTS") ? "GTS" : "TBP";
+        attachmentsResult.push({
+          id: `att-comment-${c.id}`,
+          name: c.fileName || `Lampiran: ${c.topicTitle || c.postTitle || "Topik"}`,
+          url: c.fileUrl,
+          fileType: getFileType(c.fileName || c.fileUrl),
+          sourcePostId: c.postId,
+          sourcePostTitle: c.postTitle,
+          sourceTopic: c.topicTitle,
+          sourceSection: c.section,
+          uploader: c.authorName,
+          pt: commentUniverse,
+          createdAt: c.createdAt,
+          link: `/bulletin/${commentUniverse}?postId=${c.postId}&topic=${encodeURIComponent(c.topicTitle || "")}`
+        });
+      }
+    }
+
+    // Sort: direct title matches first
+    topicsResult.sort((a, b) => (b.isDirectTitleMatch ? 1 : 0) - (a.isDirectTitleMatch ? 1 : 0));
+
+    res.json({
+      status: "success",
+      query: rawQ,
+      data: {
+        topics: topicsResult.slice(0, 12),
+        attachments: attachmentsResult.slice(0, 12),
+        tasks: tasksResult.slice(0, 12)
+      }
+    });
+  } catch (err: any) {
+    console.error("[Omnisearch Error]:", err);
+    res.status(500).json({ status: "error", message: err.message });
+  }
+});
+
 // GET Single Post by ID for direct navigation and real-time device sync
-router.get("/api/bulletin/:id", async (req, res) => {
+router.get("/api/bulletin/:id(\\d+)", async (req, res) => {
   try {
     const rawId = String(req.params.id || '');
     const id = parseInt(rawId, 10);
@@ -245,10 +577,12 @@ router.get("/api/bulletin/:id", async (req, res) => {
 
 router.post("/api/bulletin", async (req, res) => {
     try {
-      const newPostData = req.body;
-      if (!newPostData.pt) newPostData.pt = 'TBP';
+      const sanitized = sanitizePayload(bulletinPosts, req.body) || {};
+      delete sanitized.id;
+      if (!sanitized.pt) sanitized.pt = 'TBP';
+      sanitized.universe = sanitized.pt === 'GTS' ? 'GTS' : 'TBP_GPS';
       
-      const result = await db.insert(bulletinPosts).values(newPostData).returning();
+      const result = await db.insert(bulletinPosts).values(sanitized).returning();
       const post = result[0];
       clearBulletinCache();
       
@@ -257,7 +591,7 @@ router.post("/api/bulletin", async (req, res) => {
       
       const dept = post.department || 'General';
       const postUniverse = (post.pt || 'TBP').toUpperCase().includes('GTS') ? 'GTS' : 'TBP';
-      const targets = await getSectionNotificationTargets(dept);
+      const targets = await getSectionNotificationTargets(dept, postUniverse);
       
       const notificationsData = targets
         .filter(t => t.nik !== post.authorNik && t.nik)
@@ -273,7 +607,7 @@ router.post("/api/bulletin", async (req, res) => {
         
       if (notificationsData.length > 0) {
         const insertedNotifs = await db.insert(notifications).values(notificationsData).returning();
-        sendWebPush(insertedNotifs);
+        sendWebPush(insertedNotifs, { universe: postUniverse });
       }
       
       res.json({ status: "success", data: post });
@@ -322,7 +656,17 @@ router.get("/api/bulletin/:id/comments", async (req, res) => {
         return res.json({ status: "success", data: [] });
       }
 
-      const { topicTitle, topicId } = req.query as { topicTitle?: string; topicId?: string };
+      const { topicTitle, topicId, pt: queryPt, section: querySection } = req.query as { 
+        topicTitle?: string; 
+        topicId?: string; 
+        pt?: string; 
+        section?: string; 
+      };
+
+      // Retrieve post metadata to ensure strict PT universe & section alignment
+      const postRows = await db.select().from(bulletinPosts).where(eq(bulletinPosts.id, postId)).limit(1);
+      const post = postRows[0];
+      const targetUniverse = ((queryPt || post?.pt || 'TBP').toUpperCase().includes('GTS')) ? 'GTS' : 'TBP_GPS';
 
       const data = await db
         .select({
@@ -332,6 +676,7 @@ router.get("/api/bulletin/:id/comments", async (req, res) => {
           topicId: bulletinComments.topicId,
           section: bulletinComments.section,
           category: bulletinComments.category,
+          universe: bulletinComments.universe,
           statusUpdate: bulletinComments.statusUpdate,
           authorNik: bulletinComments.authorNik,
           authorName: bulletinComments.authorName,
@@ -353,10 +698,17 @@ router.get("/api/bulletin/:id/comments", async (req, res) => {
         .orderBy(desc(bulletinComments.createdAt));
 
       let result = data;
+
+      // Strict Universe Isolation: Do not leak GTS comments into TBP or vice-versa
+      result = result.filter(c => {
+        if (!c.universe) return true; // legacy unassigned
+        return c.universe === targetUniverse;
+      });
+
       if (topicTitle || topicId) {
         const qTitle = (topicTitle || '').toLowerCase().trim();
         const qId = (topicId || '').toLowerCase().trim();
-        result = data.filter((c) => {
+        result = result.filter((c) => {
           const t = (c.topicTitle || '').toLowerCase().trim();
           const id = (c.topicId || '').toLowerCase().trim();
           return (qTitle && t === qTitle) || (qId && id === qId);
@@ -406,12 +758,26 @@ router.post("/api/bulletin/:id/comments", async (req, res) => {
         return res.status(400).json({ status: "error", message: "Komentar tidak boleh kosong" });
       }
 
+      // Pastikan dokumen target ada dan warisi universe dari post induk
+      const postArray = await db.select().from(bulletinPosts).where(eq(bulletinPosts.id, postId)).limit(1);
+      const post = postArray[0];
+      if (!post) {
+        return res.status(404).json({ 
+          status: "error", 
+          message: "Dokumen Labnote tidak ditemukan di database." 
+        });
+      }
+
+      const postUniverse = (post.pt || pt || 'TBP').toUpperCase().includes('GTS') ? 'GTS' : 'TBP';
+      const commentUniverse = postUniverse === 'GTS' ? 'GTS' : 'TBP_GPS';
+      const derivedSection = section || post.category || post.department || null;
+
       const inserted = await db.insert(bulletinComments).values({
         postId,
         topicTitle: topicTitle || null,
         topicId: topicId || null,
-        section: section || null,
-        category: category || null,
+        section: derivedSection,
+        category: category || post.title || null,
         statusUpdate: statusUpdate || null,
         authorNik: authorNik || null,
         authorName: authorName || 'Seseorang',
@@ -422,16 +788,13 @@ router.post("/api/bulletin/:id/comments", async (req, res) => {
         replyToNik: replyToNik || null,
         replyToName: replyToName || null,
         replyToContent: replyToContent || null,
-        universe: pt || 'TBP_GPS',
+        universe: commentUniverse,
       }).returning();
 
       const comment = inserted[0];
 
       // Notification calculation by Section, PIC, and Reply Target
-      const postArray = await db.select().from(bulletinPosts).where(eq(bulletinPosts.id, postId)).limit(1);
-      const post = postArray[0];
       const postSection = section || post?.category || post?.department || 'Prep & Lab';
-      const postUniverse = (pt || post?.pt || 'TBP').toUpperCase().includes('GTS') ? 'GTS' : 'TBP';
 
       const topicLabel = topicTitle ? `"${topicTitle.length > 35 ? topicTitle.substring(0, 35) + '...' : topicTitle}"` : (post?.title || 'Topik');
       const notifLink = `/bulletin/${postUniverse}?postId=${postId}&topic=${encodeURIComponent(topicTitle || '')}`;
@@ -464,17 +827,20 @@ router.post("/api/bulletin/:id/comments", async (req, res) => {
           ? `${authorName || 'Personil'} mengupdate status topik ${topicLabel} ke "${statusUpdate}".`
           : `${authorName || 'Personil'} berkomentar di topik ${topicLabel}: "${displayContent}"`;
 
-        // 1. Notifikasi Broadcast Seksi (userId = null, role = postSection)
-        // Native didukung oleh GET /api/notifications & WebPush tanpa perlu menduplikasi ratusan baris di database
-        notificationsData.push({
-          userId: null,
-          role: postSection,
-          title: notifTitle,
-          message: notifMessage,
-          type: statusUpdate ? 'success' : 'info',
-          link: notifLink,
-          isRead: false,
-        });
+        // 1. Notifikasi Terarah Seksi (Khusus universe post yang bersangkutan)
+        const sectionTargets = await getSectionNotificationTargets(postSection, postUniverse);
+        const sectionNotifs = sectionTargets
+          .filter(t => t.nik && t.nik !== authorNik && t.nik !== post?.authorNik && t.nik !== picNik)
+          .map(t => ({
+            userId: t.nik,
+            role: postSection,
+            title: notifTitle,
+            message: notifMessage,
+            type: statusUpdate ? 'success' : 'info',
+            link: notifLink,
+            isRead: false,
+          }));
+        notificationsData.push(...sectionNotifs);
 
         // 2. Jika pembuat artikel bukan pengirim komentar, kirimkan notifikasi personal
         if (post?.authorNik && post.authorNik !== authorNik) {
@@ -506,7 +872,7 @@ router.post("/api/bulletin/:id/comments", async (req, res) => {
       if (notificationsData.length > 0) {
         const insertedNotifs = await db.insert(notifications).values(notificationsData).returning();
         const notifsWithSender = insertedNotifs.map((n: any) => ({ ...n, senderNik: authorNik }));
-        sendWebPush(notifsWithSender, { senderNik: authorNik });
+        sendWebPush(notifsWithSender, { senderNik: authorNik, universe: postUniverse });
       }
 
       res.json({ status: "success", data: comment });
@@ -952,6 +1318,7 @@ export async function syncBulletinToLogbook(post: any) {
             targetDate: defaultTargetDate,
             targetTime: '23:59',
             pt: post.pt || 'TBP',
+            universe: (post.pt || 'TBP').toUpperCase().includes('GTS') ? 'GTS' : 'TBP_GPS',
             bulletinPostId: post.id,
             bulletinTopicTitle: rTitle
           }).returning();
@@ -968,7 +1335,16 @@ export async function syncBulletinToLogbook(post: any) {
 
 router.put("/api/bulletin/:id", async (req, res) => {
     try {
-      const result = await db.update(bulletinPosts).set(req.body).where(eq(bulletinPosts.id, parseInt(req.params.id))).returning();
+      const postId = parseInt(req.params.id);
+      if (isNaN(postId)) {
+        return res.status(400).json({ status: "error", message: "ID dokumen tidak valid." });
+      }
+      const sanitized = sanitizePayload(bulletinPosts, req.body) || {};
+      delete sanitized.id;
+      if (sanitized.pt) {
+        sanitized.universe = sanitized.pt === 'GTS' ? 'GTS' : 'TBP_GPS';
+      }
+      const result = await db.update(bulletinPosts).set(sanitized).where(eq(bulletinPosts.id, postId)).returning();
       const post = result[0];
       clearBulletinCache();
       if (post) {
@@ -976,7 +1352,7 @@ router.put("/api/bulletin/:id", async (req, res) => {
         await syncBulletinToLogbook(post);
       }
       res.json({ status: "success", data: post });
-    } catch (error) {
+    } catch (error: any) {
       res.status(500).json({ status: "error", message: error.message });
     }
   });
@@ -1060,14 +1436,134 @@ router.post("/api/bulletin/move-topic", async (req, res) => {
     }
   });
 
+router.post("/api/bulletin/rename-topic", async (req, res) => {
+    try {
+      const { postId, oldTopicTitle, newTopicTitle, topicId } = req.body;
+      if (!oldTopicTitle || !newTopicTitle) {
+        return res.status(400).json({ status: "error", message: "Missing oldTopicTitle or newTopicTitle" });
+      }
+
+      const cleanOld = String(oldTopicTitle).trim();
+      const cleanNew = String(newTopicTitle).trim();
+      if (cleanOld.toLowerCase() === cleanNew.toLowerCase()) {
+        return res.json({ status: "success", message: "Titles are identical, no update needed", updatedCount: 0 });
+      }
+
+      const pId = postId ? parseInt(String(postId), 10) : null;
+      const cleanOldBase = cleanOld.replace(/^[↳↪\s]+/, '').replace(/<!--[\s\S]*?-->/g, '').replace(/\[[ xX]\]\s*/, '').trim();
+      const cleanNewBase = cleanNew.replace(/^[↳↪\s]+/, '').replace(/<!--[\s\S]*?-->/g, '').replace(/\[[ xX]\]\s*/, '').trim();
+
+      const titleOrFilters = [
+        eq(bulletinComments.topicTitle, cleanOld),
+        eq(bulletinComments.topicTitle, cleanOldBase),
+        like(bulletinComments.topicTitle, `${cleanOld} - %`),
+        like(bulletinComments.topicTitle, `${cleanOldBase} - %`),
+        ilike(bulletinComments.topicTitle, `%${cleanOldBase}%`),
+        ilike(bulletinComments.topicTitle, `%${cleanOld}%`),
+        ilike(bulletinComments.topicId, `%${cleanOldBase}%`)
+      ];
+      if (topicId) {
+        titleOrFilters.push(eq(bulletinComments.topicId, String(topicId).trim()));
+        titleOrFilters.push(ilike(bulletinComments.topicId, `%${String(topicId).trim()}%`));
+      }
+
+      const whereClause = pId && !isNaN(pId)
+        ? and(eq(bulletinComments.postId, pId), or(...titleOrFilters))
+        : or(...titleOrFilters);
+
+      const commentsToUpdate = await db
+        .select()
+        .from(bulletinComments)
+        .where(whereClause);
+
+      for (const c of commentsToUpdate) {
+        const rawTitle = c.topicTitle || '';
+        // Check if comment title has sub-arrow (↳ or ↪)
+        const hasSubArrow = /^[↳↪]\s*/.test(rawTitle);
+        // Extract any HTML comments like <!--origin-id:593--> or <!--task-id:...-->
+        const htmlCommentsMatch = rawTitle.match(/<!--[\s\S]*?-->/g);
+        const metaTags = htmlCommentsMatch ? htmlCommentsMatch.join(' ') : '';
+        // Extract any sub-period suffix like " - 15 Okt 2026"
+        const cleanCTitle = rawTitle.replace(/^[↳↪\s]+/, '').replace(/<!--[\s\S]*?-->/g, '').trim();
+        const suffixMatch = cleanCTitle.match(/\s+-\s+([^-]+)$/);
+
+        let updatedCore = cleanNewBase;
+        if (suffixMatch) {
+          updatedCore = `${cleanNewBase} - ${suffixMatch[1].trim()}`;
+        }
+        let updatedTitle = updatedCore;
+        if (metaTags) {
+          updatedTitle = `${updatedTitle} ${metaTags}`;
+        }
+        if (hasSubArrow) {
+          updatedTitle = `↳ ${updatedTitle}`;
+        }
+
+        let updatedTopicId = c.topicId || '';
+        const oldSlug = cleanOldBase.toLowerCase().replace(/\s+/g, '-');
+        const newSlug = cleanNewBase.toLowerCase().replace(/\s+/g, '-');
+        if (oldSlug && updatedTopicId.includes(oldSlug)) {
+          updatedTopicId = updatedTopicId.replace(oldSlug, newSlug);
+        } else if (!updatedTopicId || updatedTopicId === c.topicTitle) {
+          updatedTopicId = updatedTitle.toLowerCase().replace(/\s+/g, '-');
+        }
+
+        await db
+          .update(bulletinComments)
+          .set({
+            topicTitle: updatedTitle,
+            topicId: updatedTopicId
+          })
+          .where(eq(bulletinComments.id, c.id));
+      }
+
+      // Repoint connected Logbook tasks
+      try {
+        const logbookConditions = [
+          eq(logbookTasks.bulletinTopicTitle, cleanOld),
+          eq(logbookTasks.bulletinTopicTitle, cleanOldBase),
+          eq(logbookTasks.title, cleanOldBase)
+        ];
+        const logbookWhere = pId && !isNaN(pId)
+          ? and(eq(logbookTasks.bulletinPostId, pId), or(...logbookConditions))
+          : or(...logbookConditions);
+
+        await db
+          .update(logbookTasks)
+          .set({
+            bulletinTopicTitle: cleanNewBase,
+            title: cleanNewBase
+          })
+          .where(logbookWhere);
+      } catch (lErr) {
+        console.warn("[RenameTopic] Error updating logbook tasks:", lErr);
+      }
+
+      res.json({
+        status: "success",
+        message: `Successfully migrated ${commentsToUpdate.length} comments from "${cleanOldBase}" to "${cleanNewBase}"`,
+        updatedCount: commentsToUpdate.length
+      });
+    } catch (err: any) {
+      console.error("[RenameTopic] Error migrating comments:", err);
+      res.status(500).json({ status: "error", message: err.message || "Failed to rename topic comments" });
+    }
+  });
+
 router.delete("/api/bulletin/:id", async (req, res) => {
     try {
       const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ status: "error", message: "ID dokumen tidak valid." });
+      }
+      // Hapus data dependen terlebih dahulu untuk mencegah pelanggaran foreign key constraint
       await db.delete(agendaEvents).where(eq(agendaEvents.bulletinPostId, id));
+      await db.delete(bulletinComments).where(eq(bulletinComments.postId, id));
+      await db.delete(logbookTasks).where(eq(logbookTasks.bulletinPostId, id));
       await db.delete(bulletinPosts).where(eq(bulletinPosts.id, id));
       clearBulletinCache();
       res.json({ status: "success" });
-    } catch (error) {
+    } catch (error: any) {
       res.status(500).json({ status: "error", message: error.message });
     }
   });
@@ -1219,6 +1715,19 @@ async function initRecycleBinTable() {
 }
 initRecycleBinTable();
 
+export function sanitizeRecycleTaskTitle(title: string): string {
+  if (!title) return "Kegiatan Tanpa Judul";
+  const cleaned = title
+    .replace(/^[↳↪\s]+/, '')
+    .replace(/^\[[ xX]\]\s*/, '')
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/<!-?[a-zA-Z0-9_\-\s]+.*?>?/g, '')
+    .replace(/<!--.*$/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return cleaned || "Kegiatan Tanpa Judul";
+}
+
 // 1. POST /api/bulletin/recycle-bin - Log deleted activities
 router.post("/api/bulletin/recycle-bin", async (req, res) => {
   try {
@@ -1234,7 +1743,7 @@ router.post("/api/bulletin/recycle-bin", async (req, res) => {
         postId: postId ? parseInt(String(postId)) : null,
         postTitle: postTitle || null,
         section: section || null,
-        taskTitle: String(taskTitle || "Kegiatan Tanpa Judul"),
+        taskTitle: sanitizeRecycleTaskTitle(String(taskTitle || "")),
         rowData: typeof rowData === "string" ? rowData : JSON.stringify(rowData || {}),
         subtasksData: subtasksData ? (typeof subtasksData === "string" ? subtasksData : JSON.stringify(subtasksData)) : null,
         subtaskCount: typeof subtaskCount === "number" ? subtaskCount : (Array.isArray(subtasksData) ? subtasksData.length : 0),
@@ -1257,7 +1766,7 @@ router.post("/api/bulletin/recycle-bin", async (req, res) => {
 // 2. GET /api/bulletin/recycle-bin - List deleted activities for Developer
 router.get("/api/bulletin/recycle-bin", async (req, res) => {
   try {
-    const { postId, status } = req.query;
+    const { postId, status, pt } = req.query;
     const conditions = [];
     if (postId) {
       conditions.push(eq(bulletinRecycleBin.postId, parseInt(String(postId))));
@@ -1265,13 +1774,51 @@ router.get("/api/bulletin/recycle-bin", async (req, res) => {
     if (status) {
       conditions.push(eq(bulletinRecycleBin.restoreStatus, String(status)));
     }
+    if (pt) {
+      const ptUpper = String(pt).toUpperCase();
+      if (ptUpper === 'GTS') {
+        conditions.push(eq(bulletinPosts.pt, 'GTS'));
+      } else if (ptUpper === 'TBP' || ptUpper === 'GPS' || ptUpper === 'TBP_GPS') {
+        conditions.push(or(
+          eq(bulletinPosts.pt, 'TBP'),
+          eq(bulletinPosts.pt, 'GPS'),
+          eq(bulletinPosts.pt, 'TBP_GPS'),
+          isNull(bulletinPosts.pt)
+        ));
+      }
+    }
 
-    const query = db.select().from(bulletinRecycleBin);
+    const query = db
+      .select({
+        id: bulletinRecycleBin.id,
+        postId: bulletinRecycleBin.postId,
+        postTitle: bulletinRecycleBin.postTitle,
+        section: bulletinRecycleBin.section,
+        taskTitle: bulletinRecycleBin.taskTitle,
+        rowData: bulletinRecycleBin.rowData,
+        subtasksData: bulletinRecycleBin.subtasksData,
+        subtaskCount: bulletinRecycleBin.subtaskCount,
+        deletedByNik: bulletinRecycleBin.deletedByNik,
+        deletedByName: bulletinRecycleBin.deletedByName,
+        deletedByJabatan: bulletinRecycleBin.deletedByJabatan,
+        deletedAt: bulletinRecycleBin.deletedAt,
+        restoreStatus: bulletinRecycleBin.restoreStatus,
+        restoredAt: bulletinRecycleBin.restoredAt,
+        restoredByNik: bulletinRecycleBin.restoredByNik,
+        restoredByName: bulletinRecycleBin.restoredByName,
+      })
+      .from(bulletinRecycleBin)
+      .leftJoin(bulletinPosts, eq(bulletinRecycleBin.postId, bulletinPosts.id));
+
     const records = conditions.length > 0 
       ? await query.where(and(...conditions)).orderBy(desc(bulletinRecycleBin.deletedAt)).limit(100)
       : await query.orderBy(desc(bulletinRecycleBin.deletedAt)).limit(100);
 
-    res.json({ status: "success", data: records });
+    const sanitizedRecords = records.map(r => ({
+      ...r,
+      taskTitle: sanitizeRecycleTaskTitle(r.taskTitle)
+    }));
+    res.json({ status: "success", data: sanitizedRecords });
   } catch (err: any) {
     console.error("[RecycleBin] Error fetching recycle bin:", err);
     res.status(500).json({ status: "error", message: err.message });

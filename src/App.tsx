@@ -121,7 +121,6 @@ const ZonaAdministrasiScreen = lazyWithRetry(() => import('./components/zona-adm
 const EmployeeTardinessFormScreen = lazyWithRetry(() => import('./components/employee-tardiness-form-screen').then(m => ({ default: m.EmployeeTardinessFormScreen })));
 const XrfCalibrationScreen = lazyWithRetry(() => import('./components/xrf-calibration/XrfCalibrationScreen').then(m => ({ default: m.XrfCalibrationScreen })));
 const ScreenTestSmelterScreen = lazyWithRetry(() => import('./components/screen-test/ScreenTestSmelterScreen').then(m => ({ default: m.ScreenTestSmelterScreen })));
-const DailyPerformanceScreen = lazyWithRetry(() => import('./components/daily-performance/DailyPerformanceScreen').then(m => ({ default: m.DailyPerformanceScreen })));
 const DailyPerformanceV2Screen = lazyWithRetry(() => import('./components/daily-performance-v2/DailyPerformanceV2Screen').then(m => ({ default: m.DailyPerformanceV2Screen })));
 const DailyReportLaboratoryScreen = lazyWithRetry(() => import('./components/daily-report-laboratory/DailyReportLaboratoryScreen').then(m => ({ default: m.DailyReportLaboratoryScreen })));
 const GuestMonitoringScreen = lazyWithRetry(() => import('./components/GuestMonitoringScreen').then(m => ({ default: m.GuestMonitoringScreen })));
@@ -129,6 +128,18 @@ import { ModulesDrawer } from './components/ModulesDrawer';
 import { LabBotWidget } from './components/LabBotWidget';
 import { HeaderModuleSearchBar } from './components/HeaderModuleSearchBar';
 import { DailySplashScreen } from './components/DailySplashScreen';
+
+// Idle background pre-loader for high-frequency modules (Labnote / Bulletin Board)
+if (typeof window !== 'undefined') {
+  const preloadCriticalModules = () => {
+    import('./components/bulletin-board').catch(() => {});
+  };
+  if ('requestIdleCallback' in window) {
+    (window as any).requestIdleCallback(() => preloadCriticalModules(), { timeout: 2500 });
+  } else {
+    setTimeout(preloadCriticalModules, 1500);
+  }
+}
 
 export default function App() {
 
@@ -231,6 +242,7 @@ export default function App() {
   const [isSidebarPeeked, setIsSidebarPeeked] = useState(false);
   const isBulletin = location.pathname.startsWith('/bulletin');
   const isEmployeeDatabase = location.pathname.startsWith('/employee-database');
+  const isQuiz = location.pathname.startsWith('/quiz');
   const [bulletinFocusMode, setBulletinFocusMode] = useState(true);
   const [hoveredNav, setHoveredNav] = useState<string | null>(null);
 
@@ -495,11 +507,20 @@ export default function App() {
 
   const handleSwitchUniverse = (targetUniv: 'TBP' | 'GTS') => {
     if (!isDeveloper) return;
+    if (targetUniv === effectiveUniverse) return;
     setActiveUniverse(targetUniv);
     localStorage.setItem('portal_active_universe', targetUniv);
     localStorage.setItem('bulletin_active_universe', targetUniv);
     window.dispatchEvent(new CustomEvent('portal-universe-changed', { detail: { universe: targetUniv } }));
-    toast.success(`Beralih ke Universe ${targetUniv === 'GTS' ? 'PT. Gane Tambang Sentosa (GTS)' : 'PT. Trimegah Bangun Persada (TBP / GPS)'}`);
+    toast.loading(`Beralih ke Universe ${targetUniv === 'GTS' ? 'PT. Gane Tambang Sentosa (GTS)' : 'PT. Trimegah Bangun Persada (TBP / GPS)'}...`, { id: 'universe-switch' });
+    setTimeout(() => {
+      const currentPath = window.location.pathname;
+      if (currentPath.startsWith('/bulletin')) {
+        window.location.href = `/bulletin/${targetUniv}`;
+      } else {
+        window.location.reload();
+      }
+    }, 300);
   };
 
   const isAdminOrDeveloper = React.useMemo(() => {
@@ -817,7 +838,35 @@ export default function App() {
     else navigate('/' + cleanTab);
   };
 
+  const handleBackWithReturnTo = (fallbackTab: string = 'home') => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const returnTo = params.get('returnTo');
+      if (returnTo) {
+        const decoded = decodeURIComponent(returnTo);
+        const currentFullPath = window.location.pathname + window.location.search;
+        if (decoded !== window.location.pathname && decoded !== currentFullPath) {
+          window.location.href = decoded;
+          return;
+        }
+      }
+    } catch {}
+    handleNav(fallbackTab);
+  };
+
   const handleBack = () => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const returnTo = params.get('returnTo');
+      if (returnTo) {
+        const decoded = decodeURIComponent(returnTo);
+        const currentFullPath = window.location.pathname + window.location.search;
+        if (decoded !== window.location.pathname && decoded !== currentFullPath) {
+          window.location.href = decoded;
+          return;
+        }
+      }
+    } catch {}
     if (window.history.length > 1) {
       window.history.back();
     } else {
@@ -1923,7 +1972,7 @@ export default function App() {
       {/* Header */}
       <header 
         className={`px-4 md:px-6 lg:px-8 py-3 sticky top-0 z-40 backdrop-blur-md border-b w-full flex justify-center transition-all duration-300 ${
-          (isBulletin && bulletinFocusMode) || isEmployeeDatabase || isEmbedMode ? 'hidden' : ''
+          (isBulletin && bulletinFocusMode) || isEmployeeDatabase || isEmbedMode || isQuiz ? 'hidden' : ''
         }`}
         style={{
           backgroundColor: 'var(--header-bg, var(--card-bg, #FFFFFF))',
@@ -1970,6 +2019,7 @@ export default function App() {
           onOpenP5m={() => {
             window.dispatchEvent(new CustomEvent('open-simplified-p5m-modal'));
           }}
+          userPt={effectiveUniverse}
         />
 
         <div className="flex items-center gap-3">
@@ -2048,7 +2098,7 @@ export default function App() {
   <Route path="/pemantauan" element={<PemantauanScreen inspectorName={inspectorName!} inspectorNik={inspectorNik!} />} />
   <Route path="/monitoring" element={<MonitoringDashboard inspectorNik={inspectorNik!} inspectorName={inspectorName!} isDeveloper={isDeveloper} />} />
   <Route path="/guest/monitoring" element={<GuestMonitoringScreen />} />
-  <Route path="/quiz-admin" element={<QuizAdminScreen userSection={userProfile?.section || ''} onBack={() => handleNav('home')} />} />
+  <Route path="/quiz-admin" element={<QuizAdminScreen userSection={userProfile?.section || ''} isDeveloper={isDeveloper} onBack={() => handleNav('home')} />} />
     <Route path="/parampaa" element={<ParampaaArcadeScreen onBack={() => handleNav('home')} />} />
   <Route path="/arcade" element={<ParampaaArcadeScreen onBack={() => handleNav('home')} />} />
   <Route path="/quiz" element={<QuizScreen inspectorName={inspectorName!} inspectorNik={inspectorNik!} userSection={userProfile?.section || ''} onBack={() => handleNav('home')} />} />
@@ -2061,33 +2111,25 @@ export default function App() {
   <Route path="/preplab-cloud" element={<PreplabCloudScreen onBack={() => handleNav('home')} userProfile={userProfile} inspectorNik={inspectorNik!} inspectorName={inspectorName!} isDeveloper={isDeveloper} isManager={isManager} />} />
   <Route path="/manual" element={<UserManualScreen onBack={() => handleNav('home')} onNav={handleNav} />} />
   <Route path="/employee-database" element={<EmployeeDatabaseScreen inspectorNik={inspectorNik!} onBack={() => handleNav('home')} />} />
-  <Route path="/zona-administrasi" element={<ZonaAdministrasiScreen onNav={handleNav} onBack={() => handleNav('home')} isCrew={isCrewRole} />} />
-  <Route path="/employee-leaves" element={<EmployeeLeavesScreen userProfile={userProfile} inspectorName={inspectorName!} inspectorNik={inspectorNik!} userPt={effectiveUniverse || 'TBP'} onNav={handleNav} onBack={() => handleNav('zona-administrasi')} />} />
+  <Route path="/zona-administrasi" element={<ZonaAdministrasiScreen onNav={handleNav} onBack={() => handleBackWithReturnTo('home')} isCrew={isCrewRole} />} />
+  <Route path="/employee-leaves" element={<EmployeeLeavesScreen userProfile={userProfile} inspectorName={inspectorName!} inspectorNik={inspectorNik!} userPt={effectiveUniverse || 'TBP'} onNav={handleNav} onBack={() => handleBackWithReturnTo('zona-administrasi')} />} />
   <Route path="/rekapan-izin" element={<Navigate to="/employee-leaves" replace />} />
   <Route path="/izin-karyawan" element={<Navigate to="/employee-leaves" replace />} />
-  <Route path="/pelaporan-izin" element={<EmployeeLeaveFormScreen inspectorName={inspectorName!} inspectorNik={inspectorNik!} userProfile={userProfile} onNav={handleNav} onBack={() => handleNav('zona-administrasi')} />} />
+  <Route path="/pelaporan-izin" element={<EmployeeLeaveFormScreen inspectorName={inspectorName!} inspectorNik={inspectorNik!} userProfile={userProfile} onNav={handleNav} onBack={() => handleBackWithReturnTo('zona-administrasi')} />} />
   <Route path="/form-izin" element={<Navigate to="/pelaporan-izin" replace />} />
-  <Route path="/keterlambatan" element={<EmployeeTardinessScreen userProfile={userProfile} inspectorName={inspectorName!} inspectorNik={inspectorNik!} onNav={handleNav} onBack={() => handleNav('zona-administrasi')} />} />
+  <Route path="/keterlambatan" element={<EmployeeTardinessScreen userProfile={userProfile} inspectorName={inspectorName!} inspectorNik={inspectorNik!} onNav={handleNav} onBack={() => handleBackWithReturnTo('zona-administrasi')} />} />
   <Route path="/rekapan-keterlambatan" element={<Navigate to="/keterlambatan" replace />} />
   <Route path="/form-keterlambatan" element={<EmployeeTardinessFormScreen inspectorName={inspectorName!} inspectorNik={inspectorNik!} userProfile={userProfile} onNav={handleNav} onBack={() => handleNav('keterlambatan')} />} />
   <Route path="/pelaporan-keterlambatan" element={<Navigate to="/form-keterlambatan" replace />} />
-  <Route path="/rekapan-finger" element={<EmployeeFingerScreen userProfile={userProfile} inspectorName={inspectorName!} inspectorNik={inspectorNik!} onNav={handleNav} onBack={() => handleNav('zona-administrasi')} />} />
+  <Route path="/rekapan-finger" element={<EmployeeFingerScreen userProfile={userProfile} inspectorName={inspectorName!} inspectorNik={inspectorNik!} onNav={handleNav} onBack={() => handleBackWithReturnTo('zona-administrasi')} />} />
   <Route path="/rekap-finger" element={<Navigate to="/rekapan-finger" replace />} />
   <Route path="/finger" element={<Navigate to="/rekapan-finger" replace />} />
-  <Route path="/roster-admin" element={<RosterAdminScreen onBack={() => handleNav('zona-administrasi')} />} />
-  <Route path="/training-database" element={<TrainingDatabaseScreen key="internal" scope="internal" inspectorNik={inspectorNik!} inspectorName={inspectorName!} onBack={() => handleNav('home')} />} />
-  <Route path="/safety-rekap" element={<SafetyRekapScreen inspectorNik={inspectorNik!} inspectorName={inspectorName!} inspectorRole={userProfile?.jabatan} inspectorSection={userProfile?.section} onBack={() => handleNav('home')} />} />
-  <Route path="/inspection-schedule" element={<InspectionScheduleScreen inspectorNik={inspectorNik!} inspectorName={inspectorName!} onBack={() => {
-    const params = new URLSearchParams(window.location.search);
-    const returnTo = params.get('returnTo');
-    if (returnTo) {
-      window.location.href = returnTo;
-    } else {
-      handleNav('home');
-    }
-  }} />} />
+  <Route path="/roster-admin" element={<RosterAdminScreen onBack={() => handleBackWithReturnTo('zona-administrasi')} />} />
+  <Route path="/training-database" element={<TrainingDatabaseScreen key="internal" scope="internal" inspectorNik={inspectorNik!} inspectorName={inspectorName!} onBack={() => handleBackWithReturnTo('home')} />} />
+  <Route path="/safety-rekap" element={<SafetyRekapScreen inspectorNik={inspectorNik!} inspectorName={inspectorName!} inspectorRole={userProfile?.jabatan} inspectorSection={userProfile?.section} onBack={() => handleBackWithReturnTo('home')} />} />
+  <Route path="/inspection-schedule" element={<InspectionScheduleScreen inspectorNik={inspectorNik!} inspectorName={inspectorName!} onBack={() => handleBackWithReturnTo('home')} />} />
   <Route path="/training-external" element={<TrainingDatabaseScreen key="external" scope="external" inspectorNik={inspectorNik!} inspectorName={inspectorName!} onBack={() => handleNav('home')} />} />
-  <Route path="/meal-orders" element={<MealOrdersScreen inspectorNik={inspectorNik!} inspectorName={inspectorName!} onBack={() => handleNav('zona-administrasi')} />} />
+  <Route path="/meal-orders" element={<MealOrdersScreen inspectorNik={inspectorNik!} inspectorName={inspectorName!} onBack={() => handleBackWithReturnTo('zona-administrasi')} />} />
   <Route path="/settings" element={<SettingsScreen inspectorName={inspectorName} inspectorNik={inspectorNik} onLogoutKaryawan={handleLogoutKaryawan} onOpenThemeModal={() => setShowGlobalThemeModal(true)} onNav={handleNav} />} />
   <Route 
     path="/admin-dashboard" 
@@ -2119,11 +2161,11 @@ export default function App() {
   <Route path="/kalibrasi-xrf" element={<Navigate to="/xrf-calibration" replace />} />
   <Route path="/screen-test-smelter" element={<ScreenTestSmelterScreen inspectorName={inspectorName || 'Tamu Presentasi'} inspectorNik={inspectorNik || 'guest'} onBack={() => handleNav('home')} />} />
   <Route path="/screen-test" element={<Navigate to="/screen-test-smelter" replace />} />
-  <Route path="/daily-performance" element={<DailyPerformanceScreen inspectorName={inspectorName || 'Tamu Presentasi'} inspectorNik={inspectorNik || 'guest'} userPt={effectiveUniverse} onBack={() => handleNav('home')} />} />
+  <Route path="/daily-performance" element={<DailyPerformanceV2Screen inspectorName={inspectorName || 'Tamu Presentasi'} inspectorNik={inspectorNik || 'guest'} userPt={effectiveUniverse} onBack={() => handleNav('home')} />} />
   <Route path="/daily-performance-lab" element={<Navigate to="/daily-performance" replace />} />
-  <Route path="/daily-performance-2" element={<DailyPerformanceV2Screen inspectorName={inspectorName || 'Tamu Presentasi'} inspectorNik={inspectorNik || 'guest'} userPt={effectiveUniverse} onBack={() => handleNav('home')} />} />
-  <Route path="/daily-performance-lab-2" element={<Navigate to="/daily-performance-2" replace />} />
-  <Route path="/daily-report-laboratory" element={<DailyReportLaboratoryScreen inspectorName={inspectorName || 'Foreman On Duty'} inspectorNik={inspectorNik || 'guest'} userPt={effectiveUniverse} onBack={() => handleNav('home')} onNavigateToDailyPerformance={() => handleNav('daily-performance-2')} />} />
+  <Route path="/daily-performance-2" element={<Navigate to="/daily-performance" replace />} />
+  <Route path="/daily-performance-lab-2" element={<Navigate to="/daily-performance" replace />} />
+  <Route path="/daily-report-laboratory" element={<DailyReportLaboratoryScreen inspectorName={inspectorName || 'Foreman On Duty'} inspectorNik={inspectorNik || 'guest'} userPt={effectiveUniverse} onBack={() => handleNav('home')} onNavigateToDailyPerformance={() => handleNav('daily-performance')} />} />
   <Route path="/daily-report-lab" element={<Navigate to="/daily-report-laboratory" replace />} />
   <Route path="*" element={<Navigate to="/" replace />} />
 </Routes>
@@ -2223,7 +2265,7 @@ export default function App() {
           </motion.div>
         )}
       </AnimatePresence>
-      {!isCrewRole && !(isBulletin && bulletinFocusMode) && (
+      {!isCrewRole && !(isBulletin && bulletinFocusMode) && !isQuiz && (
         <nav 
           className="fixed bottom-0 w-full md:hidden backdrop-blur-xl border-t z-40 flex items-center justify-around h-[4.5rem] pb-safe transition-colors" 
           style={{ 
@@ -2414,25 +2456,29 @@ export default function App() {
       />
 
       {/* Floating Feedback & Suggestions Button */}
-      <FloatingFeedbackButton
-        inspectorNik={inspectorNik}
-        inspectorName={inspectorName}
-        userProfile={userProfile}
-        isHome={activeTab === 'home'}
-        isBulletin={isBulletin}
-        isBulletinFocusMode={bulletinFocusMode}
-        isCrewRole={isCrewRole}
-        currentPath={location.pathname}
-        onNavigate={handleNav}
-      />
+      {!isQuiz && (
+        <FloatingFeedbackButton
+          inspectorNik={inspectorNik}
+          inspectorName={inspectorName}
+          userProfile={userProfile}
+          isHome={activeTab === 'home'}
+          isBulletin={isBulletin}
+          isBulletinFocusMode={bulletinFocusMode}
+          isCrewRole={isCrewRole}
+          currentPath={location.pathname}
+          onNavigate={handleNav}
+        />
+      )}
 
       {/* Floating Google Gemini AI Assistant Button */}
-      <FloatingGeminiButton
-        isCrewRole={isCrewRole}
-        isBulletin={isBulletin}
-        isBulletinFocusMode={bulletinFocusMode}
-        currentPath={location.pathname}
-      />
+      {!isQuiz && (
+        <FloatingGeminiButton
+          isCrewRole={isCrewRole}
+          isBulletin={isBulletin}
+          isBulletinFocusMode={bulletinFocusMode}
+          currentPath={location.pathname}
+        />
+      )}
 
     </div>
   );

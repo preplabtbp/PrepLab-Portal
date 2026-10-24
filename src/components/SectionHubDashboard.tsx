@@ -1,5 +1,7 @@
+import { NotionContextMenu, NotionContextMenuData, isPostFavorite, togglePostFavorite } from './notion/NotionContextMenu';
 import { translateDisplayText } from './notion/logbook-section-utils';
-import React, { useState, useMemo } from 'react';
+import { VerifiedBadge } from './VerifiedBadge';
+import React, { useState, useMemo, useCallback } from 'react';
 import { 
   Home, 
   Calendar, 
@@ -62,6 +64,8 @@ interface SectionHubDashboardProps {
   posts: any[];
   activePt?: string;
   onSelectPost: (post: any) => void;
+  onOpenInNewNotionTab?: (post: any) => void;
+  onDuplicatePost?: (post: any) => void;
   onGoHome: () => void;
   agendaEvents?: any[];
   onOpenCalendar?: () => void;
@@ -75,15 +79,16 @@ interface HubItem {
   linkUrl?: string;
 }
 
-// Helper to load and save custom menu items (order + customized title/icon/linkUrl) per section hub
-function loadOrderedHubItems(section: string, type: 'info' | 'rules', defaultItems: HubItem[]): HubItem[] {
+// Helper to load and save custom menu items (order + customized title/icon/linkUrl) per section hub and universe
+function loadOrderedHubItems(section: string, type: 'info' | 'rules', defaultItems: HubItem[], universe: string = 'TBP'): HubItem[] {
   try {
     const cleanSec = (section || 'general').toLowerCase().replace(/[^a-z0-9]+/g, '_');
+    const cleanUniv = (universe || 'tbp').toLowerCase();
     const translatedCleanSec = (translateDisplayText(section) || 'general').toLowerCase().replace(/[^a-z0-9]+/g, '_');
-    const key = `preplab_hub_custom_items_${cleanSec}_${type}`;
+    const key = `preplab_hub_custom_items_${cleanUniv}_${cleanSec}_${type}`;
     let raw = localStorage.getItem(key);
     if (!raw && translatedCleanSec !== cleanSec) {
-      raw = localStorage.getItem(`preplab_hub_custom_items_${translatedCleanSec}_${type}`);
+      raw = localStorage.getItem(`preplab_hub_custom_items_${cleanUniv}_${translatedCleanSec}_${type}`);
     }
     if (raw) {
       const parsed: HubItem[] = JSON.parse(raw);
@@ -91,21 +96,19 @@ function loadOrderedHubItems(section: string, type: 'info' | 'rules', defaultIte
         return parsed;
       }
     }
-    // Backward compatibility: check if order-only was saved
-    const legacyKey = `preplab_hub_order_${cleanSec}_${type}`;
-    const legacyRaw = localStorage.getItem(legacyKey);
-    if (legacyRaw) {
-      const titlesOrder: string[] = JSON.parse(legacyRaw);
-      const itemMap = new Map(defaultItems.map(i => [i.title, i]));
-      const ordered: HubItem[] = [];
-      titlesOrder.forEach(t => {
-        if (itemMap.has(t)) {
-          ordered.push(itemMap.get(t)!);
-          itemMap.delete(t);
+    // Backward compatibility for TBP only: check if un-prefixed was saved
+    if (cleanUniv === 'tbp') {
+      const legacyKey = `preplab_hub_custom_items_${cleanSec}_${type}`;
+      let legacyRaw = localStorage.getItem(legacyKey);
+      if (!legacyRaw && translatedCleanSec !== cleanSec) {
+        legacyRaw = localStorage.getItem(`preplab_hub_custom_items_${translatedCleanSec}_${type}`);
+      }
+      if (legacyRaw) {
+        const parsed: HubItem[] = JSON.parse(legacyRaw);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
         }
-      });
-      itemMap.forEach(i => ordered.push(i));
-      return ordered;
+      }
     }
     return defaultItems;
   } catch {
@@ -113,16 +116,15 @@ function loadOrderedHubItems(section: string, type: 'info' | 'rules', defaultIte
   }
 }
 
-function saveOrderedHubItems(section: string, type: 'info' | 'rules', items: HubItem[]): void {
+function saveOrderedHubItems(section: string, type: 'info' | 'rules', items: HubItem[], universe: string = 'TBP'): void {
   try {
     const cleanSec = (section || 'general').toLowerCase().replace(/[^a-z0-9]+/g, '_');
-    const key = `preplab_hub_custom_items_${cleanSec}_${type}`;
+    const cleanUniv = (universe || 'tbp').toLowerCase();
+    const key = `preplab_hub_custom_items_${cleanUniv}_${cleanSec}_${type}`;
     localStorage.setItem(key, JSON.stringify(items));
-    // Also save legacy key for compatibility
-    const legacyKey = `preplab_hub_order_${cleanSec}_${type}`;
-    localStorage.setItem(legacyKey, JSON.stringify(items.map(i => i.title)));
   } catch {}
 }
+
 
 
 export function SectionHubDashboard({
@@ -130,11 +132,100 @@ export function SectionHubDashboard({
   posts,
   activePt,
   onSelectPost,
+  onOpenInNewNotionTab,
+  onDuplicatePost,
   onGoHome,
   agendaEvents = [],
   onOpenCalendar
 }: SectionHubDashboardProps) {
   const sectionTitle = (post?.title || '').toUpperCase().trim();
+
+  // Notion Context Menu state
+  const [contextMenu, setContextMenu] = useState<NotionContextMenuData | null>(null);
+
+  const handleItemContextMenu = (e: React.MouseEvent, item: HubItem) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    // Resolve target post or construct target
+    let targetPost: any = null;
+    if (item.isLogbook || item.title.toLowerCase().includes('logbook')) {
+      const logbookTitle = item.title;
+      const logbookId = `logbook-${sectionTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+      let cachedContent = '';
+      try {
+        cachedContent = localStorage.getItem(`preplab_logbook_content_${logbookId}`) || '';
+      } catch {}
+      const defaultContent = `# ${logbookTitle}\n\n*Integrated Section Logbook (${sectionTitle}): Active Routine & Non-Routine tasks.*\n\n| Number | Activity Name | Description | Created Time | Completion Date | Remarks | Due Date | Status | PIC | Priority | Activity | Period | Source Page |\n| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n`;
+      targetPost = findPost(item.searchKeywords || logbookTitle) || {
+        id: logbookId,
+        title: logbookTitle,
+        department: 'Prep & Lab',
+        category: sectionTitle,
+        isLogbook: true,
+        content: (cachedContent && cachedContent.includes('|')) ? cachedContent : defaultContent,
+        pt: currentUniverse
+      };
+    } else {
+      targetPost = findPost(item.searchKeywords || item.title);
+      if (!targetPost) {
+        const numericId = (item.searchKeywords || []).find((k) => /^\d+$/.test(k));
+        targetPost = {
+          id: numericId ? parseInt(numericId, 10) : `doc-${item.title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+          title: item.title,
+          department: 'Prep & Lab',
+          category: sectionTitle,
+          content: `### ${item.title}\n\n*Halaman dokumentasi untuk ${item.title} (${sectionTitle}).*`,
+          pt: currentUniverse
+        };
+      }
+    }
+
+    const postId = targetPost?.id;
+    const isFav = postId ? isPostFavorite(postId) : false;
+
+    setContextMenu({
+      x: e.clientX,
+      y: e.clientY,
+      title: item.title,
+      icon: item.icon,
+      post: targetPost,
+      linkUrl: item.linkUrl,
+      isLogbook: item.isLogbook,
+      sectionName: sectionTitle,
+      isFavorite: isFav,
+      onOpen: () => handleItemClick(item),
+      onOpenInNewNotionTab: onOpenInNewNotionTab ? () => onOpenInNewNotionTab(targetPost) : undefined,
+      onOpenInNewBrowserTab: () => {
+        if (item.linkUrl) {
+          window.open(item.linkUrl, '_blank');
+        } else if (targetPost) {
+          const pt = targetPost.pt || currentUniverse;
+          const pId = targetPost.id;
+          const url = pId ? `/bulletin/${pt}?page=${encodeURIComponent(String(pId))}` : `/bulletin/${pt}`;
+          window.open(url, '_blank');
+        }
+      },
+      onCopyLink: () => {
+        if (item.linkUrl) {
+          navigator.clipboard.writeText(item.linkUrl);
+          toast.success('Tautan berhasil disalin!');
+        } else {
+          const pt = targetPost?.pt || currentUniverse;
+          const pId = targetPost?.id;
+          const fullUrl = `${window.location.origin}/bulletin/${pt}?page=${encodeURIComponent(String(pId || item.title))}`;
+          navigator.clipboard.writeText(fullUrl);
+          toast.success('Tautan halaman disalin ke clipboard!');
+        }
+      },
+      onToggleFavorite: postId ? () => {
+        const next = togglePostFavorite(postId, item.title);
+        setContextMenu(prev => prev ? { ...prev, isFavorite: next } : null);
+      } : undefined,
+      onDuplicate: onDuplicatePost && targetPost ? () => onDuplicatePost(targetPost) : undefined
+    });
+  };
+
 
   // Strict PT universe isolation: GTS vs TBP/GPS
   const currentUniverse = (activePt === 'GTS' || post?.pt === 'GTS' || post?.universe === 'GTS') ? 'GTS' : 'TBP';
@@ -148,6 +239,27 @@ export function SectionHubDashboard({
   const [showCoverModal, setShowCoverModal] = useState<boolean>(false);
   const [coverInputUrl, setCoverInputUrl] = useState<string>('');
   const [isSavingCover, setIsSavingCover] = useState<boolean>(false);
+
+  // Section Verification State (persist in localStorage per section post ID)
+  const [isVerified, setIsVerified] = useState<boolean>(() => {
+    if (!post?.id) return true;
+    try {
+      const saved = localStorage.getItem(`preplab_section_verified_${post.id}`);
+      return saved !== null ? saved === 'true' : true;
+    } catch {
+      return true;
+    }
+  });
+
+  const handleToggleVerification = () => {
+    const next = !isVerified;
+    setIsVerified(next);
+    if (post?.id) {
+      try {
+        localStorage.setItem(`preplab_section_verified_${post.id}`, String(next));
+      } catch {}
+    }
+  };
 
   const handleSaveCover = async (urlToSave: string) => {
     if (!post?.id) return;
@@ -184,18 +296,24 @@ export function SectionHubDashboard({
     const tagColor = (post?.tags || []).find((t: string) => t.startsWith('titleColor:'))?.replace('titleColor:', '');
     if (tagColor) return tagColor;
     try {
-      let cached = localStorage.getItem(`preplab_hub_title_color_${cleanSec}`);
+      let cached = localStorage.getItem(`preplab_hub_title_color_${currentUniverse.toLowerCase()}_${cleanSec}`);
       if (!cached && translatedCleanSec !== cleanSec) {
-        cached = localStorage.getItem(`preplab_hub_title_color_${translatedCleanSec}`);
+        cached = localStorage.getItem(`preplab_hub_title_color_${currentUniverse.toLowerCase()}_${translatedCleanSec}`);
       }
       if (cached) return cached;
     } catch {}
     return '#0f172a';
   };
 
-  const [displayedTitle, setDisplayedTitle] = useState<string>(post?.title || '');
+  const [displayedTitle, setDisplayedTitle] = useState<string>(() => {
+    const raw = post?.title || '';
+    return translateDisplayText(raw.toUpperCase().trim()) || raw;
+  });
   const [isEditingTitle, setIsEditingTitle] = useState<boolean>(false);
-  const [titleInput, setTitleInput] = useState<string>(post?.title || '');
+  const [titleInput, setTitleInput] = useState<string>(() => {
+    const raw = post?.title || '';
+    return translateDisplayText(raw.toUpperCase().trim()) || raw;
+  });
   const [isSavingTitle, setIsSavingTitle] = useState<boolean>(false);
   const [titleColor, setTitleColor] = useState<string>(getInitialTitleColor);
   const [editingTitleColor, setEditingTitleColor] = useState<string>(getInitialTitleColor);
@@ -203,15 +321,19 @@ export function SectionHubDashboard({
 
   // Sync title & color when post changes
   React.useEffect(() => {
-    setDisplayedTitle(post?.title || '');
-    setTitleInput(post?.title || '');
+    const raw = post?.title || '';
+    const translated = translateDisplayText(raw.toUpperCase().trim()) || raw;
+    setDisplayedTitle(translated);
+    setTitleInput(translated);
     const col = getInitialTitleColor();
     setTitleColor(col);
     setEditingTitleColor(col);
   }, [post?.title, post?.tags]);
 
   const handleStartEditTitle = () => {
-    setTitleInput(displayedTitle || post?.title || '');
+    const raw = displayedTitle || post?.title || sectionTitle || '';
+    const translated = translateDisplayText(raw.toUpperCase().trim()) || raw;
+    setTitleInput(translated);
     setEditingTitleColor(titleColor);
     setIsEditingTitle(true);
     setShowColorPicker(false);
@@ -238,9 +360,9 @@ export function SectionHubDashboard({
 
     try {
       const translatedCleanSec = (translateDisplayText(trimmed) || 'general').toLowerCase().replace(/[^a-z0-9]+/g, '_');
-      localStorage.setItem(`preplab_hub_title_color_${cleanSec}`, editingTitleColor);
+      localStorage.setItem(`preplab_hub_title_color_${currentUniverse.toLowerCase()}_${cleanSec}`, editingTitleColor);
       if (translatedCleanSec !== cleanSec) {
-        localStorage.setItem(`preplab_hub_title_color_${translatedCleanSec}`, editingTitleColor);
+        localStorage.setItem(`preplab_hub_title_color_${currentUniverse.toLowerCase()}_${translatedCleanSec}`, editingTitleColor);
       }
     } catch {}
 
@@ -320,12 +442,13 @@ export function SectionHubDashboard({
     for (const kw of expandedList) {
       const q = kw.toLowerCase().trim();
       
-      // Look for candidates that match by numeric ID strictly in the same PT universe, then fallback to all posts
+      // Look for candidates that match by numeric ID strictly in the same PT universe
       if (/^\d+$/.test(q)) {
         const idNum = parseInt(q, 10);
-        const idMatch = eligiblePosts.find((p) => p.id === idNum) || posts.find((p) => p.id === idNum);
+        const idMatch = eligiblePosts.find((p) => p.id === idNum);
         if (idMatch) return idMatch;
       }
+
 
       // 1. Exact matches (cleaned title)
       const exactMatches = eligiblePosts.filter(
@@ -363,12 +486,10 @@ export function SectionHubDashboard({
         const slugMatch = eligiblePosts.find((p) => {
           const pSlug = (p.title || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
           return pSlug === qSlug;
-        }) || posts.find((p) => {
-          const pSlug = (p.title || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-          return pSlug === qSlug;
         });
         if (slugMatch) return slugMatch;
       }
+
 
       // 5. General match within same PT
       const generalMatches = eligiblePosts.filter((p) => (p.title || '').replace(/^[#\s\-*]+/, '').toLowerCase().trim().includes(q));
@@ -391,16 +512,17 @@ export function SectionHubDashboard({
       const logbookId = `logbook-${sectionTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
       let cachedContent = '';
       try {
-        cachedContent = localStorage.getItem(`preplab_logbook_content_${logbookId}`) || '';
+        cachedContent = localStorage.getItem(`preplab_logbook_content_${currentUniverse.toLowerCase()}_${logbookId}`) || localStorage.getItem(`preplab_logbook_content_${logbookId}`) || '';
       } catch {}
       const defaultContent = `# ${logbookTitle}\n\n*Integrated Section Logbook (${sectionTitle}): Active Routine & Non-Routine tasks.*\n\n| Number | Activity Name | Description | Created Time | Completion Date | Remarks | Due Date | Status | PIC | Priority | Activity | Period | Source Page |\n| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n`;
-      const target = findPost(item.searchKeywords || logbookTitle) || {
+      const target = {
         id: logbookId,
         title: logbookTitle,
         department: 'Prep & Lab',
         category: sectionTitle,
         isLogbook: true,
-        content: (cachedContent && cachedContent.includes('|')) ? cachedContent : defaultContent
+        content: (cachedContent && cachedContent.includes('|')) ? cachedContent : defaultContent,
+        pt: currentUniverse
       };
       onSelectPost(target);
       return;
@@ -455,12 +577,133 @@ export function SectionHubDashboard({
     onSelectPost(fallbackPost);
   };
 
+  // Helper to dynamically extract GTS hub items from post.content markdown links or eligiblePosts
+  const getGtsHubItems = useCallback(() => {
+    const info: HubItem[] = [];
+    const rules: HubItem[] = [];
+
+    const getGtsIcon = (t: string) => {
+      const lower = t.toLowerCase();
+      if (lower.includes('daily') || lower.includes('harian')) return '📅';
+      if (lower.includes('weekly') || lower.includes('mingguan')) return '📊';
+      if (lower.includes('monthly') || lower.includes('bulanan')) return '📈';
+      if (lower.includes('quarterly') || lower.includes('biannual') || lower.includes('yearly')) return '🗓️';
+      if (lower.includes('non routine') || lower.includes('routine')) return '⚡';
+      if (lower.includes('logbook')) return '📔';
+      if (lower.includes('sop') || lower.includes('ik') || lower.includes('prosedur')) return '📜';
+      if (lower.includes('audit') || lower.includes('iso')) return '🛡️';
+      if (lower.includes('asset') || lower.includes('aset') || lower.includes('scrab') || lower.includes('scrap')) return '📦';
+      if (lower.includes('monitoring') || lower.includes('po')) return '📋';
+      if (lower.includes('information') || lower.includes('informasi')) return '📄';
+      if (lower.includes('karyawan') || lower.includes('cuti') || lower.includes('simper') || lower.includes('interview')) return '👤';
+      if (lower.includes('meal')) return '🍲';
+      return '🔹';
+    };
+
+    if (post?.content && post.content.includes('/bulletin/GTS?postId=')) {
+      const matches = [...post.content.matchAll(/- 🔹 \*\*\[(.*?)\]\(\/bulletin\/GTS\?postId=(\d+)\)\*\*/g)];
+      matches.forEach(m => {
+        const title = m[1].trim();
+        const pId = m[2];
+        const lower = title.toLowerCase();
+        const item: HubItem = {
+          title,
+          icon: getGtsIcon(title),
+          searchKeywords: [pId, title]
+        };
+
+        if (sectionTitle.includes('PROSEDUR') || sectionTitle.includes('GENERAL ISSUE')) {
+          info.push(item);
+        } else if (
+          lower.includes('daily') ||
+          lower.includes('weekly') ||
+          lower.includes('monthly') ||
+          lower.includes('quarterly') ||
+          lower.includes('biannual') ||
+          lower.includes('yearly') ||
+          lower.includes('non routine') ||
+          lower.includes('routine') ||
+          lower.includes('logbook')
+        ) {
+          info.push(item);
+        } else {
+          rules.push(item);
+        }
+      });
+    }
+
+    // Fallback: If no links parsed from post.content, extract from eligiblePosts matching the section
+    if (info.length === 0 && rules.length === 0 && eligiblePosts.length > 0) {
+      const cleanSec = sectionTitle.replace(/^[#\s\-*]+/, '').toLowerCase();
+      const secPosts = eligiblePosts.filter(p => {
+        if (p.id === post?.id) return false;
+        const pTitle = (p.title || '').toLowerCase();
+        const pCat = (p.category || '').toLowerCase();
+        return pCat.includes(cleanSec) || pTitle.includes(cleanSec);
+      });
+
+      secPosts.forEach(p => {
+        const title = (p.title || '').trim();
+        const lower = title.toLowerCase();
+        const item: HubItem = {
+          title,
+          icon: getGtsIcon(title),
+          searchKeywords: [String(p.id), title]
+        };
+        if (
+          lower.includes('daily') ||
+          lower.includes('weekly') ||
+          lower.includes('monthly') ||
+          lower.includes('quarterly') ||
+          lower.includes('biannual') ||
+          lower.includes('yearly') ||
+          lower.includes('non routine') ||
+          lower.includes('routine')
+        ) {
+          info.push(item);
+        } else {
+          rules.push(item);
+        }
+      });
+    }
+
+    return { infoItems: info, rulesItems: rules };
+  }, [post?.content, post?.id, sectionTitle, eligiblePosts]);
+
   // Section configurations matching exact Notion designs from Screenshots
   const getSectionConfig = () => {
+    // Universe GTS Hub Configuration: Dynamically populated from actual GTS database sub-pages!
+    if (currentUniverse === 'GTS') {
+      const gtsHub = getGtsHubItems();
+      if (gtsHub.infoItems.length > 0 || gtsHub.rulesItems.length > 0) {
+        let secIcon = '📋';
+        if (sectionTitle.includes('LAB')) secIcon = '🥼';
+        else if (sectionTitle.includes('PREP')) secIcon = '🪨';
+        else if (sectionTitle.includes('MAINT')) secIcon = '🔧';
+        else if (sectionTitle.includes('WAREHOUSE') || sectionTitle.includes('INVENT')) secIcon = '📦';
+        else if (sectionTitle.includes('QA') || sectionTitle.includes('QUALITY') || sectionTitle.includes('MUTU')) secIcon = '🛡️';
+        else if (sectionTitle.includes('PROSEDUR') || sectionTitle.includes('PROCEDURE') || sectionTitle.includes('SOP')) secIcon = '📙';
+        else if (sectionTitle.includes('ADMIN')) secIcon = '📋';
+        else if (sectionTitle.includes('GENERAL') || sectionTitle.includes('ISSUE')) secIcon = '⚠️';
+
+        return {
+          icon: secIcon,
+          bannerUrl: post?.coverImage || 'https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?auto=format&fit=crop&w=1600&q=80',
+          infoTitle: 'INFO & RUTINITAS GTS',
+          infoItems: gtsHub.infoItems,
+          rulesTitle: gtsHub.rulesItems.length > 0 ? 'DOKUMEN & PANDUAN GTS' : '',
+          rulesItems: gtsHub.rulesItems,
+          showAgenda: true,
+          extraLinks: []
+        };
+      }
+    }
+
     // 1. PROSEDUR (Image 1) - Single Column INFO with 9 items
     if (sectionTitle.includes('PROSEDUR') || sectionTitle.includes('PROCEDURE') || sectionTitle === 'SOP') {
       return {
         icon: '📙',
+
         bannerUrl: 'https://images.unsplash.com/photo-1503387762-592deb58ef4e?auto=format&fit=crop&w=1600&q=80',
         infoTitle: 'INFO',
         infoItems: [
@@ -804,7 +1047,58 @@ export function SectionHubDashboard({
     setRulesItems(loadOrderedHubItems(sectionTitle, 'rules', config.rulesItems || []));
     setIsReorderingInfo(false);
     setIsReorderingRules(false);
+    setInlineEditing(null);
   }, [sectionTitle]);
+
+  // Inline rename state on double-click
+  const [inlineEditing, setInlineEditing] = useState<{
+    type: 'info' | 'rules';
+    index: number;
+    value: string;
+  } | null>(null);
+
+  const handleStartInlineEdit = (type: 'info' | 'rules', index: number, currentTitle: string, e?: React.MouseEvent) => {
+    if (e) {
+      e.stopPropagation();
+    }
+    setInlineEditing({
+      type,
+      index,
+      value: currentTitle
+    });
+  };
+
+  const handleSaveInlineEdit = () => {
+    if (!inlineEditing) return;
+    const newTitle = inlineEditing.value.trim();
+    if (!newTitle) {
+      toast.error('Judul menu tidak boleh kosong');
+      setInlineEditing(null);
+      return;
+    }
+
+    const currentList = inlineEditing.type === 'info' ? [...infoItems] : [...rulesItems];
+    if (inlineEditing.index >= 0 && inlineEditing.index < currentList.length) {
+      const oldTitle = currentList[inlineEditing.index].title;
+      if (oldTitle !== newTitle) {
+        const prevKeywords = currentList[inlineEditing.index].searchKeywords || [];
+        currentList[inlineEditing.index] = {
+          ...currentList[inlineEditing.index],
+          title: newTitle,
+          searchKeywords: Array.from(new Set([newTitle, ...prevKeywords]))
+        };
+        if (inlineEditing.type === 'info') {
+          setInfoItems(currentList);
+          saveOrderedHubItems(sectionTitle, 'info', currentList);
+        } else {
+          setRulesItems(currentList);
+          saveOrderedHubItems(sectionTitle, 'rules', currentList);
+        }
+        toast.success(`Berhasil mengubah nama menjadi "${newTitle}"`);
+      }
+    }
+    setInlineEditing(null);
+  };
 
   const handleDragStartInfo = (idx: number, e: React.DragEvent) => {
     setDraggedInfoIdx(idx);
@@ -904,12 +1198,13 @@ export function SectionHubDashboard({
       return;
     }
     const currentList = editingModal.type === 'info' ? [...infoItems] : [...rulesItems];
+    const prevKeywords = editingModal.index !== null ? (currentList[editingModal.index]?.searchKeywords || []) : [];
     const newItem: HubItem = {
       title: editingModal.title.trim(),
       icon: editingModal.icon.trim() || '📘',
       linkUrl: editingModal.linkUrl.trim() || undefined,
       isLogbook: editingModal.isLogbook || undefined,
-      searchKeywords: [editingModal.title.trim()]
+      searchKeywords: Array.from(new Set([editingModal.title.trim(), ...prevKeywords]))
     };
 
     if (editingModal.index === null) {
@@ -1165,9 +1460,15 @@ export function SectionHubDashboard({
 
         {/* Action / Verification Row */}
         <div className="flex items-center gap-4 text-xs text-slate-400 font-medium pt-1">
-          <span className="flex items-center gap-1.5 hover:text-slate-600 transition-colors cursor-pointer">
-            <CheckCircle2 className="w-3.5 h-3.5 text-slate-400" />
-            <span>Add verification</span>
+          <span 
+            onClick={handleToggleVerification}
+            className="flex items-center gap-1.5 hover:text-sky-600 transition-colors cursor-pointer group"
+            title={isVerified ? "Seksi ini telah terverifikasi resmi (Klik untuk toggle)" : "Klik untuk memverifikasi seksi ini"}
+          >
+            <VerifiedBadge size="xs" />
+            <span className={isVerified ? "text-sky-600 font-bold" : "group-hover:text-sky-600"}>
+              {isVerified ? "Terverifikasi" : "Add verification"}
+            </span>
           </span>
           <span className="flex items-center gap-1.5 hover:text-slate-600 transition-colors cursor-pointer">
             <MessageSquare className="w-3.5 h-3.5 text-slate-400" />
@@ -1304,7 +1605,8 @@ export function SectionHubDashboard({
                   e.preventDefault();
                   setIsEditingTitle(false);
                   setShowColorPicker(false);
-                  setTitleInput(displayedTitle);
+                  const rawCancel = displayedTitle || post?.title || sectionTitle || '';
+                  setTitleInput(translateDisplayText(rawCancel.toUpperCase().trim()) || rawCancel);
                   setEditingTitleColor(titleColor);
                 }}
                 disabled={isSavingTitle}
@@ -1322,10 +1624,11 @@ export function SectionHubDashboard({
               title="Double klik untuk mengedit judul atau warna teks"
             >
               <h1 
-                className="text-3xl md:text-4xl lg:text-5xl font-black tracking-tight transition-colors"
+                className="text-3xl md:text-4xl lg:text-5xl font-black tracking-tight transition-colors flex items-center gap-2.5 flex-wrap"
                 style={{ color: titleColor }}
               >
-                {displayedTitle ? translateDisplayText(displayedTitle.toUpperCase().trim()) : translateDisplayText(sectionTitle)}
+                <span>{displayedTitle ? translateDisplayText(displayedTitle.toUpperCase().trim()) : translateDisplayText(sectionTitle)}</span>
+                {isVerified && <VerifiedBadge size="md" title="Seksi Terverifikasi Resmi Labnote" />}
               </h1>
               <span className="opacity-0 group-hover/title:opacity-100 p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all text-xs font-semibold flex items-center gap-1 shrink-0 border border-transparent hover:border-blue-200 shadow-2xs">
                 <Pencil className="w-3.5 h-3.5" />
@@ -1438,6 +1741,7 @@ export function SectionHubDashboard({
                         onDragOver={(e) => handleDragOverInfo(idx, e)}
                         onDrop={(e) => handleDropInfo(idx, e)}
                         onDragEnd={handleDragEndInfo}
+                        onDoubleClick={(e) => handleStartInlineEdit('info', idx, item.title, e)}
                         className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl border transition-all select-none ${
                           draggedInfoIdx === idx
                             ? 'opacity-40 border-dashed border-blue-400 bg-blue-50/50'
@@ -1454,9 +1758,49 @@ export function SectionHubDashboard({
                             {idx + 1}
                           </span>
                           <span className="text-base shrink-0">{item.icon || '📘'}</span>
-                          <span className="text-sm font-medium text-slate-800 truncate">
-                            {translateDisplayText(item.title)}
-                          </span>
+                          {inlineEditing?.type === 'info' && inlineEditing?.index === idx ? (
+                            <div className="flex items-center gap-1.5 flex-1 min-w-0" onClick={(e) => e.stopPropagation()}>
+                              <input
+                                type="text"
+                                autoFocus
+                                value={inlineEditing.value}
+                                onChange={(e) => setInlineEditing({ ...inlineEditing, value: e.target.value })}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') handleSaveInlineEdit();
+                                  if (e.key === 'Escape') setInlineEditing(null);
+                                }}
+                                onBlur={handleSaveInlineEdit}
+                                className="px-2 py-1 text-sm font-semibold rounded-lg border-2 border-blue-500 bg-white text-slate-800 shadow-xs outline-none w-full max-w-xs ring-2 ring-blue-100"
+                                placeholder="Ketik nama baru lalu tekan Enter..."
+                              />
+                              <button
+                                type="button"
+                                onMouseDown={(e) => e.preventDefault()}
+                                onClick={handleSaveInlineEdit}
+                                className="p-1 rounded-md bg-emerald-600 text-white hover:bg-emerald-700 transition-colors shadow-2xs cursor-pointer shrink-0"
+                                title="Simpan (Enter)"
+                              >
+                                <Check className="w-3.5 h-3.5 stroke-[3]" />
+                              </button>
+                              <button
+                                type="button"
+                                onMouseDown={(e) => e.preventDefault()}
+                                onClick={() => setInlineEditing(null)}
+                                className="p-1 rounded-md bg-slate-200 text-slate-700 hover:bg-slate-300 transition-colors shadow-2xs cursor-pointer shrink-0"
+                                title="Batal (Esc)"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          ) : (
+                            <span 
+                              onDoubleClick={(e) => handleStartInlineEdit('info', idx, item.title, e)}
+                              className="text-sm font-medium text-slate-800 truncate cursor-text hover:text-blue-700 hover:underline underline-offset-2 transition-colors select-none"
+                              title="Klik 2x (double-click) untuk rename langsung"
+                            >
+                              {translateDisplayText(item.title)}
+                            </span>
+                          )}
                           {item.isLogbook && (
                             <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-300">
                               LOGBOOK
@@ -1524,6 +1868,7 @@ export function SectionHubDashboard({
                     <button
                       key={idx}
                       onClick={() => handleItemClick(item)}
+                      onContextMenu={(e) => handleItemContextMenu(e, item)}
                       className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-gradient-to-r from-teal-50 via-emerald-50 to-teal-50/50 hover:from-teal-100 hover:via-emerald-100 hover:to-teal-100/70 border-2 border-teal-500/40 hover:border-teal-500/70 text-slate-900 text-sm font-semibold transition-all group shadow-xs text-left cursor-pointer mb-2"
                     >
                       <div className="flex items-center gap-3 truncate">
@@ -1552,6 +1897,7 @@ export function SectionHubDashboard({
                     <button
                       key={idx}
                       onClick={() => handleItemClick(item)}
+                      onContextMenu={(e) => handleItemContextMenu(e, item)}
                       className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl bg-[#f0f6fc] hover:bg-[#e4effa] border border-[#dcecfb] hover:border-sky-300 text-slate-800 text-sm font-medium transition-all group shadow-2xs hover:shadow-xs text-left cursor-pointer"
                     >
                       <div className="flex items-center gap-3 truncate">
@@ -1630,6 +1976,7 @@ export function SectionHubDashboard({
                         onDragOver={(e) => handleDragOverRules(idx, e)}
                         onDrop={(e) => handleDropRules(idx, e)}
                         onDragEnd={handleDragEndRules}
+                        onDoubleClick={(e) => handleStartInlineEdit('rules', idx, item.title, e)}
                         className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl border transition-all select-none ${
                           draggedRulesIdx === idx
                             ? 'opacity-40 border-dashed border-amber-400 bg-amber-50/50'
@@ -1646,9 +1993,49 @@ export function SectionHubDashboard({
                             {idx + 1}
                           </span>
                           <span className="text-base shrink-0">{item.icon || '📋'}</span>
-                          <span className="text-sm font-medium text-slate-800 truncate">
-                            {translateDisplayText(item.title)}
-                          </span>
+                          {inlineEditing?.type === 'rules' && inlineEditing?.index === idx ? (
+                            <div className="flex items-center gap-1.5 flex-1 min-w-0" onClick={(e) => e.stopPropagation()}>
+                              <input
+                                type="text"
+                                autoFocus
+                                value={inlineEditing.value}
+                                onChange={(e) => setInlineEditing({ ...inlineEditing, value: e.target.value })}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') handleSaveInlineEdit();
+                                  if (e.key === 'Escape') setInlineEditing(null);
+                                }}
+                                onBlur={handleSaveInlineEdit}
+                                className="px-2 py-1 text-sm font-semibold rounded-lg border-2 border-amber-500 bg-white text-slate-800 shadow-xs outline-none w-full max-w-xs ring-2 ring-amber-100"
+                                placeholder="Ketik nama baru lalu tekan Enter..."
+                              />
+                              <button
+                                type="button"
+                                onMouseDown={(e) => e.preventDefault()}
+                                onClick={handleSaveInlineEdit}
+                                className="p-1 rounded-md bg-emerald-600 text-white hover:bg-emerald-700 transition-colors shadow-2xs cursor-pointer shrink-0"
+                                title="Simpan (Enter)"
+                              >
+                                <Check className="w-3.5 h-3.5 stroke-[3]" />
+                              </button>
+                              <button
+                                type="button"
+                                onMouseDown={(e) => e.preventDefault()}
+                                onClick={() => setInlineEditing(null)}
+                                className="p-1 rounded-md bg-slate-200 text-slate-700 hover:bg-slate-300 transition-colors shadow-2xs cursor-pointer shrink-0"
+                                title="Batal (Esc)"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          ) : (
+                            <span 
+                              onDoubleClick={(e) => handleStartInlineEdit('rules', idx, item.title, e)}
+                              className="text-sm font-medium text-slate-800 truncate cursor-text hover:text-amber-700 hover:underline underline-offset-2 transition-colors select-none"
+                              title="Klik 2x (double-click) untuk rename langsung"
+                            >
+                              {translateDisplayText(item.title)}
+                            </span>
+                          )}
                           {item.linkUrl && (
                             <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 flex items-center gap-0.5">
                               <ExternalLink className="w-2.5 h-2.5" /> Link
@@ -1710,6 +2097,7 @@ export function SectionHubDashboard({
                     <button
                       key={idx}
                       onClick={() => handleItemClick(item)}
+                      onContextMenu={(e) => handleItemContextMenu(e, item)}
                       className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl bg-[#fdfbf6] hover:bg-[#f6f0df] border border-[#f5ecd5] hover:border-amber-300 text-slate-800 text-sm font-medium transition-all group shadow-2xs hover:shadow-xs text-left cursor-pointer"
                     >
                       <div className="flex items-center gap-3 truncate">
@@ -1789,6 +2177,7 @@ export function SectionHubDashboard({
                       onDragOver={(e) => handleDragOverInfo(idx, e)}
                       onDrop={(e) => handleDropInfo(idx, e)}
                       onDragEnd={handleDragEndInfo}
+                      onDoubleClick={(e) => handleStartInlineEdit('info', idx, item.title, e)}
                       className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border transition-all select-none ${
                         draggedInfoIdx === idx
                           ? 'opacity-40 border-dashed border-blue-400 bg-blue-50/50'
@@ -1807,9 +2196,49 @@ export function SectionHubDashboard({
                         <span className="text-lg shrink-0">{item.icon || '📘'}</span>
                         <div className="truncate flex-1">
                           <div className="flex items-center gap-2">
-                            <span className="text-sm font-semibold text-slate-800 truncate">
-                              {translateDisplayText(item.title)}
-                            </span>
+                            {inlineEditing?.type === 'info' && inlineEditing?.index === idx ? (
+                              <div className="flex items-center gap-1.5 flex-1 min-w-0" onClick={(e) => e.stopPropagation()}>
+                                <input
+                                  type="text"
+                                  autoFocus
+                                  value={inlineEditing.value}
+                                  onChange={(e) => setInlineEditing({ ...inlineEditing, value: e.target.value })}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') handleSaveInlineEdit();
+                                    if (e.key === 'Escape') setInlineEditing(null);
+                                  }}
+                                  onBlur={handleSaveInlineEdit}
+                                  className="px-2.5 py-1 text-sm font-semibold rounded-lg border-2 border-blue-500 bg-white text-slate-800 shadow-xs outline-none w-full max-w-sm ring-2 ring-blue-100"
+                                  placeholder="Ketik nama baru lalu tekan Enter..."
+                                />
+                                <button
+                                  type="button"
+                                  onMouseDown={(e) => e.preventDefault()}
+                                  onClick={handleSaveInlineEdit}
+                                  className="p-1 rounded-md bg-emerald-600 text-white hover:bg-emerald-700 transition-colors shadow-2xs cursor-pointer shrink-0"
+                                  title="Simpan (Enter)"
+                                >
+                                  <Check className="w-3.5 h-3.5 stroke-[3]" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onMouseDown={(e) => e.preventDefault()}
+                                  onClick={() => setInlineEditing(null)}
+                                  className="p-1 rounded-md bg-slate-200 text-slate-700 hover:bg-slate-300 transition-colors shadow-2xs cursor-pointer shrink-0"
+                                  title="Batal (Esc)"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            ) : (
+                              <span 
+                                onDoubleClick={(e) => handleStartInlineEdit('info', idx, item.title, e)}
+                                className="text-sm font-semibold text-slate-800 truncate cursor-text hover:text-blue-700 hover:underline underline-offset-2 transition-colors select-none"
+                                title="Klik 2x (double-click) untuk rename langsung"
+                              >
+                                {translateDisplayText(item.title)}
+                              </span>
+                            )}
                             {item.isLogbook && (
                               <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
                                 LOGBOOK
@@ -1878,6 +2307,7 @@ export function SectionHubDashboard({
                   <button
                     key={idx}
                     onClick={() => handleItemClick(item)}
+                    onContextMenu={(e) => handleItemContextMenu(e, item)}
                     className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-gradient-to-r from-teal-50 via-emerald-50 to-teal-50/50 hover:from-teal-100 hover:via-emerald-100 hover:to-teal-100/70 border-2 border-teal-500/40 hover:border-teal-500/70 text-slate-900 text-sm font-semibold transition-all group shadow-xs text-left cursor-pointer mb-2"
                   >
                     <div className="flex items-center gap-3 truncate">
@@ -1906,6 +2336,7 @@ export function SectionHubDashboard({
                   <button
                     key={idx}
                     onClick={() => handleItemClick(item)}
+                    onContextMenu={(e) => handleItemContextMenu(e, item)}
                     className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl bg-[#f0f6fc] hover:bg-[#e4effa] border border-[#dcecfb] hover:border-sky-300 text-slate-800 text-sm font-medium transition-all group shadow-2xs hover:shadow-xs text-left cursor-pointer"
                   >
                     <div className="flex items-center gap-3 truncate">

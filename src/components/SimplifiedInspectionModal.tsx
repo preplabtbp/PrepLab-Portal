@@ -1,3 +1,4 @@
+import { VerifiedBadge } from './VerifiedBadge';
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -993,8 +994,8 @@ export function SimplifiedInspectionModal({
                           Bukti Screenshot Inspeksi Terunggah
                         </span>
                       </div>
-                      <span className="text-[9.5px] font-bold px-2 py-0.5 rounded-full bg-emerald-600 text-white">
-                        ✓ Terverifikasi (+50 EXP)
+                      <span className="text-[9.5px] font-bold px-2 py-0.5 rounded-full bg-sky-600 text-white flex items-center gap-1">
+                        <VerifiedBadge size="xs" /> Terverifikasi (+50 EXP)
                       </span>
                     </div>
 

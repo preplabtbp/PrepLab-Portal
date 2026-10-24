@@ -735,6 +735,14 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
       const bungkus = isAbsentWithoutMeal || isOffWithMealCR
         ? bungkusCols.map(() => '')
         : bungkusCols.map(c => {
+            // Untuk karyawan Mess NR di Nirwana, jika waktu makan tsb sudah masuk ke kolom Kantin (mis. Pagi), jangan diduplikasi di kolom Bungkusan
+            if (isMessNR && isResidenceNirwana(r, emp)) {
+              const kVal = String((r as any)[`${c.slot}Kantin`] || '').trim();
+              if (kVal === '1' && (c.slot === 'pagi' || c.slot === 'siang' || c.slot === 'sore')) {
+                const lapCount = portions((r as any)[`${c.slot}Lapangan`]);
+                return lapCount > 0 ? lapCount : '';
+              }
+            }
             const count = bungkusOf(r, c.slot);
             return count > 0 ? count : '';
           });

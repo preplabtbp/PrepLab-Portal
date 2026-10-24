@@ -1959,7 +1959,9 @@ const app = express();
     '/api/portal-gallery',
     '/api/xrf',
     '/api/employees/photo',
-    '/api/inspections/p2h-lab'
+    '/api/inspections/p2h-lab',
+    '/api/widgets',
+    '/api/bulletin/recycle-bin'
   ];
 
   // Populate req.user if token valid on all /api routes
@@ -2664,8 +2666,8 @@ async function getNotificationTargets(dept) {
   });
 
   // Ensure critical DB columns exist in background
-  pool.query('ALTER TABLE employees ADD COLUMN IF NOT EXISTS tanggal_efektif_tidak_bekerja text;').catch(() => {});
-  pool.query('ALTER TABLE employees ADD COLUMN IF NOT EXISTS masa_kerja_jabatan_sebelumnya text;').catch(() => {});
+  // pool.query('ALTER TABLE employees ADD COLUMN IF NOT EXISTS tanggal_efektif_tidak_bekerja text;').catch(() => {});
+  // pool.query('ALTER TABLE employees ADD COLUMN IF NOT EXISTS masa_kerja_jabatan_sebelumnya text;').catch(() => {});
 
   // Mulai pelayan (server) di port 3000
   initRosterCron();

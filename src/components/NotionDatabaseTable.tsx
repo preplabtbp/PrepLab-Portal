@@ -648,6 +648,11 @@ export const getCellValue = (row: TableRowData, colName: string): string => {
       if (val !== undefined && val !== '') return val;
       if (fallbackVal === undefined) fallbackVal = val;
     }
+    if ((targetLower === 'files & media' || targetLower === 'files' || targetLower === 'media' || targetLower === 'lampiran' || targetLower === 'attachments') &&
+        (keyLower.includes('file') || keyLower.includes('media') || keyLower.includes('lampiran') || keyLower.includes('attachment') || keyLower.includes('berkas'))) {
+      if (val !== undefined && val !== '') return val;
+      if (fallbackVal === undefined) fallbackVal = val;
+    }
   }
   return fallbackVal ?? row[colName] ?? '';
 };
@@ -799,8 +804,8 @@ export function migrateChecklistsInRows(
             'Created time': createdStr,
             'Tanggal Selesai': item.checked ? createdStr : '-',
             'Tanggal selesai': item.checked ? createdStr : '-',
-            'Due Date': getCellValue(row, 'Due Date') || getCellValue(row, 'due date') || createdStr,
-            'due date': getCellValue(row, 'Due Date') || getCellValue(row, 'due date') || createdStr,
+            'Due Date': getCellValue(row, 'Due Date') || getCellValue(row, 'due date') || '-',
+            'due date': getCellValue(row, 'Due Date') || getCellValue(row, 'due date') || '-',
             Kategori: parentCat,
             'Activity (routine/non routine)': parentAct,
             period: parentPeriod,
@@ -1051,6 +1056,38 @@ export function NotionDatabaseTable({
     initialValue: string;
     multiline: boolean;
   } | null>(null);
+
+  // Drag and Drop Rows state & handlers (Notion-style row reordering)
+  const [draggedRowIndex, setDraggedRowIndex] = useState<number | null>(null);
+  const [dragOverRowIndex, setDragOverRowIndex] = useState<number | null>(null);
+  const [dropPosition, setDropPosition] = useState<'top' | 'bottom'>('bottom');
+
+  const handleRowDragStart = (e: React.DragEvent, rowIndex: number) => {
+    e.dataTransfer.setData('text/plain', String(rowIndex));
+    e.dataTransfer.effectAllowed = 'move';
+    setDraggedRowIndex(rowIndex);
+  };
+
+  const handleRowDragOver = (e: React.DragEvent, rowIndex: number) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (draggedRowIndex === null || draggedRowIndex === rowIndex) {
+      setDragOverRowIndex(null);
+      return;
+    }
+    const rect = e.currentTarget.getBoundingClientRect();
+    const midY = rect.top + rect.height / 2;
+    const isTop = e.clientY < midY;
+    setDropPosition(isTop ? 'top' : 'bottom');
+    setDragOverRowIndex(rowIndex);
+  };
+
+  const handleRowDragEnd = () => {
+    setDraggedRowIndex(null);
+    setDragOverRowIndex(null);
+  };
+
+  // handleRowDrop diimplementasikan di bawah handleTogglePinRow agar dapat mengakses state pin & localStorage
 
   // User Identity & Role Permissions for Deletion / Recycle Bin
   const effectiveNik = currentAuthorNik || localStorage.getItem('p2h_inspector_nik') || '';
@@ -1627,6 +1664,11 @@ export function NotionDatabaseTable({
         if (val !== undefined && val !== '') return val;
         if (fallbackVal === undefined) fallbackVal = val;
       }
+      if ((targetLower === 'files & media' || targetLower === 'files' || targetLower === 'media' || targetLower === 'lampiran' || targetLower === 'attachments' || cleanTarget.includes('file') || cleanTarget.includes('media') || cleanTarget.includes('lampiran')) &&
+          (cleanKey.includes('file') || cleanKey.includes('media') || cleanKey.includes('lampiran') || cleanKey.includes('attachment') || cleanKey.includes('berkas'))) {
+        if (val !== undefined && val !== '') return val;
+        if (fallbackVal === undefined) fallbackVal = val;
+      }
     }
     return fallbackVal ?? row[colName] ?? '';
   }, []);
@@ -1778,6 +1820,47 @@ export function NotionDatabaseTable({
 
     return false;
   }, [pinnedRowKeys, getRawRowTitle, getRawRowDesc]);
+
+  // Helper untuk mendapatkan key unik penanda pin baris
+  const getRowPinKey = useCallback((row: TableRowData): string => {
+    if (!row) return '';
+    if (row.id) return String(row.id);
+    const rawTitle = getRawRowTitle(row);
+    const cleanTitle = getDisplayTitle(rawTitle);
+    const strippedTitle = stripColorTags(cleanTitle);
+    if (strippedTitle) return strippedTitle;
+    if (cleanTitle) return cleanTitle;
+    const taskCode = row.taskCode || row['Task ID'] || row['ID Task'];
+    if (taskCode) return String(taskCode);
+    return '';
+  }, [getRawRowTitle]);
+
+  // Helper untuk mencari index suatu baris di dalam array pinnedRowKeys
+  const getRowPinIndex = useCallback((row: TableRowData, keys: string[] = pinnedRowKeys): number => {
+    if (!row) return -1;
+    const rowId = row.id ? String(row.id) : '';
+    if (rowId) {
+      const idx = keys.indexOf(rowId);
+      if (idx !== -1) return idx;
+    }
+    const rawTitle = getRawRowTitle(row);
+    const cleanTitle = getDisplayTitle(rawTitle);
+    if (cleanTitle) {
+      const idx = keys.indexOf(cleanTitle);
+      if (idx !== -1) return idx;
+    }
+    const strippedTitle = stripColorTags(cleanTitle);
+    if (strippedTitle) {
+      const idx = keys.indexOf(strippedTitle);
+      if (idx !== -1) return idx;
+    }
+    const taskCode = row.taskCode || row['Task ID'] || row['ID Task'];
+    if (taskCode) {
+      const idx = keys.indexOf(String(taskCode));
+      if (idx !== -1) return idx;
+    }
+    return -1;
+  }, [pinnedRowKeys, getRawRowTitle]);
 
   // Sinkronisasi baris dengan penanda <!--pin--> ke pinnedRowKeys saat rows prop dimuat
   useEffect(() => {
@@ -1940,6 +2023,193 @@ export function NotionDatabaseTable({
     }
   };
 
+  // ── HANDLER DRAG & DROP BARIS (Mendukung baris reguler & reordering baris pinned) ──
+  const handleRowDrop = async (e: React.DragEvent, targetIndex: number) => {
+    e.preventDefault();
+    if (draggedRowIndex === null || draggedRowIndex === targetIndex) {
+      handleRowDragEnd();
+      return;
+    }
+
+    const currentRows = [...localRows];
+    if (
+      draggedRowIndex < 0 ||
+      draggedRowIndex >= currentRows.length ||
+      targetIndex < 0 ||
+      targetIndex >= currentRows.length
+    ) {
+      handleRowDragEnd();
+      return;
+    }
+
+    const sourceRow = currentRows[draggedRowIndex];
+    const targetRow = currentRows[targetIndex];
+    if (!sourceRow || !targetRow) {
+      handleRowDragEnd();
+      return;
+    }
+
+    const sourceIsPinned = isRowPinned(sourceRow);
+    const targetIsPinned = isRowPinned(targetRow);
+
+    // Kumpulkan bundle baris induk beserta semua sub-kegiatannya
+    let bundleCount = 1;
+    while (
+      draggedRowIndex + bundleCount < currentRows.length &&
+      isSubItemRow(currentRows[draggedRowIndex + bundleCount])
+    ) {
+      bundleCount++;
+    }
+
+    // ── KELOLA PINNED KEYS JIKA TERKAIT BARIS PINNED ──
+    let nextPinnedKeys = [...pinnedRowKeys];
+    let pinKeysChanged = false;
+
+    // Helper untuk membersihkan pin tags dari objek baris
+    const cleanPinTagsFromRow = (r: TableRowData) => {
+      r.isPinned = 'false';
+      (r as any)._pinned = 'false';
+      for (const k of Object.keys(r)) {
+        if (typeof r[k] === 'string') {
+          r[k] = r[k]
+            .replace(/<!--\s*pin.*?-->/gi, '')
+            .replace(/<!-?\s*pinned.*?-->/gi, '')
+            .replace(/<!pin.*?>/gi, '')
+            .trim();
+        }
+      }
+    };
+
+    // Helper untuk menambahkan pin tag ke objek baris
+    const addPinTagToRow = (r: TableRowData) => {
+      r.isPinned = 'true';
+      (r as any)._pinned = 'true';
+      const descKey = Object.keys(r).find(k => {
+        const kl = k.toLowerCase().trim();
+        return kl === 'keterangan' || kl === 'description' || kl === 'deskripsi' || kl === 'catatan';
+      }) || 'Keterangan';
+      let curDesc = r[descKey] || '';
+      if (!curDesc.includes('<!--pin-->')) {
+        r[descKey] = `${curDesc} <!--pin-->`.trim();
+      }
+    };
+
+    const sourceKey = getRowPinKey(sourceRow);
+    const targetKey = getRowPinKey(targetRow);
+
+    if (sourceIsPinned && targetIsPinned) {
+      // KASUS 1: Dua baris pinned saling tukar / atur urutan
+      let sourceKeyIdx = getRowPinIndex(sourceRow, nextPinnedKeys);
+      let targetKeyIdx = getRowPinIndex(targetRow, nextPinnedKeys);
+
+      if (targetKeyIdx === -1 && targetKey) {
+        nextPinnedKeys.push(targetKey);
+        targetKeyIdx = nextPinnedKeys.length - 1;
+      }
+
+      let keyToMove = sourceKey;
+      if (sourceKeyIdx !== -1) {
+        keyToMove = nextPinnedKeys[sourceKeyIdx];
+        nextPinnedKeys.splice(sourceKeyIdx, 1);
+      }
+
+      let newTargetIdx = getRowPinIndex(targetRow, nextPinnedKeys);
+      if (newTargetIdx === -1) {
+        newTargetIdx = targetKeyIdx !== -1 ? targetKeyIdx : nextPinnedKeys.length;
+      }
+
+      const insertPinIdx = dropPosition === 'top' ? newTargetIdx : newTargetIdx + 1;
+      const safePinIdx = Math.max(0, Math.min(nextPinnedKeys.length, insertPinIdx));
+      if (keyToMove) {
+        nextPinnedKeys.splice(safePinIdx, 0, keyToMove);
+      }
+      pinKeysChanged = true;
+    } else if (!sourceIsPinned && targetIsPinned) {
+      // KASUS 2: Baris unpinned digeser masuk ke area pinned -> jadikan pinned pada urutan tersebut
+      addPinTagToRow(sourceRow);
+      const targetKeyIdx = getRowPinIndex(targetRow, nextPinnedKeys);
+      const insertPinIdx = dropPosition === 'top' 
+        ? (targetKeyIdx !== -1 ? targetKeyIdx : 0) 
+        : (targetKeyIdx !== -1 ? targetKeyIdx + 1 : nextPinnedKeys.length);
+      const safePinIdx = Math.max(0, Math.min(nextPinnedKeys.length, insertPinIdx));
+      if (sourceKey && !nextPinnedKeys.includes(sourceKey)) {
+        nextPinnedKeys.splice(safePinIdx, 0, sourceKey);
+        pinKeysChanged = true;
+      }
+    } else if (sourceIsPinned && !targetIsPinned) {
+      // KASUS 3: Baris pinned digeser keluar ke area reguler unpinned -> lepas pin
+      cleanPinTagsFromRow(sourceRow);
+      const sourceKeyIdx = getRowPinIndex(sourceRow, nextPinnedKeys);
+      if (sourceKeyIdx !== -1) {
+        nextPinnedKeys.splice(sourceKeyIdx, 1);
+        pinKeysChanged = true;
+      } else {
+        const keysToRemove = new Set<string>();
+        if (sourceRow.id) keysToRemove.add(String(sourceRow.id));
+        const rawT = getRawRowTitle(sourceRow);
+        const cleanT = getDisplayTitle(rawT);
+        const strippedT = stripColorTags(cleanT);
+        if (rawT) keysToRemove.add(rawT);
+        if (cleanT) keysToRemove.add(cleanT);
+        if (strippedT) keysToRemove.add(strippedT);
+        const nextFiltered = nextPinnedKeys.filter(k => !keysToRemove.has(k));
+        if (nextFiltered.length !== nextPinnedKeys.length) {
+          nextPinnedKeys = nextFiltered;
+          pinKeysChanged = true;
+        }
+      }
+    }
+
+    if (pinKeysChanged) {
+      setPinnedRowKeys(nextPinnedKeys);
+      try {
+        localStorage.setItem(tablePinStorageKey, JSON.stringify(nextPinnedKeys));
+      } catch {}
+    }
+
+    // ── KELOLA URUTAN LOKAL ROWS (Array Baris) ──
+    let targetEndIdx = targetIndex;
+    while (
+      targetEndIdx + 1 < currentRows.length &&
+      isSubItemRow(currentRows[targetEndIdx + 1])
+    ) {
+      targetEndIdx++;
+    }
+
+    const movingBundle = currentRows.splice(draggedRowIndex, bundleCount);
+
+    let finalTargetIdx = dropPosition === 'top' ? targetIndex : targetEndIdx;
+    if (draggedRowIndex < finalTargetIdx) {
+      finalTargetIdx -= bundleCount;
+    }
+    let insertionIdx = dropPosition === 'top' ? finalTargetIdx : finalTargetIdx + 1;
+    insertionIdx = Math.max(0, Math.min(currentRows.length, insertionIdx));
+
+    currentRows.splice(insertionIdx, 0, ...movingBundle);
+
+    setLocalRows(currentRows);
+    onRowsChange?.(currentRows);
+    await saveTableToBackend(currentRows);
+
+    const titleMoved = getDisplayTitle(
+      getRowVal(sourceRow, 'Activity Name') ||
+      getRowVal(sourceRow, 'Jenis kegiatan') ||
+      'Kegiatan'
+    );
+
+    if (sourceIsPinned && targetIsPinned) {
+      toast.success(`Urutan pinned task "${titleMoved}" berhasil diatur!`);
+    } else if (!sourceIsPinned && targetIsPinned) {
+      toast.success(`Task "${titleMoved}" disematkan (pinned) ke posisi baru!`);
+    } else if (sourceIsPinned && !targetIsPinned) {
+      toast.info(`Sematkan (pin) dilepas, task "${titleMoved}" dipindahkan ke urutan reguler.`);
+    } else {
+      toast.success(`Urutan baris "${titleMoved}" berhasil dipindahkan!`);
+    }
+
+    handleRowDragEnd();
+  };
+
   // Employees List for PIC Dropdown & Search
   const [employeesList, setEmployeesList] = useState<any[]>([]);
   const [isPicDropdownOpen, setIsPicDropdownOpen] = useState(false);
@@ -1980,6 +2250,22 @@ export function NotionDatabaseTable({
     images?: Array<{ url: string; title?: string; driveViewUrl?: string; driveDownloadUrl?: string }>;
     currentIndex?: number;
   } | null>(null);
+
+  // Document / non-image file interactive preview modal state
+  const [previewDoc, setPreviewDoc] = useState<{
+    url: string;
+    name: string;
+    driveViewUrl?: string;
+    driveDownloadUrl?: string;
+    size?: number;
+    mimeType?: string;
+    isPdf?: boolean;
+  } | null>(null);
+
+  // Cell file upload state & ref
+  const cellFileInputRef = useRef<HTMLInputElement>(null);
+  const [cellUploadTarget, setCellUploadTarget] = useState<{ rowIndex: number; colName: string } | null>(null);
+  const [isUploadingCellFile, setIsUploadingCellFile] = useState(false);
   const [showAllReplies, setShowAllReplies] = useState(false);
   const [showModalKeterangan, setShowModalKeterangan] = useState(false);
   const [showModalMedia, setShowModalMedia] = useState(false);
@@ -2025,14 +2311,15 @@ export function NotionDatabaseTable({
 
   // Column templates definition
   const POPULAR_COLUMN_TEMPLATES = [
+    { name: 'Files & media', icon: '📎', defaultValue: '', desc: 'Lampiran berkas foto, PDF, dokumen, atau media tugas' },
     { name: 'Created Time', icon: '🕒', defaultValue: '-', desc: 'Tanggal pembuatan tugas (otomatis saat dibuat)' },
     { name: 'Status', icon: '🏷️', defaultValue: 'Open', desc: 'Dropdown status progress tugas' },
     { name: 'Completed Time', icon: '✓', defaultValue: '-', desc: 'Tanggal atau waktu penyelesaian tugas' },
+    { name: 'Due Date', icon: '🎯', defaultValue: '-', desc: 'Batas tanggal penyelesaian tugas (Parameter Wajib KPI SLA)' },
     { name: 'Priority', icon: '⚡', defaultValue: 'Normal', desc: 'Tingkat urgensi kegiatan' },
     { name: 'PIC', icon: '👤', defaultValue: '', desc: 'Personil penanggung jawab' },
     { name: 'Activity (routine/non routine)', icon: '🔄', defaultValue: 'Routine', desc: 'Klasifikasi aktivitas rutin/non-rutin' },
     { name: 'period', icon: '⏱️', defaultValue: 'Weekly', desc: 'Periode waktu kegiatan' },
-    { name: 'Due Date', icon: '🎯', defaultValue: '-', desc: 'Batas tanggal penyelesaian tugas (Parameter Wajib KPI SLA)' },
     { name: 'Lokasi / Area', icon: '📍', defaultValue: 'Site Obi', desc: 'Lokasi fisik pelaksanaan tugas' },
     { name: 'Departemen', icon: '🏢', defaultValue: 'Laboratorium', desc: 'Seksi atau departemen pelaksana' },
     { name: 'Catatan Tambahan', icon: '📝', defaultValue: '-', desc: 'Rincian atau catatan ekstra' },
@@ -2051,6 +2338,7 @@ export function NotionDatabaseTable({
     if (l.includes('status')) return 6;
     if (l === 'pic' || l.includes('assignee') || l.includes('pj') || l === 'personil') return 7;
     if (l.includes('priority') || l.includes('prioritas')) return 8;
+    if (l.includes('file') || l.includes('media') || l.includes('lampiran') || l.includes('attachment') || l.includes('berkas')) return 15;
     if (!l.includes('name') && (l.includes('activity') || l.includes('aktivitas'))) return 9;
     if (l.includes('period') || l.includes('periode')) return 10;
     if (l.includes('group') || l.includes('kategori') || l.includes('category') || l.includes('dept')) return 11;
@@ -2882,6 +3170,77 @@ export function NotionDatabaseTable({
     fetchComments();
   }, [fetchComments]);
 
+  // Auto-migrate topic comments in database and local state when a task title is renamed
+  const handleRenameTopicComments = useCallback(async (oldTitle: string, newTitle: string, rowId?: string, targetRowObj?: TableRowData) => {
+    const targetPostId = getEffectivePostId(targetRowObj);
+    if (!oldTitle || !newTitle) return;
+    const cleanOld = getDisplayTitle(oldTitle).trim();
+    const cleanNew = getDisplayTitle(newTitle).trim();
+    if (!cleanOld || !cleanNew || cleanOld.toLowerCase() === cleanNew.toLowerCase()) return;
+
+    // 1. Optimistic update in allComments local state (preserving sub-arrow and meta tags)
+    setAllComments(prev => prev.map(c => {
+      const cTitle = (c.topicTitle || '').trim();
+      const cClean = getDisplayTitle(cTitle).trim();
+      const hasSubArrow = /^[↳↪]\s*/.test(cTitle);
+      const metaMatch = cTitle.match(/<!--[\s\S]*?-->/g);
+      const metaTags = metaMatch ? metaMatch.join(' ') : '';
+
+      if (cClean.toLowerCase() === cleanOld.toLowerCase() || cTitle.toLowerCase() === cleanOld.toLowerCase()) {
+        let nextT = cleanNew;
+        if (metaTags) nextT = `${nextT} ${metaTags}`;
+        if (hasSubArrow) nextT = `↳ ${nextT}`;
+        return { ...c, topicTitle: nextT };
+      }
+      if (cClean.toLowerCase().startsWith(`${cleanOld.toLowerCase()} - `)) {
+        const suffix = cClean.slice(`${cleanOld} - `.length);
+        let nextT = `${cleanNew} - ${suffix}`;
+        if (metaTags) nextT = `${nextT} ${metaTags}`;
+        if (hasSubArrow) nextT = `↳ ${nextT}`;
+        return { ...c, topicTitle: nextT };
+      }
+      return c;
+    }));
+
+    // 2. Also keep pinnedRowKeys updated if this row was pinned
+    setPinnedRowKeys(prev => {
+      let changed = false;
+      const next = prev.map(k => {
+        if (k === oldTitle || k === cleanOld) {
+          changed = true;
+          return cleanNew;
+        }
+        return k;
+      });
+      if (changed) {
+        try { localStorage.setItem(tablePinStorageKey, JSON.stringify(next)); } catch {}
+        return next;
+      }
+      return prev;
+    });
+
+    // 3. Call backend endpoint to update database records
+    try {
+      const res = await fetch('/api/bulletin/rename-topic', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          postId: targetPostId,
+          oldTopicTitle: cleanOld,
+          newTopicTitle: cleanNew,
+          topicId: rowId
+        })
+      });
+      const data = await res.json();
+      if (data.status === 'success' && data.updatedCount > 0) {
+        toast.info(`Riwayat komentar otomatis diperbarui ke "${cleanNew}".`);
+        fetchComments(targetPostId);
+      }
+    } catch (err) {
+      console.warn('[RenameTopic] Failed to migrate comments in backend:', err);
+    }
+  }, [getEffectivePostId, fetchComments, tablePinStorageKey]);
+
   // Comment counts per topic title, task ID, and clean title (aggregates sub-periods to base topic as well)
   const topicCommentCounts = useMemo(() => {
     const map: Record<string, number> = {};
@@ -3252,6 +3611,12 @@ export function NotionDatabaseTable({
         const taskMatch = (c.topicTitle || '').match(/<!--task-id:([^>]+)-->/);
         if (taskMatch && taskMatch[1].toLowerCase().trim() === rowId) return true;
       }
+      const taskCode = (selectedRow?.taskCode || selectedRow?.['Task ID'] || selectedRow?.['ID Task'] || selectedRow?.number || '').toLowerCase().trim();
+      if (taskCode && taskCode !== '-') {
+        if (cTopicId === taskCode || cTopicId.includes(taskCode)) return true;
+        const taskMatch = (c.topicTitle || '').match(/<!--task-id:([^>]+)-->/);
+        if (taskMatch && taskMatch[1].toLowerCase().trim() === taskCode) return true;
+      }
 
       // 2. Clean Title match (resilient against checkbox toggle [ ] <-> [x], ↳ prefix, and <!--last-modified:...--> changes)
       if (cleanSelTitle && cCleanTitle === cleanSelTitle) return true;
@@ -3403,9 +3768,195 @@ export function NotionDatabaseTable({
         images: activeGallery.length > 0 ? activeGallery : [fallbackItem],
         currentIndex: currentIndex
       });
-    } else if (att.driveViewUrl) {
-      window.open(att.driveViewUrl, '_blank');
+    } else {
+      const targetUrl = att.previewUrl || att.directUrl || att.url || '';
+      const driveId = att.id || extractDriveId(targetUrl) || (att.driveViewUrl ? extractDriveId(att.driveViewUrl) : null);
+      const isPdf = att.name.toLowerCase().endsWith('.pdf') || (att.mimeType && att.mimeType.includes('pdf')) || targetUrl.toLowerCase().includes('.pdf');
+      
+      setPreviewDoc({
+        url: targetUrl,
+        name: att.name || 'Lampiran Dokumen',
+        driveViewUrl: att.driveViewUrl || (driveId ? `https://drive.google.com/file/d/${driveId}/view?usp=sharing` : undefined),
+        driveDownloadUrl: att.driveDownloadUrl || (driveId ? `https://drive.google.com/uc?id=${driveId}&export=download` : (targetUrl || undefined)),
+        size: att.size,
+        mimeType: att.mimeType,
+        isPdf: Boolean(isPdf)
+      });
     }
+  };
+
+  // Handler for opening file dialog for a specific cell
+  const triggerCellUpload = (rowIndex: number, colName: string) => {
+    setCellUploadTarget({ rowIndex, colName });
+    if (cellFileInputRef.current) {
+      cellFileInputRef.current.value = '';
+      cellFileInputRef.current.click();
+    }
+  };
+
+  // Handler for cell file upload change (Lightning-fast client compression & optimistic insertion)
+  const handleCellFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0 || !cellUploadTarget) return;
+
+    const { rowIndex, colName } = cellUploadTarget;
+    setIsUploadingCellFile(true);
+    const toastId = toast.loading(`Memproses & mengunggah ${files.length} file...`);
+
+    try {
+      const uploadedAttachments: CommentAttachmentItem[] = [];
+
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const isImg = file.type.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp|svg|bmp)$/i.test(file.name);
+
+        // Convert file to base64
+        const base64Data = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = (err) => reject(err);
+          reader.readAsDataURL(file);
+        });
+
+        let finalBase64 = base64Data;
+        // Aggressive, ultra-fast client-side image compression (down to ~150KB in < 50ms)
+        if (isImg && file.size > 150 * 1024) {
+          try {
+            const img = new Image();
+            img.src = base64Data;
+            await new Promise((res) => { img.onload = res; img.onerror = res; });
+            const maxDim = 1280;
+            let w = img.width || 1200;
+            let h = img.height || 800;
+            if (w > maxDim || h > maxDim) {
+              if (w > h) {
+                h = Math.round((h * maxDim) / w);
+                w = maxDim;
+              } else {
+                w = Math.round((w * maxDim) / h);
+                h = maxDim;
+              }
+            }
+            const canvas = document.createElement('canvas');
+            canvas.width = w;
+            canvas.height = h;
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+              ctx.drawImage(img, 0, 0, w, h);
+              finalBase64 = canvas.toDataURL('image/jpeg', 0.78);
+            }
+          } catch (e) {
+            // fallback to original base64
+          }
+        }
+
+        // Upload to /api/upload with 45s timeout for large attachments
+        let uploadedUrl = '';
+        let driveId: string | null = null;
+        try {
+          const abortCtrl = new AbortController();
+          const abortTimer = setTimeout(() => abortCtrl.abort(), 45000);
+
+          const upRes = await fetch('/api/upload', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            signal: abortCtrl.signal,
+            body: JSON.stringify({
+              base64Data: finalBase64,
+              mimeType: file.type || (isImg ? 'image/jpeg' : 'application/octet-stream'),
+              filename: file.name.replace(/\|/g, '-'),
+              folderName: 'Bulletin Attachments'
+            })
+          });
+          clearTimeout(abortTimer);
+          if (upRes.ok) {
+            const upJson = await upRes.json();
+            if (upJson.url) {
+              uploadedUrl = upJson.url;
+              driveId = upJson.fileId || extractDriveId(uploadedUrl);
+            }
+          }
+        } catch (uErr) {
+          console.warn('Upload API error:', uErr);
+        }
+
+        // Never embed raw base64 into markdown table cells
+        if (!uploadedUrl || uploadedUrl.startsWith('data:')) {
+          throw new Error(`Gagal mengunggah "${file.name}". Pastikan koneksi stabil.`);
+        }
+
+        const directUrl = driveId ? `/api/drive/view/${driveId}` : uploadedUrl;
+        const driveViewUrl = driveId ? `https://drive.google.com/file/d/${driveId}/view?usp=sharing` : undefined;
+        const driveDownloadUrl = driveId ? `/api/drive/download/${driveId}` : directUrl;
+
+        uploadedAttachments.push({
+          id: driveId || undefined,
+          name: file.name.replace(/\|/g, '-'),
+          url: directUrl,
+          directUrl: directUrl,
+          driveViewUrl: driveViewUrl,
+          driveDownloadUrl: driveDownloadUrl,
+          isImage: isImg,
+          mimeType: file.type,
+          size: file.size
+        });
+      }
+
+      // Existing cell attachments
+      const targetRow = localRows[rowIndex];
+      if (!targetRow) throw new Error('Baris tabel tidak ditemukan');
+      const existingVal = getRowVal(targetRow, colName);
+      const existingAttachments = parseCommentAttachments(existingVal);
+      const combined = [...existingAttachments, ...uploadedAttachments];
+      const serialized = JSON.stringify(combined);
+
+      // Construct updated copy and persist to backend
+      const nextRows = [...localRows];
+      const updatedRow = { ...nextRows[rowIndex] };
+      let keyToSet = colName;
+      const colLower = colName.toLowerCase().trim();
+      const cleanCol = colLower.replace(/^[^a-z0-9]+/i, '').trim();
+      for (const k of Object.keys(updatedRow)) {
+        const kLower = k.toLowerCase().trim();
+        const kClean = kLower.replace(/^[^a-z0-9]+/i, '').trim();
+        if (kLower === colLower || (kClean && kClean === cleanCol)) {
+          keyToSet = k;
+          break;
+        }
+      }
+      updatedRow[keyToSet] = serialized;
+      nextRows[rowIndex] = updatedRow;
+
+      setLocalRows(nextRows);
+      onRowsChange?.(nextRows);
+
+      toast.loading('Menyimpan perubahan ke server...', { id: toastId });
+      const saveOk = await saveTableToBackend(nextRows);
+      if (saveOk) {
+        toast.success(`${uploadedAttachments.length} file berhasil disimpan permanen!`, { id: toastId });
+      } else {
+        toast.error('File berhasil diunggah tapi gagal disimpan ke server. Coba simpan ulang.', { id: toastId });
+      }
+    } catch (err: any) {
+      console.error('Gagal upload file ke cell:', err);
+      toast.error('Gagal mengunggah file. Silakan coba lagi.', { id: toastId });
+    } finally {
+      setIsUploadingCellFile(false);
+      setCellUploadTarget(null);
+      if (cellFileInputRef.current) cellFileInputRef.current.value = '';
+    }
+  };
+
+  // Handler for removing a single attachment from a cell
+  const handleRemoveCellAttachment = (rowIndex: number, colName: string, attIndex: number) => {
+    const targetRow = localRows[rowIndex];
+    if (!targetRow) return;
+    const existingVal = getRowVal(targetRow, colName);
+    const existingAttachments = parseCommentAttachments(existingVal);
+    const filtered = existingAttachments.filter((_, idx) => idx !== attIndex);
+    const serialized = filtered.length > 0 ? JSON.stringify(filtered) : '';
+    handleUpdateCellDirect(rowIndex, colName, serialized);
+    toast.info('File lampiran dihapus');
   };
 
   // Save changes to database
@@ -3472,7 +4023,8 @@ export function NotionDatabaseTable({
         const postIdStr = String(postId || '');
         if (postIdStr.startsWith('logbook-')) {
           try {
-            localStorage.setItem(`preplab_logbook_content_${postIdStr}`, updatedMarkdown);
+            const activeUniverse = String(pt || 'TBP').toUpperCase().includes('GTS') ? 'gts' : 'tbp';
+            localStorage.setItem(`preplab_logbook_content_${activeUniverse}_${postIdStr}`, updatedMarkdown);
           } catch {}
         }
         onPostContentUpdate?.(updatedMarkdown);
@@ -3483,6 +4035,42 @@ export function NotionDatabaseTable({
       console.error('Failed to persist table markdown to backend:', err);
       return false;
     }
+  };
+
+  // Helper: compute sort weight for inspection tickets (newest / highest sequence & date first)
+  const getTicketSortWeight = (row: TableRowData): number => {
+    const tktId = extractLinkedTicketId(row);
+    if (tktId) {
+      // 1. Format: TKT-W<week>Y<year>-<seq>, e.g. TKT-W42Y26-245
+      const match = tktId.match(/TKT-W(\d+)Y(\d+)-(\d+)/i);
+      if (match) {
+        const week = parseInt(match[1], 10) || 0;
+        const year = parseInt(match[2], 10) || 0;
+        const seq = parseInt(match[3], 10) || 0;
+        return (year * 10000000) + (week * 100000) + seq;
+      }
+      // 2. Trailing sequence number, e.g. TKT-245 or -245
+      const seqMatch = tktId.match(/(\d+)$/);
+      if (seqMatch) {
+        return parseInt(seqMatch[1], 10) || 0;
+      }
+      const anyNums = tktId.match(/\d+/g);
+      if (anyNums) {
+        return parseInt(anyNums.join(''), 10) || 0;
+      }
+    }
+
+    // 3. Fallback: Parse Created Time (DD-MM-YYYY)
+    const created = row['Created Time'] || row['Tanggal Dibuat'] || '';
+    const dMatch = created.match(/^(\d{2})-(\d{2})-(\d{4})/);
+    if (dMatch) {
+      const day = parseInt(dMatch[1], 10);
+      const month = parseInt(dMatch[2], 10);
+      const year = parseInt(dMatch[3], 10);
+      return (year * 10000) + (month * 100) + day;
+    }
+
+    return 0;
   };
 
   // Reconcile open/closed findings between /api/tickets and Labnote tasks
@@ -3499,25 +4087,14 @@ export function NotionDatabaseTable({
         let hasChanges = false;
         const nextRows = [...currentRows];
 
-        // 1. Process "Review temuan SAP"
-        const sapParentIdx = nextRows.findIndex(r => 
-          !isSubItemRow(r) && (
-            (getRowVal(r, 'Jenis kegiatan') || getRowVal(r, 'Name') || '').toLowerCase().includes('review temuan sap') ||
-            (r['Jenis kegiatan'] || r['Name'] || '').toLowerCase().includes('review temuan sap')
-          )
-        );
-
-        // 2. Process "Review temuan inspeksi gabungan"
-        const gabunganParentIdx = nextRows.findIndex(r => 
-          !isSubItemRow(r) && (
-            (getRowVal(r, 'Jenis kegiatan') || getRowVal(r, 'Name') || '').toLowerCase().includes('review temuan inspeksi gabungan') ||
-            (r['Jenis kegiatan'] || r['Name'] || '').toLowerCase().includes('review temuan inspeksi gabungan')
-          )
-        );
-
-        if (sapParentIdx === -1 && gabunganParentIdx === -1) {
-          return currentRows;
-        }
+        const findParentIndex = (searchPattern: string) => {
+          return nextRows.findIndex(r => 
+            !isSubItemRow(r) && (
+              (getRowVal(r, 'Jenis kegiatan') || getRowVal(r, 'Name') || '').toLowerCase().includes(searchPattern) ||
+              (r['Jenis kegiatan'] || r['Name'] || '').toLowerCase().includes(searchPattern)
+            )
+          );
+        };
 
         const syncParentWithTickets = (pIdx: number, targetTickets: any[], parentTitle: string) => {
           if (pIdx === -1) return;
@@ -3545,7 +4122,6 @@ export function NotionDatabaseTable({
           });
 
           const openTickets = targetTickets.filter(t => (t.status || '').toUpperCase() !== 'CLOSED');
-          const closedTickets = targetTickets.filter(t => (t.status || '').toUpperCase() === 'CLOSED');
 
           // A. Mark completed subtasks and backfill metadata (Created Time, Due Date, Completion Date)
           targetTickets.forEach(t => {
@@ -3654,28 +4230,57 @@ export function NotionDatabaseTable({
             }
           });
 
-          if (newSubRowsToAdd.length > 0) {
-            const insertPosition = existingSubIndices.length > 0
-              ? existingSubIndices[existingSubIndices.length - 1] + 1
-              : pIdx + 1;
-            nextRows.splice(insertPosition, 0, ...newSubRowsToAdd);
+          // C. Collect and sort all subtasks (updated existing + newly added) newest first
+          const allSubRows: TableRowData[] = [];
+          existingSubIndices.forEach(idx => {
+            allSubRows.push(nextRows[idx]);
+          });
+          allSubRows.push(...newSubRowsToAdd);
+
+          if (allSubRows.length > 0) {
+            // Sort descending: highest sort weight (newest ticket sequence & date) always at top
+            const sortedSubRows = [...allSubRows].sort((a, b) => getTicketSortWeight(b) - getTicketSortWeight(a));
+            
+            // Check if order changed or new rows were added
+            let orderChanged = allSubRows.length !== existingSubIndices.length;
+            if (!orderChanged) {
+              for (let k = 0; k < sortedSubRows.length; k++) {
+                if (sortedSubRows[k] !== allSubRows[k]) {
+                  orderChanged = true;
+                  break;
+                }
+              }
+            }
+
+            if (orderChanged) {
+              hasChanges = true;
+            }
+
+            // Replace existing subtask range under the parent with sortedSubRows
+            nextRows.splice(pIdx + 1, existingSubIndices.length, ...sortedSubRows);
           }
         };
 
-        // Routine SAP tickets
+        // Routine SAP tickets (filter by source: 'inspeksi' or TKT-* or SAP)
         const sapTickets = allTickets.filter(t => 
-          (t.source === 'inspeksi' || (t.ticketId || '').includes('SAP') || (t.ticketId || '').includes('W42Y26')) && 
+          (t.source === 'inspeksi' || (t.ticketId || '').includes('SAP') || (t.ticketId || '').toUpperCase().startsWith('TKT-')) && 
           (t.category || '').toLowerCase() !== 'inspeksi gabungan' &&
           t.source !== 'sidak_management'
         );
-        syncParentWithTickets(sapParentIdx, sapTickets, 'Review temuan SAP');
+        const sapIdx = findParentIndex('review temuan sap');
+        if (sapIdx !== -1) {
+          syncParentWithTickets(sapIdx, sapTickets, 'Review temuan SAP');
+        }
 
         // Inspeksi Gabungan / Sidak Management tickets
         const gabunganTickets = allTickets.filter(t => 
           (t.category || '').toLowerCase().includes('inspeksi gabungan') || 
           t.source === 'sidak_management'
         );
-        syncParentWithTickets(gabunganParentIdx, gabunganTickets, 'Review temuan inspeksi gabungan');
+        const gabunganIdx = findParentIndex('review temuan inspeksi gabungan');
+        if (gabunganIdx !== -1) {
+          syncParentWithTickets(gabunganIdx, gabunganTickets, 'Review temuan inspeksi gabungan');
+        }
 
         if (hasChanges) {
           saveTableToBackend(nextRows);
@@ -3691,7 +4296,7 @@ export function NotionDatabaseTable({
     }
   }, [saveTableToBackend, onRowsChange, getRowVal]);
 
-  // Real-time WebSocket sync for findings tickets
+  // Real-time WebSocket and Polling sync for findings tickets
   useEffect(() => {
     reconcileFindingsWithTickets();
 
@@ -3736,13 +4341,34 @@ export function NotionDatabaseTable({
     };
 
     socket.on('ticket:closed', handleTicketClosed);
+    socket.on('ticket:created', handleTicketUpdated);
     socket.on('ticket:updated', handleTicketUpdated);
     window.addEventListener('refresh-tickets', handleTicketUpdated);
 
+    // Periodic auto-sync: Poll every 2 minutes (120,000 ms) when tab is active to minimize Google Cloud cost
+    const pollInterval = setInterval(() => {
+      if (!document.hidden) {
+        reconcileFindingsWithTickets();
+      }
+    }, 120000);
+
+    // Immediate sync when browser window or tab becomes active/visible
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        reconcileFindingsWithTickets();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleVisibilityChange);
+
     return () => {
+      clearInterval(pollInterval);
       socket.off('ticket:closed', handleTicketClosed);
+      socket.off('ticket:created', handleTicketUpdated);
       socket.off('ticket:updated', handleTicketUpdated);
       window.removeEventListener('refresh-tickets', handleTicketUpdated);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleVisibilityChange);
     };
   }, [reconcileFindingsWithTickets, saveTableToBackend, getRowVal]);
 
@@ -3903,7 +4529,7 @@ export function NotionDatabaseTable({
       'Created Time': createdDateFormatted,
       'Tanggal Dibuat': createdDateFormatted,
       'Remarks': '-',
-      'Due Date': newTicket.targetDate ? formatToDDMMYYYY(newTicket.targetDate) : getTodayDDMMYYYY(),
+      'Due Date': newTicket.targetDate ? formatToDDMMYYYY(newTicket.targetDate) : '-',
       'Aktivitas': 'Daily',
       'isSubItem': 'true',
       'isCompleted': 'false',
@@ -3978,9 +4604,18 @@ export function NotionDatabaseTable({
       const targetRow = { ...copy[targetRowIndex] };
       
       const colLower = colName.toLowerCase().trim();
+      const cleanCol = colLower.replace(/^[^a-z0-9]+/i, '').trim();
+      const isFilesCol = cleanCol.includes('file') || cleanCol.includes('media') || cleanCol.includes('lampiran') || cleanCol.includes('attachment') || cleanCol.includes('berkas');
+
       let keyToSet = colName;
       for (const k of Object.keys(targetRow)) {
-        if (k.toLowerCase().trim() === colLower) {
+        const kLower = k.toLowerCase().trim();
+        const kClean = kLower.replace(/^[^a-z0-9]+/i, '').trim();
+        if (kLower === colLower || (kClean && kClean === cleanCol)) {
+          keyToSet = k;
+          break;
+        }
+        if (isFilesCol && (kClean.includes('file') || kClean.includes('media') || kClean.includes('lampiran') || kClean.includes('attachment') || kClean.includes('berkas'))) {
           keyToSet = k;
           break;
         }
@@ -4006,9 +4641,17 @@ export function NotionDatabaseTable({
       }
 
       if (colLower === 'jenis kegiatan' || colLower === 'judul' || colLower === 'task' || colLower === 'nama kegiatan' || colLower === 'activity name') {
+        const oldRowTitle = getRowVal(copy[targetRowIndex], 'Jenis kegiatan') || 
+                            getRowVal(copy[targetRowIndex], 'Activity Name') || 
+                            copy[targetRowIndex]['Jenis kegiatan'] || 
+                            copy[targetRowIndex]['Activity Name'] || '';
         targetRow['Jenis kegiatan'] = newValue;
         targetRow['Jenis Kegiatan'] = newValue;
         if (targetRow['Activity Name'] !== undefined) targetRow['Activity Name'] = newValue;
+
+        if (oldRowTitle && newValue && oldRowTitle.trim() !== newValue.trim()) {
+          handleRenameTopicComments(oldRowTitle, newValue, targetRow.id, targetRow);
+        }
       }
 
       // Smart Tasklist Auto-progress:
@@ -4137,7 +4780,15 @@ export function NotionDatabaseTable({
       if (selectedRow) {
         const curSelectedTitle = getRowVal(selectedRow, 'Jenis kegiatan');
         const updatedTitle = getRowVal(targetRow, 'Jenis kegiatan');
+        const selTitleClean = getDisplayTitle(curSelectedTitle || '').toLowerCase();
+        const oldTitleClean = getDisplayTitle(copy[targetRowIndex]['Jenis kegiatan'] || '').toLowerCase();
         if (curSelectedTitle && curSelectedTitle === updatedTitle) {
+          setSelectedRow(targetRow);
+        } else if (
+          selectedRow === copy[targetRowIndex] || 
+          (selectedRow.id && selectedRow.id === targetRow.id) ||
+          (selTitleClean && selTitleClean === oldTitleClean)
+        ) {
           setSelectedRow(targetRow);
         }
       }
@@ -4386,7 +5037,7 @@ export function NotionDatabaseTable({
       Status: 'Open',
       'Created Time': createdStr,
       'Tanggal Selesai': '-',
-      'Due Date': formatToDDMMYYYY(now),
+      'Due Date': '-',
       Kategori: targetCat,
       'Activity (routine/non routine)': inheritedCadence,
       period: inheritedPeriod
@@ -4488,8 +5139,8 @@ export function NotionDatabaseTable({
       'Created time': createdStr,
       'Tanggal Selesai': '-',
       'Tanggal selesai': '-',
-      'Due Date': getRowVal(parentRow, 'Due Date') || getRowVal(parentRow, 'due date') || createdStr,
-      'due date': getRowVal(parentRow, 'Due Date') || getRowVal(parentRow, 'due date') || createdStr,
+      'Due Date': getRowVal(parentRow, 'Due Date') || getRowVal(parentRow, 'due date') || '-',
+      'due date': getRowVal(parentRow, 'Due Date') || getRowVal(parentRow, 'due date') || '-',
       Kategori: parentCat,
       'Activity (routine/non routine)': parentAct,
       Aktivitas: parentAct,
@@ -5194,9 +5845,9 @@ export function NotionDatabaseTable({
     try {
       let updatedRows: TableRowData[];
       if (editingRowIndex === null) {
-        // Adding new row -> place at TOP (#1, row 1)
-        updatedRows = [cleanedRow, ...localRows];
-        toast.success(`Data kegiatan baru (${finalTaskCode}) berhasil ditambahkan di Baris #1!`);
+        // Adding new row -> place at BOTTOM (ala Notion)
+        updatedRows = [...localRows, cleanedRow];
+        toast.success(`Data kegiatan baru (${finalTaskCode}) berhasil ditambahkan di Baris #${updatedRows.length}!`);
       } else {
         // Editing existing row: pastikan targetIndex cocok dengan id / referensi row yang diedit
         let targetIndex = editingRowIndex;
@@ -5206,7 +5857,12 @@ export function NotionDatabaseTable({
             targetIndex = foundIdx;
           }
         }
+        const oldRow = localRows[targetIndex];
+        const oldRowTitle = oldRow ? (getRowVal(oldRow, 'Jenis kegiatan') || oldRow['Activity Name'] || '') : '';
         updatedRows = localRows.map((r, i) => i === targetIndex ? { ...r, ...cleanedRow } : r);
+        if (oldRowTitle && title && oldRowTitle.trim() !== title.trim()) {
+          handleRenameTopicComments(oldRowTitle, title, cleanedRow.id);
+        }
         toast.success(`Perubahan data kegiatan (${finalTaskCode}) berhasil disimpan!`);
       }
 
@@ -5225,8 +5881,9 @@ export function NotionDatabaseTable({
     }
   };
 
-  // Insert Blank Row Inline directly into table (starts manual inline editing immediately at row #1)
-  const handleInsertBlankRow = (_insertAtIndex: number = 0) => {
+  // Insert Blank Row Inline directly into table (starts manual inline editing at bottom ala Notion)
+  const handleInsertBlankRow = (insertOption: boolean | number = true) => {
+    const isBottom = typeof insertOption === 'boolean' ? insertOption : insertOption !== 0;
     const now = new Date();
     const createdStr = getTodayDDMMYYYY();
     const inheritedCadence = currentCadence || 'Non Routine';
@@ -5250,7 +5907,7 @@ export function NotionDatabaseTable({
       isCompleted: 'false',
       'Created Time': createdStr,
       'Tanggal Selesai': '-',
-      'Due Date': formatToDDMMYYYY(now),
+      'Due Date': '-',
       Kategori: targetCat,
       'Activity (routine/non routine)': inheritedCadence,
       period: inheritedCadence,
@@ -5265,27 +5922,39 @@ export function NotionDatabaseTable({
       }
     });
 
-    // Sisipkan di posisi paling atas (#1)
-    const nextRows = [blankRow, ...localRows];
+    const targetIndex = isBottom ? localRows.length : 0;
+    const nextRows = isBottom ? [...localRows, blankRow] : [blankRow, ...localRows];
 
     setLocalRows(nextRows);
     onRowsChange?.(nextRows);
     saveTableToBackend(nextRows);
 
-    // Immediately activate inline editor on the new empty cell at row 0
+    // Immediately activate inline editor on the new empty cell
     const titleColHeader = displayHeaders.find(h => {
       const hl = h.toLowerCase().trim();
       return hl.includes('activity name') || hl.includes('jenis kegiatan') || hl === 'task' || hl === 'judul';
     }) || 'Activity Name';
 
     setActiveInlineEditor({
-      rowIndex: 0,
+      rowIndex: targetIndex,
       colName: titleColHeader,
       initialValue: '',
       multiline: false
     });
 
-    toast.success(`Kegiatan baru (${autoTaskCode}) ditambahkan di Baris #1! Silakan ketik nama kegiatan.`);
+    // Auto-scroll ke paling bawah tabel
+    if (isBottom) {
+      setTimeout(() => {
+        if (tableScrollRef.current) {
+          tableScrollRef.current.scrollTo({
+            top: tableScrollRef.current.scrollHeight,
+            behavior: 'smooth'
+          });
+        }
+      }, 80);
+    }
+
+    toast.success(`Kegiatan baru (${autoTaskCode}) ditambahkan di Baris #${targetIndex + 1}! Silakan ketik nama kegiatan.`);
   };
 
   // Map setiap baris sub-item ke baris parent-nya di localRows
@@ -5309,6 +5978,30 @@ export function NotionDatabaseTable({
     return map;
   }, [localRows, getRowVal]);
 
+  // Enterprise Helper: Extract human-readable clean task title for Delete & Audit Trail
+  const getRowTaskCleanTitle = (row: TableRowData, fallbackIndex?: number): string => {
+    if (!row) return fallbackIndex !== undefined ? `Baris #${fallbackIndex + 1}` : 'Kegiatan';
+    const rawTitle = (
+      getRowVal(row, 'Activity Name') ||
+      getRowVal(row, 'Activity') ||
+      getRowVal(row, 'Jenis kegiatan') ||
+      getRowVal(row, 'Jenis Kegiatan') ||
+      getRowVal(row, 'Task') ||
+      getRowVal(row, 'Judul') ||
+      getRowVal(row, 'Name') ||
+      getRowVal(row, 'Nama') ||
+      row['Activity Name'] ||
+      row['Jenis kegiatan'] ||
+      row['Jenis Kegiatan'] ||
+      row['Name'] ||
+      row['= Name'] ||
+      ''
+    );
+    const clean = getDisplayTitle(rawTitle);
+    if (clean) return clean;
+    return fallbackIndex !== undefined ? `Baris #${fallbackIndex + 1}` : 'Kegiatan';
+  };
+
   // Request Delete for a single row (opens modern confirmation dialog with subtask cascade detection)
   const handleRequestDeleteRow = (index: number, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
@@ -5316,7 +6009,7 @@ export function NotionDatabaseTable({
     if (!targetRow) return;
 
     const isSub = isSubItemRow(targetRow);
-    const taskName = (getRowVal(targetRow, 'Jenis kegiatan') || getRowVal(targetRow, 'Name') || getRowVal(targetRow, 'Judul') || `Baris #${index + 1}`).trim();
+    const taskName = getRowTaskCleanTitle(targetRow, index);
 
     // Find all nested subtasks under this parent
     const subtasks: TableRowData[] = [];
@@ -5377,7 +6070,7 @@ export function NotionDatabaseTable({
               postId,
               postTitle: title || 'Daily Laboratory',
               section: section || 'LABORATORIUM',
-              taskTitle: (getRowVal(r, 'Jenis kegiatan') || getRowVal(r, 'Name') || `Baris #${idx + 1}`).trim(),
+              taskTitle: getRowTaskCleanTitle(r, idx),
               rowData: r,
               subtasksData: null,
               subtaskCount: 0
@@ -5401,7 +6094,7 @@ export function NotionDatabaseTable({
             postId,
             postTitle: title || 'Daily Laboratory',
             section: section || 'LABORATORIUM',
-            taskTitle: taskName || 'Kegiatan',
+            taskTitle: getRowTaskCleanTitle(targetRow, rowIndex),
             rowData: targetRow,
             subtasksData: subtasks && subtasks.length > 0 ? subtasks : null,
             subtaskCount: subtaskCount || 0
@@ -5415,18 +6108,24 @@ export function NotionDatabaseTable({
       }
 
       // 1. Audit Trail: Send to Recycle Bin API
-      fetch('/api/bulletin/recycle-bin', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          items: recyclePayloadItems,
-          deletedByNik: effectiveNik,
-          deletedByName: effectiveName,
-          deletedByJabatan: effectiveJabatan
-        })
-      }).catch(err => {
+      try {
+        const token = localStorage.getItem('token') || localStorage.getItem('preplab_auth_token') || '';
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+
+        await fetch('/api/bulletin/recycle-bin', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            items: recyclePayloadItems,
+            deletedByNik: effectiveNik,
+            deletedByName: effectiveName,
+            deletedByJabatan: effectiveJabatan
+          })
+        });
+      } catch (err) {
         console.warn('[RecycleBin] Error logging to recycle bin:', err);
-      });
+      }
 
       // 2. Remove rows locally & re-index number
       const updatedRows = localRows.filter((_, idx) => !rowsToRemoveIndices.has(idx));
@@ -5464,9 +6163,10 @@ export function NotionDatabaseTable({
   const handleOpenRecycleBin = async (filterMode: 'all' | 'current' = 'current') => {
     setRecycleBinModalState(prev => ({ ...prev, isOpen: true, isLoading: true, filter: filterMode }));
     try {
+      const activePt = pt || 'TBP';
       const url = filterMode === 'current' && postId
-        ? `/api/bulletin/recycle-bin?postId=${postId}`
-        : '/api/bulletin/recycle-bin';
+        ? `/api/bulletin/recycle-bin?postId=${postId}&pt=${activePt}`
+        : `/api/bulletin/recycle-bin?pt=${activePt}`;
       const res = await fetch(url);
       const json = await res.json();
       if (json.status === 'success' && Array.isArray(json.data)) {
@@ -6723,6 +7423,9 @@ export function NotionDatabaseTable({
     if (colLower.includes('pic') || colLower.includes('assignee')) return <span className="text-slate-400 mr-1 text-xs">≡</span>;
     if (colLower.includes('priority') || colLower.includes('prioritas')) return <span className="text-slate-400 mr-1 text-xs">↓</span>;
     if (colLower.includes('activity') || colLower.includes('aktivitas')) return <span className="text-slate-400 mr-1 text-xs">≡</span>;
+    if (colLower.includes('file') || colLower.includes('media') || colLower.includes('lampiran') || colLower.includes('attachment') || colLower.includes('berkas')) {
+      return <Paperclip className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400 mr-1 inline shrink-0" />;
+    }
     return <span className="text-slate-400 mr-1 text-xs">≡</span>;
   };
 
@@ -6824,7 +7527,7 @@ export function NotionDatabaseTable({
     <div 
       className={`w-full my-0 mb-0 border-b transition-all font-sans antialiased ${
         isNotionLight 
-          ? 'bg-white border-[#e9e9e8] text-[#37352f]' 
+          ? 'bg-white border-[#cbd5e1] text-[#37352f]' 
           : 'bg-[#181818] border-[#2d2d2d] text-slate-200'
       }`}
       style={{
@@ -6835,8 +7538,8 @@ export function NotionDatabaseTable({
       {/* NOTION MINIMALIST DATABASE HEADER (Icon-First with Smart Hover Tooltips)  */}
       {/* ========================================================================= */}
       <div 
-        className={`sticky top-0 md:top-12 z-30 transition-all border-b shadow-xs backdrop-blur-md ${
-          isNotionLight ? 'bg-white/95 border-[#e9e9e8]' : 'bg-[#191919]/95 border-[#2d2d2d]'
+        className={`transition-all border-b shadow-xs backdrop-blur-md ${
+          isNotionLight ? 'bg-white/95 border-[#cbd5e1]' : 'bg-[#191919]/95 border-[#2d2d2d]'
         }`}
       >
         {/* Main Clean Row: Left (Title & View Tabs) | Right (Essential Icon Tools, Full Tools Logo, + New) */}
@@ -6859,7 +7562,7 @@ export function NotionDatabaseTable({
 
             {/* Notion View Switcher Tabs */}
             <div className={`flex items-center p-0.5 rounded-lg border transition-colors ${
-              isNotionLight ? 'bg-[#f7f7f5] border-[#e9e9e8]' : 'bg-[#151515] border-[#2d2d2d]'
+              isNotionLight ? 'bg-[#f7f7f5] border-[#cbd5e1]' : 'bg-[#151515] border-[#2d2d2d]'
             }`}>
               <NotionTooltip content="Tampilan Tabel" position="bottom">
                 <button
@@ -7027,7 +7730,7 @@ export function NotionDatabaseTable({
               {isFilterPopoverOpen && (
                 <div 
                   className={`absolute right-0 top-full mt-1.5 w-80 sm:w-96 max-h-[82vh] overflow-y-auto rounded-2xl shadow-2xl border p-3.5 z-50 transition-all text-left space-y-3 ${
-                    isNotionLight ? 'bg-white border-[#e9e9e7] text-[#37352f]' : 'bg-[#202020] border-[#333333] text-slate-100'
+                    isNotionLight ? 'bg-white border-[#cbd5e1] text-[#37352f]' : 'bg-[#202020] border-[#333333] text-slate-100'
                   }`}
                   style={{
                     fontFamily: 'ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif'
@@ -7132,7 +7835,7 @@ export function NotionDatabaseTable({
                                 ? isSelected
                                   ? 'bg-[#37352f] text-white border border-[#37352f] dark:bg-teal-600 dark:border-teal-500 shadow-2xs font-semibold'
                                   : isNotionLight
-                                  ? 'bg-[#f7f7f5] hover:bg-[#efefed] text-[#37352f] border border-[#e9e9e7] opacity-80 hover:opacity-100 font-medium'
+                                  ? 'bg-[#f7f7f5] hover:bg-[#efefed] text-[#37352f] border border-[#cbd5e1] opacity-80 hover:opacity-100 font-medium'
                                   : 'bg-[#282828] hover:bg-[#333333] text-slate-300 border border-slate-700 opacity-80 hover:opacity-100 font-medium'
                                 : isSelected
                                 ? 'font-semibold ring-2 ring-slate-800/80 dark:ring-white/80 ring-offset-1 shadow-xs scale-[1.02] border border-transparent opacity-100'
@@ -7227,7 +7930,7 @@ export function NotionDatabaseTable({
                                 ? isSelected
                                   ? 'bg-[#37352f] text-white border border-[#37352f] dark:bg-teal-600 dark:border-teal-500 shadow-2xs font-semibold'
                                   : isNotionLight
-                                  ? 'bg-[#f7f7f5] hover:bg-[#efefed] text-[#37352f] border border-[#e9e9e7] opacity-80 hover:opacity-100 font-medium'
+                                  ? 'bg-[#f7f7f5] hover:bg-[#efefed] text-[#37352f] border border-[#cbd5e1] opacity-80 hover:opacity-100 font-medium'
                                   : 'bg-[#282828] hover:bg-[#333333] text-slate-300 border border-slate-700 opacity-80 hover:opacity-100 font-medium'
                                 : isSelected
                                 ? 'font-semibold ring-2 ring-slate-800/80 dark:ring-white/80 ring-offset-1 shadow-xs scale-[1.02] border border-transparent opacity-100'
@@ -7274,7 +7977,7 @@ export function NotionDatabaseTable({
                         className="w-full pl-8 pr-2.5 py-1 rounded-lg border text-[11px] outline-none focus:border-teal-500 font-sans"
                         style={{
                           backgroundColor: isNotionLight ? '#fbfbfa' : '#1a1a1a',
-                          borderColor: isNotionLight ? '#e9e9e7' : '#333333',
+                          borderColor: isNotionLight ? '#cbd5e1' : '#374151',
                           color: isNotionLight ? '#37352f' : '#f1f5f9'
                         }}
                       />
@@ -7288,7 +7991,7 @@ export function NotionDatabaseTable({
                           selectedPics.length === 0
                             ? 'bg-[#37352f] text-white border-[#37352f] dark:bg-teal-600 dark:border-teal-500 shadow-2xs'
                             : isNotionLight
-                            ? 'bg-[#f7f7f5] hover:bg-[#efefed] text-[#37352f] border-[#e9e9e7]'
+                            ? 'bg-[#f7f7f5] hover:bg-[#efefed] text-[#37352f] border-[#cbd5e1]'
                             : 'bg-[#282828] hover:bg-[#333333] text-slate-300 border-slate-700'
                         }`}
                       >
@@ -7313,7 +8016,7 @@ export function NotionDatabaseTable({
                                 isSelected
                                   ? 'bg-[#37352f] text-white border-[#37352f] dark:bg-teal-600 dark:border-teal-500 shadow-2xs'
                                   : isNotionLight
-                                  ? 'bg-[#f7f7f5] hover:bg-[#efefed] text-[#37352f] border-[#e9e9e7]'
+                                  ? 'bg-[#f7f7f5] hover:bg-[#efefed] text-[#37352f] border-[#cbd5e1]'
                                   : 'bg-[#282828] hover:bg-[#333333] text-slate-300 border-slate-700'
                               }`}
                             >
@@ -7361,7 +8064,7 @@ export function NotionDatabaseTable({
               {isSortPopoverOpen && (
                 <div 
                   className={`absolute right-0 top-full mt-1.5 w-64 rounded-xl shadow-2xl border p-3 z-50 transition-all text-left ${
-                    isNotionLight ? 'bg-white border-[#e9e9e8] text-slate-800' : 'bg-[#202020] border-[#333333] text-slate-100'
+                    isNotionLight ? 'bg-white border-[#cbd5e1] text-slate-800' : 'bg-[#202020] border-[#333333] text-slate-100'
                   }`}
                   onClick={(e) => e.stopPropagation()}
                 >
@@ -8081,7 +8784,7 @@ export function NotionDatabaseTable({
         <div 
           ref={tableScrollRef}
           onScroll={handleTableScroll}
-          className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-210px)] w-full transition-all notion-table-scroll-freeze rounded-b-xl border border-[#e9e9e8] dark:border-[#2d2d2d]"
+          className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-210px)] w-full transition-all notion-table-scroll-freeze rounded-b-xl border border-[#cbd5e1] dark:border-[#2d2d2d]"
           style={{ zoom: zoomPercent !== 100 ? `${zoomPercent}%` : undefined }}
         >
           <style>{`
@@ -8149,6 +8852,14 @@ export function NotionDatabaseTable({
             .notion-font-scope textarea {
               font-size: inherit;
             }
+            /* High-contrast crisp border rules for all screens, DPI scalings (125%, 150%) & laptop panels */
+            .notion-font-scope th,
+            .notion-font-scope td {
+              border-color: ${isNotionLight ? '#cbd5e1' : '#3f3f46'} !important;
+            }
+            .notion-font-scope tr {
+              border-color: ${isNotionLight ? '#cbd5e1' : '#3f3f46'} !important;
+            }
           `}</style>
           <table 
             className={`w-full ${fitPageMode ? 'table-fixed max-w-full leading-normal' : 'min-w-max table-auto leading-relaxed'} text-left border-collapse notion-font-scope`}
@@ -8163,14 +8874,14 @@ export function NotionDatabaseTable({
             <thead>
               <tr 
                 className={`border-b select-none transition-colors ${
-                  isNotionLight ? 'border-[#e9e9e8]' : 'border-[#303030]'
+                  isNotionLight ? 'border-[#cbd5e1]' : 'border-[#303030]'
                 }`}
               >
                 {/* 0. Dedicated Action Gutter (+, ::, [ ]) Column Header ala Notion */}
                 <th 
                   className={`sticky top-0 z-20 text-center shadow-2xs border-b border-r select-none ${
-                    isNotionLight ? 'bg-[#fbfbfa] text-[#37352f] border-[#e9e9e8]' : 'bg-[#202020] text-slate-300 border-[#303030]'
-                  } ${fitPageMode ? 'w-14 min-w-[56px] max-w-[56px] px-1 py-2.5' : 'w-16 min-w-[62px] max-w-[62px] px-1.5 py-3'}`}
+                    isNotionLight ? 'bg-[#fbfbfa] text-[#37352f] border-[#cbd5e1]' : 'bg-[#202020] text-slate-300 border-[#303030]'
+                  } ${fitPageMode ? 'w-16 min-w-[64px] max-w-[64px] px-1 py-2.5' : 'w-20 min-w-[76px] max-w-[76px] px-1.5 py-3'}`}
                 >
                   <div className="flex items-center justify-center">
                     <input
@@ -8222,7 +8933,7 @@ export function NotionDatabaseTable({
                       key={colHeader}
                       style={getColStyle(colHeader)}
                       className={`sticky top-0 z-20 shadow-2xs font-semibold hover:opacity-90 transition-opacity group/th relative border-b border-r text-[13px] ${
-                        isNotionLight ? 'bg-[#fbfbfa] text-[#37352f] border-[#e9e9e8]' : 'bg-[#202020] text-slate-200 border-[#303030]'
+                        isNotionLight ? 'bg-[#fbfbfa] text-[#37352f] border-[#cbd5e1]' : 'bg-[#202020] text-slate-200 border-[#303030]'
                       } ${widthClass}`}
                     >
                       <div className={`flex items-center justify-between gap-1.5 ${isNum ? 'justify-center' : ''}`}>
@@ -8349,7 +9060,7 @@ export function NotionDatabaseTable({
                 {/* Add Column Header Button (+) */}
                 <th 
                   className={`sticky top-0 z-20 w-10 text-center px-1.5 py-2.5 relative shadow-2xs border-b border-r ${
-                    isNotionLight ? 'bg-[#fbfbfa] border-[#e9e9e8]' : 'bg-[#202020] border-[#303030]'
+                    isNotionLight ? 'bg-[#fbfbfa] border-[#cbd5e1]' : 'bg-[#202020] border-[#303030]'
                   }`} 
                   ref={addColumnRef}
                 >
@@ -8386,6 +9097,53 @@ export function NotionDatabaseTable({
                       >
                         <span>Tambah Kolom Baru</span>
                       </div>
+
+                      {/* Featured Quick Add: Files & Media */}
+                      {(() => {
+                        const hasFilesCol = tableHeaders.some(h => {
+                          const l = h.toLowerCase().trim();
+                          return l.includes('file') || l.includes('media') || l.includes('lampiran') || l.includes('attachment') || l.includes('berkas');
+                        });
+                        return (
+                          <div 
+                            className="p-2 mb-2 rounded-xl border flex items-center justify-between transition-colors shadow-2xs"
+                            style={{
+                              backgroundColor: hasFilesCol 
+                                ? (isNotionLight ? '#f1f5f9' : '#1e293b') 
+                                : (isNotionLight ? '#f0fdfa' : 'rgba(20, 184, 166, 0.12)'),
+                              borderColor: hasFilesCol 
+                                ? (isNotionLight ? '#e2e8f0' : '#334155') 
+                                : 'rgba(20, 184, 166, 0.4)'
+                            }}
+                          >
+                            <div className="flex items-center gap-2 min-w-0 pr-1">
+                              <div className="w-7 h-7 rounded-lg bg-teal-500/20 text-teal-600 dark:text-teal-400 flex items-center justify-center shrink-0">
+                                <Paperclip className="w-4 h-4" />
+                              </div>
+                              <div className="min-w-0">
+                                <p className="font-bold text-xs truncate" style={{ color: 'var(--text-main, #0f172a)' }}>
+                                  Files &amp; media
+                                </p>
+                                <p className="text-[10px] truncate" style={{ color: 'var(--text-muted, #64748b)' }}>
+                                  Upload foto, PDF &amp; dokumen
+                                </p>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              disabled={hasFilesCol}
+                              onClick={() => handleAddColumn('Files & media')}
+                              className={`px-2.5 py-1 rounded-lg text-xs font-bold shrink-0 transition-all cursor-pointer ${
+                                hasFilesCol
+                                  ? 'opacity-50 cursor-not-allowed bg-slate-200 dark:bg-slate-700 text-slate-500'
+                                  : 'bg-teal-600 hover:bg-teal-500 text-white shadow-xs'
+                              }`}
+                            >
+                              {hasFilesCol ? 'Ada' : '+ Tambah'}
+                            </button>
+                          </div>
+                        );
+                      })()}
 
                       {/* Custom Column Input */}
                       <div 
@@ -8439,7 +9197,13 @@ export function NotionDatabaseTable({
                       </div>
                       <div className="space-y-0.5 max-h-48 overflow-y-auto pr-1">
                         {POPULAR_COLUMN_TEMPLATES.map((tmpl) => {
-                          const isAlreadyAdded = tableHeaders.some(h => h.toLowerCase() === tmpl.name.toLowerCase());
+                          const isAlreadyAdded = tableHeaders.some(h => {
+                            const l = h.toLowerCase().trim();
+                            if (tmpl.name === 'Files & media') {
+                              return l.includes('file') || l.includes('media') || l.includes('lampiran') || l.includes('attachment') || l.includes('berkas');
+                            }
+                            return l === tmpl.name.toLowerCase();
+                          });
                           return (
                             <button
                               key={tmpl.name}
@@ -8518,7 +9282,7 @@ export function NotionDatabaseTable({
 
                 <th 
                   className={`sticky top-0 z-20 text-center shadow-2xs border-b text-[13px] ${fitPageMode ? 'w-[5%] px-1.5 py-2.5' : 'w-24 px-3 py-3'} ${
-                    isNotionLight ? 'bg-[#fbfbfa] text-slate-700 font-semibold border-[#e9e9e8]' : 'bg-[#202020] text-slate-300 font-bold border-[#303030]'
+                    isNotionLight ? 'bg-[#fbfbfa] text-slate-700 font-semibold border-[#cbd5e1]' : 'bg-[#202020] text-slate-300 font-bold border-[#303030]'
                   }`}
                 >
                   Actions
@@ -8582,7 +9346,7 @@ export function NotionDatabaseTable({
                           </div>
                           <button
                             type="button"
-                            onClick={handleOpenAddModal}
+                            onClick={() => handleInsertBlankRow(true)}
                             className="mt-2 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-semibold text-xs shadow-md transition-all cursor-pointer active:scale-95"
                           >
                             <Plus className="w-4 h-4" />
@@ -8607,7 +9371,7 @@ export function NotionDatabaseTable({
                         onClick={() => toggleGroup(groupName)}
                         className={`cursor-pointer select-none transition-colors border-b font-medium text-xs ${
                           isNotionLight
-                            ? 'bg-[#fbfbfa] hover:bg-[#f3f3f1] text-slate-800 border-[#e9e9e8]'
+                            ? 'bg-[#fbfbfa] hover:bg-[#f3f3f1] text-slate-800 border-[#cbd5e1]'
                             : 'bg-[#202020] hover:bg-[#282828] text-slate-200 border-[#303030]'
                         }`}
                       >
@@ -8723,13 +9487,12 @@ export function NotionDatabaseTable({
                           if (aPin && !bPin) return -1;
                           if (!aPin && bPin) return 1;
                           if (aPin && bPin) {
-                            const aKey = a.parentRow.id ? String(a.parentRow.id) : (a.parentRow['Jenis kegiatan'] || '').replace(/^↳\s*/, '').trim();
-                            const bKey = b.parentRow.id ? String(b.parentRow.id) : (b.parentRow['Jenis kegiatan'] || '').replace(/^↳\s*/, '').trim();
-                            const aIdx = pinnedRowKeys.indexOf(aKey);
-                            const bIdx = pinnedRowKeys.indexOf(bKey);
+                            const aIdx = getRowPinIndex(a.parentRow);
+                            const bIdx = getRowPinIndex(b.parentRow);
                             if (aIdx !== -1 && bIdx !== -1) return aIdx - bIdx;
                             if (aIdx !== -1) return -1;
                             if (bIdx !== -1) return 1;
+                            return a.parentIndex - b.parentIndex;
                           }
 
                           if (sortColumn) {
@@ -8797,7 +9560,7 @@ export function NotionDatabaseTable({
                             row['Jenis Kegiatan'] || 
                             row['Name'] || 
                             row['= Name'] || 
-                            `Baris ${actualRowIndex + 1}`
+                            ''
                           ).trim();
                           const displayTitle = getDisplayTitle(rawTitle);
                           const topicKey = displayTitle.toLowerCase().trim();
@@ -8812,7 +9575,19 @@ export function NotionDatabaseTable({
                           return (
                             <tr
                               key={isSubItem ? `sub-${actualRowIndex}-${row.id || ''}` : `row-${actualRowIndex}-${row.id || ''}`}
+                              onDragOver={(e) => handleRowDragOver(e, actualRowIndex)}
+                              onDrop={(e) => handleRowDrop(e, actualRowIndex)}
                               className={`transition-all group border-b ${
+                                dragOverRowIndex === actualRowIndex
+                                  ? dropPosition === 'top'
+                                    ? '!border-t-2 !border-t-teal-500 bg-teal-500/10'
+                                    : '!border-b-2 !border-b-teal-500 bg-teal-500/10'
+                                  : ''
+                              } ${
+                                draggedRowIndex === actualRowIndex
+                                  ? 'opacity-40 bg-slate-200/50 dark:bg-slate-800/50'
+                                  : ''
+                              } ${
                                 isSelected 
                                   ? 'bg-teal-500/10 hover:bg-teal-500/15' 
                                   : isDirty 
@@ -8823,7 +9598,7 @@ export function NotionDatabaseTable({
                                       ? 'hover:bg-[#fbfbfa] bg-white'
                                       : 'hover:bg-slate-800/40 bg-transparent'
                               } ${
-                                isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
+                                isNotionLight ? 'border-[#cbd5e1]' : 'border-[#2d2d2d]'
                               }`}
                               style={{ 
                                 borderBottomColor: isSelected 
@@ -8831,19 +9606,34 @@ export function NotionDatabaseTable({
                                   : isDirty 
                                     ? 'rgba(245, 158, 11, 0.4)' 
                                     : isNotionLight
-                                    ? '#e9e9e8'
-                                    : 'var(--border-main, #334155)' 
+                                    ? '#cbd5e1'
+                                    : 'var(--border-main, #3f3f46)' 
                               }}
                             >
                               {/* 0. Dedicated Action Gutter (+, ::, [ ]) Column ala Notion */}
                               <td 
                                 className={`border-r select-none transition-colors ${
-                                  isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
-                                } ${fitPageMode ? 'w-14 min-w-[56px] max-w-[56px] px-0.5 py-1' : 'w-16 min-w-[62px] max-w-[62px] px-1 py-1'}`}
+                                  isNotionLight ? 'border-[#cbd5e1]' : 'border-[#2d2d2d]'
+                                } ${fitPageMode ? 'w-16 min-w-[64px] max-w-[64px] px-0.5 py-1' : 'w-20 min-w-[76px] max-w-[76px] px-1 py-1'}`}
                                 onClick={(e) => e.stopPropagation()}
                               >
-                                <div className="flex items-center justify-center gap-1.5">
-                                  {/* Pin Button: Menggantikan logo drag handle GripVertical */}
+                                <div className="flex items-center justify-center gap-1">
+                                  {/* Drag Handle ala Notion */}
+                                  {!isSubItem ? (
+                                    <div
+                                      draggable
+                                      onDragStart={(e) => handleRowDragStart(e, actualRowIndex)}
+                                      onDragEnd={handleRowDragEnd}
+                                      className="cursor-grab active:cursor-grabbing p-0.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 opacity-40 hover:opacity-100 group-hover:opacity-80 transition-opacity shrink-0"
+                                      title="Geser untuk mengubah urutan baris (Tarik ke atas/bawah)"
+                                    >
+                                      <GripVertical className="w-3.5 h-3.5" />
+                                    </div>
+                                  ) : (
+                                    <div className="w-3.5 h-3.5 shrink-0" />
+                                  )}
+
+                                  {/* Pin Button */}
                                   {!isSubItem ? (
                                     <button
                                       type="button"
@@ -8851,17 +9641,17 @@ export function NotionDatabaseTable({
                                         e.stopPropagation();
                                         handleTogglePinRow(row);
                                       }}
-                                      className={`p-0.5 rounded transition-all cursor-pointer ${
+                                      className={`p-0.5 rounded transition-all cursor-pointer shrink-0 ${
                                         isRowPinned(row)
                                           ? 'text-amber-500 hover:text-amber-600 bg-amber-50 dark:bg-amber-950/50 opacity-100 shadow-2xs'
-                                          : 'text-slate-400 hover:text-amber-500 opacity-0 group-hover:opacity-100 hover:bg-slate-200 dark:hover:bg-slate-700'
+                                          : 'text-slate-400 hover:text-amber-500 opacity-40 hover:opacity-100 group-hover:opacity-80 hover:bg-slate-200 dark:hover:bg-slate-700'
                                       }`}
                                       title={isRowPinned(row) ? 'Lepas Pin Task (Unpin)' : 'Pin Task ke Atas (Maks. 10 task)'}
                                     >
                                       <Pin className={`w-3.5 h-3.5 ${isRowPinned(row) ? 'fill-amber-500 rotate-45 text-amber-500' : ''}`} />
                                     </button>
                                   ) : (
-                                    <div className="w-3.5 h-3.5" />
+                                    <div className="w-3.5 h-3.5 shrink-0" />
                                   )}
 
                                   {/* [ ] Select Checkbox */}
@@ -8870,7 +9660,7 @@ export function NotionDatabaseTable({
                                     checked={isSelected}
                                     onChange={(e) => handleToggleSelectRow(actualRowIndex, e as any)}
                                     className={`w-3.5 h-3.5 rounded cursor-pointer accent-teal-600 transition-opacity ${
-                                      isSelected ? 'opacity-100' : 'opacity-50 sm:opacity-0 group-hover:opacity-100 hover:opacity-100'
+                                      isSelected ? 'opacity-100' : 'opacity-60 hover:opacity-100'
                                     } ${
                                       isNotionLight ? 'border-slate-300' : 'bg-slate-800 border-slate-600'
                                     }`}
@@ -8901,7 +9691,7 @@ export function NotionDatabaseTable({
                                       key={colName} 
                                       style={{ ...getColStyle(colName), color: isDirty ? '#f59e0b' : isNotionLight ? '#64748b' : 'var(--text-muted, #64748b)' }} 
                                       className={`text-center font-mono border-r ${
-                                        isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
+                                        isNotionLight ? 'border-[#cbd5e1]' : 'border-[#2d2d2d]'
                                       } ${
                                         fitPageMode ? 'px-1.5 py-2.5 text-xs' : 'px-3 py-3 text-[13px]'
                                       }`}
@@ -8925,7 +9715,7 @@ export function NotionDatabaseTable({
                                       key={colName} 
                                       style={{ ...getColStyle(colName), fontSize: `${labNoteFontSize}px`, color: isNotionLight ? '#0f172a' : 'var(--text-main, #f8fafc)' }} 
                                       className={`font-medium transition-colors border-r ${
-                                        isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
+                                        isNotionLight ? 'border-[#cbd5e1]' : 'border-[#2d2d2d]'
                                       } ${
                                         fitPageMode ? 'px-2.5 py-2.5 overflow-hidden' : 'px-4 py-3'
                                       } ${!isEditingThis && onToggleExpand ? 'cursor-pointer hover:bg-slate-100/50 dark:hover:bg-slate-800/20' : ''}`}
@@ -9131,7 +9921,7 @@ export function NotionDatabaseTable({
                                                       setSelectedRow(row);
                                                       setModalTab('details');
                                                     }}
-                                                    className={`ml-1 opacity-0 group-hover/cell:opacity-100 px-1.5 py-0.5 rounded text-[9.5px] font-bold border transition-all uppercase tracking-wider cursor-pointer shadow-2xs shrink-0 ${
+                                                    className={`ml-1.5 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9.5px] font-bold border transition-all uppercase tracking-wider cursor-pointer shadow-2xs shrink-0 select-none ${
                                                       isNotionLight
                                                         ? 'bg-white hover:bg-slate-100 border-slate-300 text-slate-700'
                                                         : 'bg-slate-800 hover:bg-slate-700 border-slate-600 text-slate-300'
@@ -9290,25 +10080,23 @@ export function NotionDatabaseTable({
                                                       </button>
                                                     )}
 
-                                                  {/* Open Badge / Button (Only displayed when NO shortcut exists) */}
-                                                  {!hasModuleShortcut && (
-                                                    <button
-                                                      type="button"
-                                                      onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        setSelectedRow(row);
-                                                        setModalTab('details');
-                                                      }}
-                                                      className={`ml-1 opacity-0 group-hover/cell:opacity-100 px-1.5 py-0.5 rounded text-[9.5px] font-bold border transition-all uppercase tracking-wider cursor-pointer shadow-2xs shrink-0 ${
-                                                        isNotionLight
-                                                          ? 'bg-white hover:bg-slate-100 border-slate-300 text-slate-700'
-                                                          : 'bg-slate-800 hover:bg-slate-700 border-slate-600 text-slate-300'
-                                                      }`}
-                                                      title="Buka dokumen / detail halaman"
-                                                    >
-                                                      OPEN
-                                                    </button>
-                                                  )}
+                                                  {/* Open Badge / Button (Selalu tersedia untuk semua baris agar bisa membuka detail & diskusi) */}
+                                                  <button
+                                                    type="button"
+                                                    onClick={(e) => {
+                                                      e.stopPropagation();
+                                                      setSelectedRow(row);
+                                                      setModalTab('details');
+                                                    }}
+                                                    className={`ml-1.5 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9.5px] font-bold border transition-all uppercase tracking-wider cursor-pointer shadow-2xs shrink-0 select-none ${
+                                                      isNotionLight
+                                                        ? 'bg-white hover:bg-slate-100 border-slate-300 text-slate-700'
+                                                        : 'bg-slate-800 hover:bg-slate-700 border-slate-600 text-slate-300'
+                                                    }`}
+                                                    title="Buka dokumen / detail halaman"
+                                                  >
+                                                    OPEN
+                                                  </button>
                                                 </>
                                               );
                                             })()}
@@ -9348,7 +10136,7 @@ export function NotionDatabaseTable({
                                                 });
                                               }}
                                               title="Tautkan baris ini ke Tiket K3/SAP, WO, atau Modul Lain"
-                                              className={`opacity-0 group-hover/cell:opacity-100 p-1 rounded transition-all cursor-pointer ${
+                                              className={`opacity-40 hover:opacity-100 group-hover:opacity-90 p-1 rounded transition-all cursor-pointer ${
                                                 extractRowLinkInfo(row)
                                                   ? 'text-sky-500 hover:bg-sky-50 dark:hover:bg-sky-950/50'
                                                   : 'text-slate-400 hover:text-sky-500 hover:bg-slate-200 dark:hover:bg-slate-700'
@@ -9364,7 +10152,7 @@ export function NotionDatabaseTable({
                                                 setActiveInlineEditor({ rowIndex: actualRowIndex, colName, initialValue: displayTitle || val, multiline: false });
                                               }}
                                               title="Edit judul langsung"
-                                              className="opacity-0 group-hover/cell:opacity-100 p-1 rounded hover:bg-teal-500/15 text-slate-400 hover:text-teal-400 transition-all cursor-pointer"
+                                              className="opacity-40 hover:opacity-100 group-hover:opacity-90 p-1 rounded hover:bg-teal-500/15 text-slate-400 hover:text-teal-400 transition-all cursor-pointer"
                                             >
                                               <Edit2 className="w-3 h-3" />
                                             </button>
@@ -9392,7 +10180,7 @@ export function NotionDatabaseTable({
                                       key={colName} 
                                       style={{ ...getColStyle(colName), color: isNotionLight ? '#475569' : 'var(--text-muted, #94a3b8)' }} 
                                       className={`font-sans border-r ${
-                                        isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
+                                        isNotionLight ? 'border-[#cbd5e1]' : 'border-[#2d2d2d]'
                                       } ${
                                         fitPageMode ? 'px-2 py-2 text-xs overflow-hidden' : 'px-3.5 py-2.5 w-[360px] min-w-[280px] max-w-[450px] overflow-hidden text-[13px]'
                                       }`}
@@ -9451,7 +10239,7 @@ export function NotionDatabaseTable({
                                               setActiveInlineEditor({ rowIndex: actualRowIndex, colName, initialValue: cleanInitial, multiline: true });
                                             }}
                                             title="Edit keterangan langsung"
-                                            className="opacity-0 group-hover/cell:opacity-100 p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-400 hover:text-teal-400 transition-all shrink-0 cursor-pointer"
+                                            className="opacity-40 hover:opacity-100 group-hover:opacity-90 p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-400 hover:text-teal-400 transition-all shrink-0 cursor-pointer"
                                           >
                                             <Edit2 className="w-3 h-3" />
                                           </button>
@@ -9496,7 +10284,7 @@ export function NotionDatabaseTable({
                                       key={colName} 
                                       style={{ ...getColStyle(colName), color: isNotionLight ? '#047857' : '#34d399' }} 
                                       className={`font-sans border-r cursor-pointer ${
-                                        isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
+                                        isNotionLight ? 'border-[#cbd5e1]' : 'border-[#2d2d2d]'
                                       } ${
                                         fitPageMode ? 'px-2 py-2 text-xs truncate' : 'px-3.5 py-2.5 whitespace-nowrap text-[13px]'
                                       }`}
@@ -9591,7 +10379,7 @@ export function NotionDatabaseTable({
                                       key={colName} 
                                       style={getColStyle(colName)} 
                                       className={`font-sans border-r ${
-                                        isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
+                                        isNotionLight ? 'border-[#cbd5e1]' : 'border-[#2d2d2d]'
                                       } ${
                                         fitPageMode ? 'px-2 py-2 text-xs truncate' : 'px-3.5 py-2.5 whitespace-nowrap text-[13px]'
                                       }`}
@@ -9629,7 +10417,7 @@ export function NotionDatabaseTable({
                                       key={colName} 
                                       style={getColStyle(colName)} 
                                       className={`font-sans border-r cursor-pointer ${
-                                        isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
+                                        isNotionLight ? 'border-[#cbd5e1]' : 'border-[#2d2d2d]'
                                       } ${
                                         fitPageMode ? 'px-2 py-2 truncate' : 'px-3.5 py-2.5 whitespace-nowrap'
                                       }`}
@@ -9696,7 +10484,7 @@ export function NotionDatabaseTable({
                                       key={colName} 
                                       style={getColStyle(colName)} 
                                       className={`relative border-r cursor-pointer select-none transition-colors ${
-                                        isNotionLight ? 'border-[#e9e9e8] hover:bg-slate-100/60' : 'border-[#2d2d2d] hover:bg-slate-800/40'
+                                        isNotionLight ? 'border-[#cbd5e1] hover:bg-slate-100/60' : 'border-[#2d2d2d] hover:bg-slate-800/40'
                                       } ${fitPageMode ? 'px-2 py-1.5 overflow-visible' : 'px-3.5 py-2 whitespace-nowrap overflow-visible'}`}
                                       onClick={(e) => {
                                         e.stopPropagation();
@@ -9863,7 +10651,7 @@ export function NotionDatabaseTable({
                                       key={colName} 
                                       style={getColStyle(colName)} 
                                       className={`border-r cursor-pointer ${
-                                        isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
+                                        isNotionLight ? 'border-[#cbd5e1]' : 'border-[#2d2d2d]'
                                       } ${fitPageMode ? 'px-2 py-2 overflow-hidden' : 'px-3.5 py-2.5 whitespace-nowrap'}`}
                                       onDoubleClick={startInlineEdit}
                                       title="Klik untuk memilih opsi prioritas, atau klik 2x (double-click) untuk edit langsung"
@@ -9914,7 +10702,7 @@ export function NotionDatabaseTable({
                                       key={colName} 
                                       style={getColStyle(colName)} 
                                       className={`border-r cursor-pointer ${
-                                        isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
+                                        isNotionLight ? 'border-[#cbd5e1]' : 'border-[#2d2d2d]'
                                       } ${fitPageMode ? 'px-2 py-2 overflow-hidden' : 'px-4 py-2.5 whitespace-nowrap'}`}
                                       onDoubleClick={startInlineEdit}
                                       title="Klik untuk memilih status, atau klik 2x (double-click) untuk edit langsung"
@@ -10044,7 +10832,7 @@ export function NotionDatabaseTable({
                                       key={colName} 
                                       style={{ ...getColStyle(colName), color: isNotionLight ? '#475569' : 'var(--text-muted, #94a3b8)' }} 
                                       className={`font-sans border-r cursor-pointer ${
-                                        isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
+                                        isNotionLight ? 'border-[#cbd5e1]' : 'border-[#2d2d2d]'
                                       } ${
                                         fitPageMode ? 'px-2 py-2 text-xs truncate' : 'px-3.5 py-2.5 whitespace-nowrap text-[13px]'
                                       }`}
@@ -10076,7 +10864,7 @@ export function NotionDatabaseTable({
                                   if (isSubItem) {
                                     return (
                                       <td key={colName} style={getColStyle(colName)} className={`text-center font-mono border-r ${
-                                        isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
+                                        isNotionLight ? 'border-[#cbd5e1]' : 'border-[#2d2d2d]'
                                       } ${fitPageMode ? 'px-1.5 py-2 text-xs' : 'px-3.5 py-2 text-[13px]'}`}>
                                         <span className="text-slate-400 font-mono">-</span>
                                       </td>
@@ -10085,7 +10873,7 @@ export function NotionDatabaseTable({
 
                                   return (
                                     <td key={colName} style={getColStyle(colName)} className={`border-r ${
-                                      isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
+                                      isNotionLight ? 'border-[#cbd5e1]' : 'border-[#2d2d2d]'
                                     } ${fitPageMode ? 'px-2 py-2 truncate' : 'px-3.5 py-2.5 whitespace-nowrap'}`}>
                                       {val && val !== '-' ? (
                                         <span 
@@ -10112,7 +10900,7 @@ export function NotionDatabaseTable({
                                       key={colName} 
                                       style={getColStyle(colName)} 
                                       className={`border-r cursor-pointer ${
-                                        isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
+                                        isNotionLight ? 'border-[#cbd5e1]' : 'border-[#2d2d2d]'
                                       } ${fitPageMode ? 'px-2 py-2 truncate' : 'px-3.5 py-2.5 whitespace-nowrap'}`}
                                       onDoubleClick={startInlineEdit}
                                       title="Klik untuk memilih aktivitas, atau klik 2x (double-click) untuk edit langsung"
@@ -10153,7 +10941,7 @@ export function NotionDatabaseTable({
                                       key={colName} 
                                       style={getColStyle(colName)} 
                                       className={`border-r cursor-pointer ${
-                                        isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
+                                        isNotionLight ? 'border-[#cbd5e1]' : 'border-[#2d2d2d]'
                                       } ${fitPageMode ? 'px-2 py-2 truncate' : 'px-3.5 py-2.5 whitespace-nowrap'}`}
                                       onDoubleClick={startInlineEdit}
                                       title="Klik untuk memilih periode, atau klik 2x (double-click) untuk edit langsung"
@@ -10188,7 +10976,7 @@ export function NotionDatabaseTable({
                                   if (isSubItem) {
                                     return (
                                       <td key={colName} style={getColStyle(colName)} className={`text-center font-mono border-r ${
-                                        isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
+                                        isNotionLight ? 'border-[#cbd5e1]' : 'border-[#2d2d2d]'
                                       } ${fitPageMode ? 'px-1.5 py-2 text-xs' : 'px-3.5 py-2 text-[13px]'}`}>
                                         <span className="text-slate-400 font-mono">-</span>
                                       </td>
@@ -10197,7 +10985,7 @@ export function NotionDatabaseTable({
 
                                   return (
                                     <td key={colName} style={{ ...getColStyle(colName), color: isNotionLight ? '#334155' : 'var(--text-main, #cbd5e1)' }} className={`whitespace-nowrap border-r ${
-                                      isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
+                                      isNotionLight ? 'border-[#cbd5e1]' : 'border-[#2d2d2d]'
                                     } ${
                                       fitPageMode ? 'px-2 py-2 text-xs' : 'px-3.5 py-2.5 text-[13px]'
                                     }`}>
@@ -10211,7 +10999,7 @@ export function NotionDatabaseTable({
                                   const asalVal = val || row['Asal Halaman'] || row._originPostTitle || '';
                                   return (
                                     <td key={colName} style={getColStyle(colName)} className={`border-r ${
-                                      isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
+                                      isNotionLight ? 'border-[#cbd5e1]' : 'border-[#2d2d2d]'
                                     } ${fitPageMode ? 'px-2 py-2 text-xs truncate' : 'px-3.5 py-2.5 whitespace-nowrap text-[13px]'}`}>
                                       {asalVal && asalVal !== '-' ? (
                                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200/60 dark:border-slate-700/60">
@@ -10221,6 +11009,128 @@ export function NotionDatabaseTable({
                                       ) : (
                                         <span className="font-mono text-slate-400">-</span>
                                       )}
+                                    </td>
+                                  );
+                                }
+
+                                // 13. Files & media Column (Interactive Attachments with ImageModal preview & Document preview)
+                                const isFilesCol = cleanCol.includes('file') || cleanCol.includes('media') || cleanCol.includes('lampiran') || cleanCol.includes('attachment') || cleanCol.includes('berkas');
+                                if (isFilesCol) {
+                                  const cellAttachments = parseCommentAttachments(val);
+                                  const isUploadingThisCell = isUploadingCellFile && cellUploadTarget?.rowIndex === actualRowIndex && cellUploadTarget?.colName === colName;
+
+                                  return (
+                                    <td
+                                      key={colName}
+                                      style={{ ...getColStyle(colName) }}
+                                      className={`border-r transition-colors ${
+                                        isNotionLight ? 'border-[#cbd5e1]' : 'border-[#2d2d2d]'
+                                      } ${fitPageMode ? 'px-2 py-1.5 text-xs' : 'px-3 py-2 text-[13px]'}`}
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      <div className="flex items-center flex-wrap gap-1.5 min-w-0">
+                                        {cellAttachments.map((att, attIdx) => {
+                                          const isImg = att.isImage;
+                                          const ext = (att.name || '').split('.').pop()?.toLowerCase() || '';
+                                          const isPdf = ext === 'pdf' || (att.mimeType && att.mimeType.includes('pdf'));
+                                          const isExcel = ext === 'xls' || ext === 'xlsx' || ext === 'csv';
+
+                                          return (
+                                            <div
+                                              key={att.id || att.url || attIdx}
+                                              className={`group/chip relative inline-flex items-center gap-1.5 pl-1.5 pr-2 py-1 rounded-md text-xs font-medium border transition-all cursor-pointer shadow-2xs ${
+                                                isNotionLight
+                                                  ? 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-800'
+                                                  : 'bg-[#272727] hover:bg-[#323232] border-[#3f3f46] text-slate-200'
+                                              }`}
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                handlePreviewAttachment(att, cellAttachments);
+                                              }}
+                                              title={`Klik untuk preview: ${att.name}`}
+                                            >
+                                              {/* Thumbnail / Icon */}
+                                              {isImg ? (
+                                                <img
+                                                  src={att.previewUrl || att.directUrl || att.url}
+                                                  alt={att.name}
+                                                  className="w-5 h-5 rounded object-cover border border-slate-300 dark:border-slate-600 shrink-0"
+                                                  onError={(e) => {
+                                                    (e.target as HTMLElement).style.display = 'none';
+                                                  }}
+                                                />
+                                              ) : isPdf ? (
+                                                <span className="p-0.5 rounded bg-red-100 dark:bg-red-950/60 text-red-600 dark:text-red-400 shrink-0">
+                                                  <FileText className="w-3.5 h-3.5" />
+                                                </span>
+                                              ) : isExcel ? (
+                                                <span className="p-0.5 rounded bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 shrink-0">
+                                                  <FileSpreadsheet className="w-3.5 h-3.5" />
+                                                </span>
+                                              ) : (
+                                                <span className="p-0.5 rounded bg-teal-100 dark:bg-teal-950/60 text-teal-600 dark:text-teal-400 shrink-0">
+                                                  <Paperclip className="w-3.5 h-3.5" />
+                                                </span>
+                                              )}
+
+                                              {/* Name */}
+                                              <span className="truncate max-w-[110px] select-none hover:underline" title={att.name}>
+                                                {att.name}
+                                              </span>
+
+                                              {/* Preview hint badge */}
+                                              <span className="text-[10px] text-teal-600 dark:text-teal-400 opacity-60 group-hover/chip:opacity-100">
+                                                <Eye className="w-3 h-3" />
+                                              </span>
+
+                                              {/* Remove button */}
+                                              <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  handleRemoveCellAttachment(actualRowIndex, colName, attIdx);
+                                                }}
+                                                className="opacity-0 group-hover/chip:opacity-100 p-0.5 rounded hover:bg-red-100 dark:hover:bg-red-900/50 hover:text-red-600 transition-opacity ml-0.5 cursor-pointer"
+                                                title="Hapus file ini"
+                                              >
+                                                <X className="w-3 h-3" />
+                                              </button>
+                                            </div>
+                                          );
+                                        })}
+
+                                        {/* Add file button */}
+                                        <button
+                                          type="button"
+                                          disabled={isUploadingThisCell}
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            triggerCellUpload(actualRowIndex, colName);
+                                          }}
+                                          className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors cursor-pointer ${
+                                            cellAttachments.length === 0
+                                              ? isNotionLight
+                                                ? 'text-slate-400 hover:text-teal-700 hover:bg-teal-50 border border-dashed border-slate-300 hover:border-teal-400'
+                                                : 'text-slate-500 hover:text-teal-400 hover:bg-teal-950/30 border border-dashed border-slate-700 hover:border-teal-600'
+                                              : isNotionLight
+                                                ? 'text-slate-400 hover:text-teal-700 hover:bg-slate-100'
+                                                : 'text-slate-500 hover:text-teal-400 hover:bg-slate-800'
+                                          }`}
+                                          title="Tambah / unggah file lampiran"
+                                        >
+                                          {isUploadingThisCell ? (
+                                            <>
+                                              <Loader2 className="w-3 h-3 animate-spin text-teal-500 shrink-0" />
+                                              <span>Mengunggah...</span>
+                                            </>
+                                          ) : (
+                                            <>
+                                              <Plus className="w-3 h-3 shrink-0" />
+                                              <span>{cellAttachments.length === 0 ? 'Tambah file' : ''}</span>
+                                            </>
+                                          )}
+                                        </button>
+                                      </div>
                                     </td>
                                   );
                                 }
@@ -10238,7 +11148,7 @@ export function NotionDatabaseTable({
                                     key={colName} 
                                     style={{ ...getColStyle(colName), color: isNotionLight ? '#334155' : 'var(--text-main, #cbd5e1)' }} 
                                     className={`whitespace-nowrap border-r cursor-pointer ${
-                                      isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
+                                      isNotionLight ? 'border-[#cbd5e1]' : 'border-[#2d2d2d]'
                                     } ${
                                       fitPageMode ? 'px-2 py-2 text-xs' : 'px-3.5 py-2.5 text-[13px]'
                                     }`}
@@ -10274,7 +11184,7 @@ export function NotionDatabaseTable({
 
                               {/* Spacer cell for Add Column (+) header */}
                               <td className={`w-10 px-1 py-2 text-center border-r ${
-                                isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
+                                isNotionLight ? 'border-[#cbd5e1]' : 'border-[#2d2d2d]'
                               }`} />
 
                                {/* Row Action Buttons - Menu Titik Tiga */}
@@ -10315,6 +11225,22 @@ export function NotionDatabaseTable({
                                        }`}
                                        onClick={(e) => e.stopPropagation()}
                                      >
+                                       {/* Buka Halaman / Detail (OPEN) Shortcut in Action Menu */}
+                                       <button
+                                         type="button"
+                                         onClick={(e) => {
+                                           e.stopPropagation();
+                                           setSelectedRow(row);
+                                           setModalTab('details');
+                                           setActiveActionMenuRowIndex(null);
+                                         }}
+                                         className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs rounded-lg hover:bg-teal-50 dark:hover:bg-teal-950/40 text-teal-700 dark:text-teal-300 font-bold transition-colors cursor-pointer border-b border-slate-100 dark:border-slate-800 mb-0.5"
+                                         title="Buka dokumen / detail halaman (OPEN)"
+                                       >
+                                         <FileText className="w-3.5 h-3.5 shrink-0 text-teal-600 dark:text-teal-400" />
+                                         <span>Buka Halaman (OPEN)</span>
+                                       </button>
+
                                        {!isSubItem && (
                                          <button
                                            type="button"
@@ -10495,7 +11421,7 @@ export function NotionDatabaseTable({
                                         key={`toggle-completed-${parentKey}`}
                                         className={`border-b text-xs transition-colors cursor-pointer select-none ${
                                           isNotionLight
-                                            ? 'hover:bg-slate-100/80 bg-slate-50/60 text-slate-500 border-[#e9e9e8]'
+                                            ? 'hover:bg-slate-100/80 bg-slate-50/60 text-slate-500 border-[#cbd5e1]'
                                             : 'hover:bg-slate-800/60 bg-slate-900/40 text-slate-400 border-[#2d2d2d]'
                                         }`}
                                         onClick={(e) => {
@@ -10508,9 +11434,9 @@ export function NotionDatabaseTable({
                                         title={isCompletedCollapsed ? "Klik untuk melihat subtask yang sudah selesai" : "Klik untuk meringkas subtask selesai"}
                                       >
                                         {(isSelectionModeActive || selectedRowIndices.size > 0) && (
-                                          <td className={`px-2 py-1 text-center border-r ${isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'}`} />
+                                          <td className={`px-2 py-1 text-center border-r ${isNotionLight ? 'border-[#cbd5e1]' : 'border-[#2d2d2d]'}`} />
                                         )}
-                                        <td className={`px-3 py-1 text-center font-mono text-slate-400 text-xs border-r ${isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'}`} />
+                                        <td className={`px-3 py-1 text-center font-mono text-slate-400 text-xs border-r ${isNotionLight ? 'border-[#cbd5e1]' : 'border-[#2d2d2d]'}`} />
                                         <td colSpan={displayHeaders.length + 1} className="px-6 py-1.5">
                                           <div className="flex items-center gap-2 text-[11px] font-medium">
                                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 font-semibold shadow-2xs">
@@ -10564,14 +11490,14 @@ export function NotionDatabaseTable({
                                   key={`new-sub-row-${parentKey}`}
                                   className={`transition-colors border-b select-none ${
                                     isNotionLight
-                                      ? 'hover:bg-[#fbfbfa]/80 bg-white/40 border-[#e9e9e8]'
+                                      ? 'hover:bg-[#fbfbfa]/80 bg-white/40 border-[#cbd5e1]'
                                       : 'hover:bg-slate-800/30 bg-transparent border-[#2d2d2d]'
                                   }`}
                                 >
                                   {(isSelectionModeActive || selectedRowIndices.size > 0) && (
-                                    <td className={`px-2 py-1 text-center border-r ${isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'}`} />
+                                    <td className={`px-2 py-1 text-center border-r ${isNotionLight ? 'border-[#cbd5e1]' : 'border-[#2d2d2d]'}`} />
                                   )}
-                                  <td className={`px-3 py-1 text-center font-mono text-slate-400 text-xs border-r ${isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'}`} />
+                                  <td className={`px-3 py-1 text-center font-mono text-slate-400 text-xs border-r ${isNotionLight ? 'border-[#cbd5e1]' : 'border-[#2d2d2d]'}`} />
                                   <td colSpan={displayHeaders.length + 1} className="px-4 py-2">
                                     {creatingSubItemForParent === parentIndex ? (
                                       <div className="flex items-center gap-2 pl-6" onClick={(e) => e.stopPropagation()}>
@@ -10649,19 +11575,19 @@ export function NotionDatabaseTable({
           {/* Bottom Table Add Row Shortcut & Select All (Natural at end of table) */}
           <div 
             className={`p-3 border-t flex items-center justify-between transition-colors ${
-              isNotionLight ? 'bg-[#fafafa] border-[#e9e9e8] text-slate-700' : 'bg-[#181818] border-[#2d2d2d] text-slate-400'
+              isNotionLight ? 'bg-[#fafafa] border-[#cbd5e1] text-slate-700' : 'bg-[#181818] border-[#2d2d2d] text-slate-400'
             }`}
           >
             <div className="flex items-center gap-3">
               <button
                 type="button"
-                onClick={handleOpenAddModal}
+                onClick={() => handleInsertBlankRow(true)}
                 className={`text-xs font-semibold flex items-center gap-1.5 py-1 px-2.5 rounded-lg transition-all cursor-pointer ${
                   isNotionLight
                     ? 'text-teal-700 bg-teal-50 hover:bg-teal-100 border border-teal-200'
                     : 'text-teal-400 bg-teal-950/40 hover:bg-teal-900/60 border border-teal-800/60'
                 }`}
-                title="Tambah Baris Kegiatan Baru"
+                title="Tambah Baris Kegiatan Baru (Di Paling Bawah)"
               >
                 <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
                 <span>+ Tambah Baris Kegiatan</span>
@@ -13274,6 +14200,161 @@ export function NotionDatabaseTable({
           images={previewImage.images}
           currentIndex={previewImage.currentIndex}
         />
+      )}
+
+      {/* Hidden File Input for Direct Cell File Uploads */}
+      <input
+        type="file"
+        ref={cellFileInputRef}
+        onChange={handleCellFileChange}
+        multiple
+        className="hidden"
+        style={{ display: 'none' }}
+      />
+
+      {/* Non-image Document / Media Interactive Preview Modal */}
+      {previewDoc && (
+        <div
+          className="fixed inset-0 z-[110] bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 md:p-6"
+          onClick={() => setPreviewDoc(null)}
+        >
+          <div
+            className="bg-white dark:bg-[#1e1e1e] rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 w-full max-w-5xl h-[88vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-200 dark:border-slate-800 bg-slate-50/90 dark:bg-[#252525]/90 shrink-0">
+              <div className="flex items-center gap-3 min-w-0 mr-4">
+                <div className="w-9 h-9 rounded-xl bg-teal-500/10 border border-teal-500/20 flex items-center justify-center text-teal-600 dark:text-teal-400 shrink-0">
+                  {previewDoc.isPdf ? (
+                    <FileText className="w-5 h-5 text-red-500" />
+                  ) : previewDoc.name.match(/\.(xls|xlsx|csv)$/i) ? (
+                    <FileSpreadsheet className="w-5 h-5 text-emerald-500" />
+                  ) : (
+                    <Paperclip className="w-5 h-5 text-teal-500" />
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100 truncate" title={previewDoc.name}>
+                    {previewDoc.name}
+                  </h3>
+                  <p className="text-[11px] text-slate-400 flex items-center gap-2">
+                    <span>Preview Dokumen / Lampiran</span>
+                    {previewDoc.size ? (
+                      <>
+                        <span>•</span>
+                        <span>{(previewDoc.size / 1024).toFixed(1)} KB</span>
+                      </>
+                    ) : null}
+                  </p>
+                </div>
+              </div>
+
+              {/* Action Toolbar */}
+              <div className="flex items-center gap-2 shrink-0">
+                {previewDoc.driveViewUrl && (
+                  <a
+                    href={previewDoc.driveViewUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition-colors"
+                    title="Buka langsung di Google Drive / Dokumen"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Buka di Drive</span>
+                  </a>
+                )}
+
+                {(previewDoc.driveDownloadUrl || previewDoc.url) && (
+                  <a
+                    href={previewDoc.driveDownloadUrl || previewDoc.url}
+                    download={previewDoc.name}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-teal-600 hover:bg-teal-500 text-white transition-colors shadow-xs"
+                    title="Unduh file ke perangkat"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Download</span>
+                  </a>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => setPreviewDoc(null)}
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200/60 dark:hover:bg-slate-800 transition-colors cursor-pointer ml-1"
+                  title="Tutup (Esc)"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Body / Viewer */}
+            <div className="flex-1 bg-slate-100 dark:bg-[#141414] overflow-hidden relative">
+              {(() => {
+                const driveId = extractDriveId(previewDoc.url) || (previewDoc.driveViewUrl ? extractDriveId(previewDoc.driveViewUrl) : null);
+                const iframeSrc = driveId 
+                  ? `https://drive.google.com/file/d/${driveId}/preview` 
+                  : (previewDoc.url || '');
+
+                if (driveId || previewDoc.isPdf || previewDoc.url.endsWith('.pdf')) {
+                  return (
+                    <iframe
+                      src={iframeSrc}
+                      className="w-full h-full border-0 bg-white"
+                      title={previewDoc.name}
+                      allow="autoplay"
+                    />
+                  );
+                }
+
+                return (
+                  <div className="flex flex-col items-center justify-center h-full p-8 text-center">
+                    <div className="w-20 h-20 rounded-2xl bg-slate-200 dark:bg-slate-800 flex items-center justify-center text-slate-400 mb-4 shadow-inner">
+                      {previewDoc.name.match(/\.(xls|xlsx|csv)$/i) ? (
+                        <FileSpreadsheet className="w-10 h-10 text-emerald-500" />
+                      ) : (
+                        <Paperclip className="w-10 h-10 text-teal-500" />
+                      )}
+                    </div>
+                    <h4 className="text-base font-bold text-slate-800 dark:text-slate-200 max-w-md truncate mb-2">
+                      {previewDoc.name}
+                    </h4>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm mb-6 leading-relaxed">
+                      Format berkas ini paling optimal dilihat dengan mengunduh langsung atau membuka pada aplikasi terkait.
+                    </p>
+                    <div className="flex items-center gap-3">
+                      {(previewDoc.driveDownloadUrl || previewDoc.url) && (
+                        <a
+                          href={previewDoc.driveDownloadUrl || previewDoc.url}
+                          download={previewDoc.name}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs shadow-md transition-all cursor-pointer"
+                        >
+                          <Download className="w-4 h-4" />
+                          <span>Unduh Berkas</span>
+                        </a>
+                      )}
+                      {previewDoc.driveViewUrl && (
+                        <a
+                          href={previewDoc.driveViewUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-semibold text-xs hover:bg-slate-50 transition-all"
+                        >
+                          <ExternalLink className="w-4 h-4" />
+                          <span>Buka di Google Drive</span>
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Logbook Task Recommendation Modal */}

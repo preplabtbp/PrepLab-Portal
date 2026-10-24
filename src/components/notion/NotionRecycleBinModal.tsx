@@ -33,6 +33,29 @@ interface NotionRecycleBinModalProps {
   isNotionLight?: boolean;
 }
 
+export const cleanRecycleTitle = (rawTitle: string): string => {
+  if (!rawTitle) return 'Kegiatan Tanpa Judul';
+  return rawTitle
+    .replace(/^[↳↪\s]+/, '')
+    .replace(/^\[[ xX]\]\s*/, '')
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/<!-?[a-zA-Z0-9_\-\s]+.*?>?/g, '')
+    .replace(/<!--.*$/g, '')
+    .replace(/\s+/g, ' ')
+    .trim() || 'Kegiatan Tanpa Judul';
+};
+
+function checkIsSubtask(item: RecycleBinItem): boolean {
+  if (item.taskTitle && (item.taskTitle.startsWith('↳') || item.taskTitle.startsWith('↪'))) return true;
+  try {
+    const parsed = typeof item.rowData === 'string' ? JSON.parse(item.rowData) : item.rowData;
+    if (parsed && (parsed.isSubItem === 'true' || parsed.isSubItem === true || parsed.parentId || parsed.parentRowId)) {
+      return true;
+    }
+  } catch {}
+  return false;
+}
+
 export const NotionRecycleBinModal: React.FC<NotionRecycleBinModalProps> = ({
   isOpen,
   onClose,
@@ -53,7 +76,7 @@ export const NotionRecycleBinModal: React.FC<NotionRecycleBinModalProps> = ({
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
       list = list.filter(item => 
-        (item.taskTitle || '').toLowerCase().includes(q) ||
+        cleanRecycleTitle(item.taskTitle || '').toLowerCase().includes(q) ||
         (item.deletedByName || '').toLowerCase().includes(q) ||
         (item.deletedByNik || '').toLowerCase().includes(q) ||
         (item.postTitle || '').toLowerCase().includes(q)
@@ -77,35 +100,34 @@ export const NotionRecycleBinModal: React.FC<NotionRecycleBinModalProps> = ({
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-[#202020]">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-teal-500/15 text-teal-600 dark:text-teal-400 flex items-center justify-center shrink-0 border border-teal-500/30">
-              <Trash2 className="w-4 h-4 stroke-[2.5]" />
+            <div className="w-9 h-9 rounded-xl bg-rose-500/10 text-rose-600 dark:text-rose-400 flex items-center justify-center">
+              <Trash2 className="w-5 h-5" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
-                  Recycle Bin (Pemulihan Data Terhapus)
-                </h3>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-teal-500/15 text-teal-600 dark:text-teal-400 border border-teal-500/30">
-                  Dev Only
+              <h3 className="text-base font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                <span>Recycle Bin Kegiatan Lab</span>
+                <span className="text-[10px] font-mono font-medium px-2 py-0.5 rounded-full bg-slate-200/70 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                  Audit Trail
                 </span>
-              </div>
-              <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                Riwayat aktivitas yang dihapus oleh personil / Foreman Lab beserta tombol pemulihan data
+              </h3>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Riwayat kegiatan terhapus dari logbook & labnote. Data dapat dipulihkan sewaktu-waktu.
               </p>
             </div>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-200/60 dark:hover:bg-slate-800 transition-colors"
+            className="p-1.5 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
+            title="Tutup"
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Toolbar: Tabs & Search */}
-        <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-3 border-b border-slate-100 dark:border-slate-800/80 bg-slate-50/40 dark:bg-[#1e1e1e]">
-          <div className="flex items-center gap-1.5 p-1 rounded-xl bg-slate-200/60 dark:bg-slate-800/80 text-xs">
+        {/* Filter & Search Bar */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-6 py-3 border-b border-slate-200/80 dark:border-slate-800 bg-slate-50/40 dark:bg-[#1a1a1a]">
+          <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl text-xs">
             <button
               type="button"
               onClick={() => {
@@ -191,7 +213,9 @@ export const NotionRecycleBinModal: React.FC<NotionRecycleBinModalProps> = ({
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-sans">
                   {filteredItems.map((item) => {
                     const isRestored = item.restoreStatus === 'RESTORED';
-                    const hasSubtasks = item.subtaskCount && item.subtaskCount > 0;
+                    const hasSubtasks = Boolean(item.subtaskCount && item.subtaskCount > 0);
+                    const isSub = checkIsSubtask(item);
+                    const displayTitle = cleanRecycleTitle(item.taskTitle);
                     const dateObj = new Date(item.deletedAt);
                     const formattedDate = !isNaN(dateObj.getTime())
                       ? `${dateObj.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })} ${dateObj.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}`
@@ -213,8 +237,15 @@ export const NotionRecycleBinModal: React.FC<NotionRecycleBinModalProps> = ({
                           </div>
                         </td>
                         <td className="px-3.5 py-3 max-w-xs">
-                          <div className="font-semibold text-slate-800 dark:text-slate-200 line-clamp-2">
-                            {item.taskTitle}
+                          <div className="flex items-center gap-1.5">
+                            {isSub && (
+                              <span className="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-semibold bg-sky-50 dark:bg-sky-950/40 text-sky-600 dark:text-sky-400 border border-sky-500/30">
+                                Sub
+                              </span>
+                            )}
+                            <span className="font-semibold text-slate-800 dark:text-slate-200 line-clamp-2" title={displayTitle}>
+                              {displayTitle}
+                            </span>
                           </div>
                           {hasSubtasks && (
                             <span className="inline-flex items-center gap-1 px-1.5 py-0.5 mt-1 rounded text-[10px] font-semibold bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 border border-amber-500/30">

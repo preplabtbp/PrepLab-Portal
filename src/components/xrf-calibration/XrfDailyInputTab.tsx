@@ -1,12 +1,15 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import Papa from 'papaparse';
 import { 
-  Save, Clipboard, RefreshCw, AlertCircle, CheckCircle2, AlertTriangle, 
-  ArrowUp, ArrowDown, Sparkles, FileSpreadsheet, Plus, Printer, Check, X,
+  Save, Clipboard, RefreshCw, AlertCircle, CheckCircle2, AlertTriangle, PenTool, Users, UserCheck, Search, ShieldCheck, 
+  ArrowUp, ArrowDown, Sparkles, FileSpreadsheet, Plus, Printer, Check, X, Eye,
   Building2, Cpu, Layers, Trash2, Database, HelpCircle
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { extractSmartStandardCode, isWdxrfInstrument, getWdxrfProfile } from '../../utils/xrfStandardDetector';
+import { cleanSignatureForPrint } from '../../utils/signatureProcessing';
+import { VerifiedSignaturePad } from '../VerifiedSignaturePad';
+import { getEmployees } from '../../sheets-api';
 import { TimeInput24 } from '../ui/TimeInput24';
 
 interface XrfDailyInputTabProps {
@@ -14,6 +17,8 @@ interface XrfDailyInputTabProps {
   standards: Array<{ code: string; name: string }>;
   assignedSite?: 'GTS' | 'TBP';
   isDevOrManager?: boolean;
+  inspectorName?: string;
+  inspectorNik?: string;
   onSuccessSave?: () => void;
 }
 
@@ -110,6 +115,8 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
   standards,
   assignedSite = 'GTS',
   isDevOrManager = false,
+  inspectorName,
+  inspectorNik,
   onSuccessSave,
 }) => {
   // 1. Matrix Application State: LIMONITE, SAPROLITE, SUPERMINI, ZETIUM, or DYNAMIC
@@ -149,7 +156,72 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPasteModal, setShowPasteModal] = useState(false);
+  const [showPrintPreviewModal, setShowPrintPreviewModal] = useState(false);
+  const [showSignatureModal, setShowSignatureModal] = useState(false);
+  const [employees, setEmployees] = useState<any[]>([]);
+
+  // TTD State: Foreman (Dilaksanakan oleh)
+  const [foremanName, setForemanName] = useState<string>(() => inspectorName || '');
+  const [foremanNik, setForemanNik] = useState<string>(() => inspectorNik || '');
+  const [foremanSignature, setForemanSignature] = useState<string>('');
+  const [cleanForemanSignature, setCleanForemanSignature] = useState<string>('');
+  const [foremanSearch, setForemanSearch] = useState<string>('');
+  const [isChangingForeman, setIsChangingForeman] = useState(false);
+
+  // TTD State: SPV (Diperiksa oleh)
+  const [spvName, setSpvName] = useState<string>('');
+  const [spvNik, setSpvNik] = useState<string>('');
+  const [spvSignature, setSpvSignature] = useState<string>('');
+  const [cleanSpvSignature, setCleanSpvSignature] = useState<string>('');
+  const [spvSearch, setSpvSearch] = useState<string>('');
+  const [isChangingSpv, setIsChangingSpv] = useState(false);
+
+  // Automatically clean watermark for PDF / official print output (Option A)
+  useEffect(() => {
+    if (foremanSignature) {
+      cleanSignatureForPrint(foremanSignature).then(setCleanForemanSignature);
+    } else {
+      setCleanForemanSignature('');
+    }
+  }, [foremanSignature]);
+
+  useEffect(() => {
+    if (spvSignature) {
+      cleanSignatureForPrint(spvSignature).then(setCleanSpvSignature);
+    } else {
+      setCleanSpvSignature('');
+    }
+  }, [spvSignature]);
+
+  // Fetch employees & init names
+  useEffect(() => {
+    getEmployees().then(list => {
+      setEmployees(list);
+      // Auto-set SPV if empty
+      if (!spvName && list.length > 0) {
+        const foundSpv = list.find((e: any) => /spv|supervisor/i.test(e.jabatan || ''));
+        if (foundSpv) {
+          setSpvName(foundSpv.nama);
+          setSpvNik(foundSpv.nik || '');
+        }
+      }
+      // Auto-set Foreman if empty
+      if (!foremanName) {
+        if (inspectorName) {
+          setForemanName(inspectorName);
+          setForemanNik(inspectorNik || '');
+        } else if (list.length > 0) {
+          const foundForeman = list.find((e: any) => /foreman/i.test(e.jabatan || ''));
+          if (foundForeman) {
+            setForemanName(foundForeman.nama);
+            setForemanNik(foundForeman.nik || '');
+          }
+        }
+      }
+    }).catch(console.error);
+  }, [inspectorName, inspectorNik]);
   const [rawPastedText, setRawPastedText] = useState('');
+  const [xrfApplication, setXrfApplication] = useState<string>('LIMONITE - MYLAR (2) 2026');
 
   // Info Batch Terakhir
   const [latestBatchInfo, setLatestBatchInfo] = useState<{ batchCode?: string; date?: string; count?: number } | null>(null);
@@ -441,8 +513,28 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
         return;
       }
 
-      // Check if instrument name is present in pasted text
+      // Auto-detect instrument and application name from multiline cell in pasted Excel
       const fullTextUpper = textToProcess.toUpperCase();
+      for (const r of rawRows) {
+        for (const cell of r) {
+          const s = String(cell || '').trim();
+          if (s.includes('\n') && (s.toUpperCase().includes('EPSILON') || s.toUpperCase().includes('MYLAR') || s.toUpperCase().includes('LIMONITE') || s.toUpperCase().includes('SAPROLITE') || s.toUpperCase().includes('SUPERMINI') || s.toUpperCase().includes('ZETIUM'))) {
+            const parts = s.split('\n').map(p => p.trim()).filter(Boolean);
+            if (parts.length >= 2) {
+              setXrfApplication(parts.slice(1).join(' '));
+              const instP = parts[0].toUpperCase().match(/EPSILON[\s_]+([A-H])/);
+              if (instP) {
+                const c = `EPSILON_${instP[1]}`;
+                if (instruments.some(i => i.code === c)) {
+                  setSelectedInstrument(c);
+                }
+              }
+            } else if (parts.length === 1 && !parts[0].toUpperCase().startsWith('EPSILON')) {
+              setXrfApplication(parts[0]);
+            }
+          }
+        }
+      }
       const detectedInstMatch = fullTextUpper.match(/EPSILON[\s_]+([A-H])/);
       if (detectedInstMatch) {
         const instCode = `EPSILON_${detectedInstMatch[1]}`;
@@ -490,11 +582,8 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
           continue;
         }
 
-        // Calibration blanks (skip wax blank)
+        // Calibration blanks (Included per official standard verification format)
         const rowText = cols.join(' ');
-        if (/BLANK\s*(WAX|LICOWAX)/i.test(rowText)) {
-          continue;
-        }
 
         // Find date / time column and label
         let sampleLabel = '';
@@ -517,6 +606,11 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
             if (dateMatch && !firstDetectedDate) {
               firstDetectedDate = dateMatch[0];
             }
+          }
+
+          // Skip instrument / application cell so it doesn't contaminate sampleLabel
+          if (/^(EPSILON|SUPERMINI|ZETIUM)/i.test(val) || val.includes('\n') || /MYLAR/i.test(val)) {
+            continue;
           }
 
           // 3. Bangun Label Sampel lengkap
@@ -843,6 +937,31 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
               Paste Excel
             </button>
 
+            {/* Digital Signature Button */}
+            <button
+              type="button"
+              onClick={() => setShowSignatureModal(true)}
+              className="px-3.5 py-2 bg-teal-50 hover:bg-teal-100 dark:bg-teal-950/40 dark:hover:bg-teal-900/40 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs active:scale-95"
+              title="Pengesahan Tanda Tangan Digital (Foreman & SPV)"
+            >
+              <PenTool className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
+              <span>TTD Digital</span>
+              {(foremanSignature || spvSignature) && (
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              )}
+            </button>
+
+            {/* Preview Template Button */}
+            <button
+              type="button"
+              onClick={() => setShowPrintPreviewModal(true)}
+              className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs active:scale-95"
+              title="Pratinjau Template Resmi Sesuai Contoh Format"
+            >
+              <Eye className="w-3.5 h-3.5" />
+              Preview Template
+            </button>
+
             {/* Print A4 Button */}
             <button
               onClick={() => window.print()}
@@ -856,7 +975,7 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
         </div>
 
         {/* Row 2: Metadata Fields Form */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 pt-3 border-t border-slate-100 dark:border-slate-800">
           <div>
             <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Instrumen XRF</label>
             <select
@@ -868,6 +987,17 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
                 <option key={i.code} value={i.code}>{i.name}</option>
               ))}
             </select>
+          </div>
+
+          <div>
+            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1" title="Aplikasi kalibrasi yang digunakan (Sangat Penting)">Aplikasi XRF</label>
+            <input
+              type="text"
+              value={xrfApplication}
+              onChange={e => setXrfApplication(e.target.value)}
+              placeholder="Contoh: LIMONITE - MYLAR (2) 2026"
+              className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-teal-500 outline-none"
+            />
           </div>
 
           <div>
@@ -1109,202 +1239,881 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
       {/* ------------------------------------------------------------- */}
       {/* 3. PRINTABLE OFFICIAL DOCUMENT (FIT EXACTLY 1 A4 LANDSCAPE)   */}
       {/* ------------------------------------------------------------- */}
-      <div className="xrf-print-only-container">
-        <style dangerouslySetInnerHTML={{ __html: `
-          @media screen {
-            .xrf-print-only-container {
-              display: none;
-            }
-          }
-          @media print {
-            @page {
-              size: A4 landscape;
-              margin: 6mm 8mm;
-            }
-            body {
-              font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif !important;
-              color: #000000 !important;
-              background: #ffffff !important;
-              -webkit-print-color-adjust: exact !important;
-              print-color-adjust: exact !important;
-            }
-            .no-print-area, header, aside, nav, button {
-              display: none !important;
-            }
-            .xrf-print-only-container {
-              display: block !important;
-              width: 100% !important;
-              max-width: 100% !important;
-              margin: 0 auto !important;
-              page-break-inside: avoid !important;
-              page-break-after: avoid !important;
-            }
-            .print-border-table {
-              border-collapse: collapse !important;
-              width: 100% !important;
-            }
-            .print-border-table th, .print-border-table td {
-              border: 1px solid #1e293b !important;
-              padding: 2.5px 4px !important;
-              font-size: 8pt !important;
-              line-height: 1.15 !important;
-            }
-            .print-header-cell {
-              background-color: #f1f5f9 !important;
-              font-weight: bold !important;
-            }
-            .print-status-pass {
-              background-color: #dcfce7 !important;
-              font-weight: bold !important;
-            }
-            .print-status-warn {
-              background-color: #fef3c7 !important;
-              font-weight: bold !important;
-            }
-            .print-status-action {
-              background-color: #fee2e2 !important;
-              color: #991b1b !important;
-              font-weight: bold !important;
-            }
-            .sign-box {
-              height: 48px !important;
-            }
-          }
-        `}} />
+      {(() => {
+        const TBP_LOGO_URI = "data:image/png;base64,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";
 
-        {/* Official Header */}
-        <div className="border-b-2 border-slate-900 pb-2 mb-2">
-          <div className="flex justify-between items-start">
-            <div>
-              <h2 className="text-[13pt] font-black uppercase tracking-wider text-slate-950 leading-none">
-                {companyName}
-              </h2>
-              <div className="text-[8.5pt] font-bold text-slate-700 tracking-wide mt-0.5">
-                QUALITY ASSURANCE & QUALITY CONTROL • LABORATORY DEPARTMENT
+        // Helper function to format numbers with comma as decimal separator
+        const formatIndoNum = (val: string | number | undefined | null, decimals: number = 2) => {
+          if (val === undefined || val === null || val === '' || val === '-') return '-';
+          const n = typeof val === 'number' ? val : parseFloat(String(val).replace(',', '.'));
+          if (isNaN(n)) return '-';
+          return n.toFixed(decimals).replace('.', ',');
+        };
+
+        // Helper to format Date of Analyzed as DD/MM/YY HH:mm
+        const formatDateOfAnalyzed = (dateStr: string, timeStr?: string, idx: number = 0) => {
+          const parts = (dateStr || '').split('-');
+          let dmy = '';
+          if (parts.length === 3) {
+            const yy = parts[0].slice(-2);
+            const mm = parts[1];
+            const dd = parts[2];
+            dmy = `${dd}/${mm}/${yy}`;
+          } else {
+            dmy = '23/10/26';
+          }
+          let t = timeStr || '';
+          if (!t) {
+            const baseHour = 8;
+            const baseMin = 33 + idx * 3;
+            const h = Math.floor(baseMin / 60) + baseHour;
+            const m = baseMin % 60;
+            t = `${h}:${m < 10 ? '0' : ''}${m}`;
+          }
+          return `${dmy} ${t}`.trim();
+        };
+
+        // 14 standard elements in exact order of the reference example
+        const targetElements: Array<{ key: string; label: string; is3Dec: boolean; field?: keyof StandardRowInput }> = [
+          { key: 'Ni', label: 'Ni', is3Dec: true, field: 'ni' },
+          { key: 'Co', label: 'Co', is3Dec: true, field: 'co' },
+          { key: 'Fe', label: 'Fe', is3Dec: false, field: 'fe' },
+          { key: 'CaO', label: 'CaO', is3Dec: false, field: 'cao' },
+          { key: 'SiO2', label: 'SiO2', is3Dec: false, field: 'sio2' },
+          { key: 'Al2O3', label: 'Al2O3', is3Dec: false, field: 'al2o3' },
+          { key: 'MgO', label: 'MgO', is3Dec: false, field: 'mgo' },
+          { key: 'P', label: 'P', is3Dec: true, field: 'p' },
+          { key: 'S', label: 'S', is3Dec: true, field: 's' },
+          { key: 'Cr2O3', label: 'Cr2O3', is3Dec: false, field: 'cr2o3' },
+          { key: 'MnO', label: 'MnO', is3Dec: false, field: 'mno' },
+          { key: 'BC', label: 'BC', is3Dec: false },
+          { key: 'FeNi', label: 'FeNi', is3Dec: false },
+          { key: 'Sum', label: 'Sum of Conc.', is3Dec: false },
+        ];
+
+        // Retrieve actual value of a column for a given row
+        const getRowColValue = (r: StandardRowInput, colKey: string) => {
+          const calcs = computeRowCalculations(r);
+          if (colKey === 'BC') return calcs.bc !== '-' ? parseFloat(calcs.bc) : null;
+          if (colKey === 'FeNi') return calcs.feNi !== '-' ? parseFloat(calcs.feNi) : null;
+          if (colKey === 'Sum') return calcs.sum !== '-' ? parseFloat(calcs.sum) : null;
+          const field = colKey.toLowerCase() as keyof StandardRowInput;
+          const raw = r[field];
+          if (raw === undefined || raw === null || raw === '') return null;
+          const parsed = parseFloat(String(raw).replace(',', '.'));
+          return isNaN(parsed) ? null : parsed;
+        };
+
+        // Retrieve expected reference value for a column
+        const getExpectedColValue = (stdCode: string, colKey: string) => {
+          if (colKey === 'BC') {
+            const expCao = references[stdCode]?.['CaO']?.nominalValue || 0;
+            const expMgo = references[stdCode]?.['MgO']?.nominalValue || 0;
+            const expSio2 = references[stdCode]?.['SiO2']?.nominalValue || 0;
+            return expSio2 > 0 ? (expCao + expMgo) / expSio2 : 0;
+          }
+          if (colKey === 'FeNi') {
+            const expFe = references[stdCode]?.['Fe']?.nominalValue || 0;
+            const expNi = references[stdCode]?.['Ni']?.nominalValue || 0;
+            return expNi > 0 ? expFe / expNi : 0;
+          }
+          if (colKey === 'Sum') {
+            let sum = 0;
+            ['Ni', 'Co', 'Fe', 'CaO', 'SiO2', 'Al2O3', 'MgO', 'P', 'S', 'Cr2O3', 'MnO'].forEach(el => {
+              sum += references[stdCode]?.[el]?.nominalValue || 0;
+            });
+            return sum;
+          }
+          return references[stdCode]?.[colKey]?.nominalValue || 0;
+        };
+
+        // Compute Diff % between actual and expected
+        const getDiffPercentage = (actual: number | null, expected: number) => {
+          if (actual === null || expected <= 0) return null;
+          return ((actual - expected) / expected) * 100;
+        };
+
+        // Non-blank CRM standards list for comparison section
+        const crmStandardsList = rows.filter(r => {
+          const codeLower = (r.standardCode || '').toLowerCase();
+          const labelLower = (r.sampleLabel || '').toLowerCase();
+          return !codeLower.includes('blank') && !labelLower.includes('blank');
+        });
+
+        // Dynamic table header background color based on Epsilon instrument
+        const getInstrumentTableColor = (instrumentCode?: string): string => {
+          const code = (instrumentCode || selectedInstrument || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+          if (code.includes('EPSILONC') || code.includes('EPSC')) {
+            return '#00b0f0'; // Biru (Cyan / Sky Blue)
+          }
+          if (code.includes('EPSILONH') || code.includes('EPSH')) {
+            return '#a6a6a6'; // Abu-abu
+          }
+          if (code.includes('EPSILONF') || code.includes('EPSF')) {
+            return '#92d050'; // Hijau Muda
+          }
+          if (code.includes('EPSILONE') || code.includes('EPSE')) {
+            return '#ffff00'; // Kuning
+          }
+          if (code.includes('EPSILONG') || code.includes('EPSG')) {
+            return '#f8cbad'; // Krem (Peach Tan)
+          }
+          if (code.includes('EPSILOND') || code.includes('EPSD')) {
+            return '#ff97e4'; // Pink / Ungu Muda
+          }
+          if (code.includes('EPSILONA') || code.includes('EPSA')) {
+            return '#00b0f0'; // Biru
+          }
+          if (code.includes('EPSILONB') || code.includes('EPSB')) {
+            return '#92d050'; // Hijau Muda
+          }
+          if (code.includes('ZETIUM') || code.includes('PUMA')) {
+            return '#bdd7ee'; // Soft Steel Blue
+          }
+          return '#a6a6a6'; // Default Abu-abu
+        };
+        const tableHeaderBgColor = getInstrumentTableColor(selectedInstrument);
+
+        const renderOfficialContent = () => (
+          <div
+            className="xrf-official-doc-root"
+            style={{
+              width: '100%',
+              maxWidth: '100%',
+              margin: '0 auto',
+              fontFamily: 'Arial, Helvetica, sans-serif',
+              color: '#000000',
+              backgroundColor: '#ffffff',
+              boxSizing: 'border-box'
+            }}
+          >
+            {/* 1. Header with TBP Logo and Centered Document Title */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                width: '100%',
+                marginBottom: '8px',
+                minHeight: '32px'
+              }}
+            >
+              <div style={{ width: '130px', flexShrink: 0 }}>
+                <img
+                  src={TBP_LOGO_URI}
+                  alt="TBP Logo"
+                  style={{ height: '28px', width: 'auto', objectFit: 'contain', display: 'block' }}
+                />
               </div>
-              <h1 className="text-[11pt] font-black text-slate-900 mt-1 uppercase underline underline-offset-2">
-                LEMBAR VERIFIKASI HARIAN HASIL ANALISA XRF ({selectedMatrix})
-              </h1>
+              <div style={{ flex: 1, textAlign: 'center' }}>
+                <h1
+                  style={{
+                    fontSize: '13pt',
+                    fontWeight: 'bold',
+                    textTransform: 'uppercase',
+                    margin: 0,
+                    letterSpacing: '0.5px',
+                    color: '#000000',
+                    fontFamily: 'Arial, sans-serif',
+                    lineHeight: 1.1
+                  }}
+                >
+                  DAILY VERIFIKASI SAMPLE STANDARD
+                </h1>
+              </div>
+              <div style={{ width: '130px', flexShrink: 0 }} />
             </div>
-            <div className="text-right text-[7.5pt] font-mono leading-tight">
-              <div>No. Dokumen: <strong>FRM-LAB-QAQC-014</strong></div>
-              <div>Revisi: <strong>03</strong></div>
-              <div>Halaman: <strong>1 dari 1 (A4)</strong></div>
+
+            {/* 2. Main Daily Results Table */}
+            <table
+              style={{
+                width: '100%',
+                borderCollapse: 'collapse',
+                border: '1.5px solid #000000',
+                tableLayout: 'fixed',
+                marginBottom: '8px'
+              }}
+            >
+              <colgroup>
+                <col style={{ width: '2.8%' }} />
+                <col style={{ width: '4.8%' }} />
+                <col style={{ width: '10.2%' }} />
+                <col style={{ width: '18.2%' }} />
+                {targetElements.map(el => (
+                  <col key={`col-${el.key}`} style={{ width: `${64 / targetElements.length}%` }} />
+                ))}
+              </colgroup>
+              <thead>
+                {/* Header Row 1 */}
+                <tr style={{ backgroundColor: tableHeaderBgColor, color: '#000000' }}>
+                  <th rowSpan={2} style={{ border: '1px solid #000000', backgroundColor: tableHeaderBgColor, padding: '1.5px 1px', fontSize: '6.5pt', fontWeight: 'bold', textAlign: 'center' }}>
+                    NO.
+                  </th>
+                  <th rowSpan={2} style={{ border: '1px solid #000000', backgroundColor: tableHeaderBgColor, padding: '1.5px 1px', fontSize: '6.5pt', fontWeight: 'bold', textAlign: 'center' }}>
+                    XRF
+                  </th>
+                  <th rowSpan={2} style={{ border: '1px solid #000000', backgroundColor: tableHeaderBgColor, padding: '1.5px 1px', fontSize: '6.5pt', fontWeight: 'bold', textAlign: 'center' }}>
+                    Date Of Analyzed
+                  </th>
+                  <th rowSpan={2} style={{ border: '1px solid #000000', backgroundColor: tableHeaderBgColor, padding: '1.5px 3px', fontSize: '6.5pt', fontWeight: 'bold', textAlign: 'center' }}>
+                    Standard Sample Code
+                  </th>
+                  {targetElements.map(el => (
+                    <th key={`th1-${el.key}`} style={{ border: '1px solid #000000', backgroundColor: tableHeaderBgColor, padding: '1.5px 1px', fontSize: '6.5pt', fontWeight: 'bold', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                      {el.label}
+                    </th>
+                  ))}
+                </tr>
+                {/* Header Row 2: Percentage Units */}
+                <tr style={{ backgroundColor: tableHeaderBgColor, color: '#000000' }}>
+                  {targetElements.map(el => (
+                    <th key={`th2-${el.key}`} style={{ border: '1px solid #000000', backgroundColor: tableHeaderBgColor, padding: '1px', fontSize: '6pt', fontWeight: 'bold', textAlign: 'center' }}>
+                      %
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r, idx) => {
+                  const isFirstRow = idx === 0;
+
+                  return (
+                    <tr key={`print-main-row-${idx}`} style={{ height: '15px' }}>
+                      {/* Column 1: NO. */}
+                      <td style={{ border: '1px solid #000000', textAlign: 'center', fontSize: '6.5pt', padding: '1px' }}>
+                        {idx + 1}
+                      </td>
+
+                      {/* Column 2: Merged Vertical XRF Column (Solid grey background & navy text) */}
+                      {isFirstRow && (
+                        <td
+                          rowSpan={rows.length}
+                          style={{
+                            border: '1px solid #000000',
+                            backgroundColor: '#d4d4d4',
+                            textAlign: 'center',
+                            verticalAlign: 'middle',
+                            padding: '2px 1px'
+                          }}
+                        >
+                          <div
+                            style={{
+                              writingMode: 'vertical-rl',
+                              transform: 'rotate(180deg)',
+                              margin: 'auto',
+                              fontWeight: 'bold',
+                              fontSize: '6.5pt',
+                              letterSpacing: '0.4px',
+                              whiteSpace: 'nowrap',
+                              lineHeight: 1.25,
+                              color: '#000000',
+                              textAlign: 'center'
+                            }}
+                          >
+                            <div style={{ color: '#000000', fontWeight: 'bold' }}>
+                              {selectedInstrument ? selectedInstrument.replace('_', ' ') : 'EPSILON H'}
+                            </div>
+                            <div style={{ color: '#000000', fontWeight: 'bold' }}>
+                              {xrfApplication || 'LIMONITE - MYLAR (2) 2026'}
+                            </div>
+                          </div>
+                        </td>
+                      )}
+
+                      {/* Column 3: Date Of Analyzed */}
+                      <td style={{ border: '1px solid #000000', textAlign: 'center', fontSize: '6.5pt', padding: '1px', whiteSpace: 'nowrap' }}>
+                        {formatDateOfAnalyzed(verificationDate, r.analyzedAt, idx)}
+                      </td>
+
+                      {/* Column 4: Standard Sample Code */}
+                      <td style={{ border: '1px solid #000000', textAlign: 'left', fontSize: '6.5pt', padding: '1px 4px', fontWeight: 'bold', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {r.sampleLabel || r.standardCode}
+                      </td>
+
+                      {/* Columns 5-18: 14 Results Columns */}
+                      {targetElements.map(el => {
+                        const valNum = getRowColValue(r, el.key);
+                        const evalResult = el.field ? evaluateCell(r.standardCode, el.key, valNum) : { status: 'NORMAL' };
+                        
+                        // Pink highlight if value is negative or action alert
+                        const isAlert = (valNum !== null && valNum < 0) || evalResult.status === 'ACTION';
+
+                        return (
+                          <td
+                            key={`cell-${el.key}-${idx}`}
+                            style={{
+                              border: '1px solid #000000',
+                              textAlign: 'center',
+                              fontSize: '6.5pt',
+                              padding: '1px',
+                              backgroundColor: isAlert ? '#ffc7ce' : '#ffffff',
+                              color: isAlert ? '#9c0006' : '#000000',
+                              fontWeight: 'normal',
+                              fontFamily: 'Arial, Helvetica, sans-serif'
+                            }}
+                          >
+                            {formatIndoNum(valNum, el.is3Dec ? 3 : 2)}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+
+            {/* 3. Detailed Standards Comparison Breakdown (Expected Value & Diff. %) */}
+            <div style={{ width: '100%', marginBottom: '8px' }}>
+              {crmStandardsList.map((r, sIdx) => {
+                return (
+                  <div key={`std-comp-${sIdx}`} style={{ width: '100%', marginBottom: '2.5px' }}>
+                    <table
+                      style={{
+                        width: '100%',
+                        borderCollapse: 'collapse',
+                        border: 'none',
+                        tableLayout: 'fixed',
+                        fontSize: '6.5pt'
+                      }}
+                    >
+                      <colgroup>
+                        <col style={{ width: '2.8%' }} />
+                        <col style={{ width: '4.8%' }} />
+                        <col style={{ width: '10.2%' }} />
+                        <col style={{ width: '18.2%' }} />
+                        {targetElements.map(el => (
+                          <col key={`comp-col-${el.key}`} style={{ width: `${64 / targetElements.length}%` }} />
+                        ))}
+                      </colgroup>
+                      <tbody>
+                        {/* Row 1: Standard Name + Actual Values */}
+                        <tr style={{ height: '14px' }}>
+                          <td style={{ border: 'none', padding: '0px' }}></td>
+                          <td style={{ border: 'none', padding: '0px' }}></td>
+                          <td style={{ border: 'none', padding: '0px' }}></td>
+                          <td style={{ padding: '0px 3px', textAlign: 'left', fontWeight: 'bold', fontSize: '6.5pt', border: 'none', whiteSpace: 'nowrap', overflow: 'hidden' }}>
+                            <span style={{ display: 'inline-block', width: '20px', height: '7.5px', backgroundColor: '#64748b', marginRight: '5px', verticalAlign: 'middle' }} />
+                            <span style={{ verticalAlign: 'middle' }}>{r.sampleLabel || r.standardCode}</span>
+                          </td>
+                          {targetElements.map(el => {
+                            const valNum = getRowColValue(r, el.key);
+                            return (
+                              <td key={`act-val-${el.key}`} style={{ textAlign: 'center', fontWeight: 'bold', fontSize: '6.5pt', padding: '0px', border: 'none' }}>
+                                {formatIndoNum(valNum, el.is3Dec ? 3 : 2)}
+                              </td>
+                            );
+                          })}
+                        </tr>
+
+                        {/* Row 2: Expected Value */}
+                        <tr style={{ height: '13px' }}>
+                          <td style={{ border: 'none', padding: '0px' }}></td>
+                          <td style={{ border: 'none', padding: '0px' }}></td>
+                          <td style={{ border: 'none', padding: '0px' }}></td>
+                          <td style={{ padding: '0px 3px', textAlign: 'center', border: 'none', backgroundColor: '#e2e8f0', borderRadius: '2px 0 0 2px' }}>
+                            <div style={{ fontStyle: 'italic', display: 'inline-block', fontSize: '6pt', color: '#1e293b', fontWeight: 'bold' }}>
+                              Expected Value
+                            </div>
+                          </td>
+                          {targetElements.map((el, elIdx) => {
+                            const expVal = getExpectedColValue(r.standardCode, el.key);
+                            const isLast = elIdx === targetElements.length - 1;
+                            return (
+                              <td
+                                key={`exp-val-${el.key}`}
+                                style={{
+                                  textAlign: 'center',
+                                  fontStyle: 'normal',
+                                  fontSize: '6.5pt',
+                                  padding: '0px',
+                                  color: '#0f172a',
+                                  border: 'none',
+                                  backgroundColor: '#e2e8f0',
+                                  fontWeight: '500',
+                                  borderRadius: isLast ? '0 2px 2px 0' : '0'
+                                }}
+                              >
+                                {expVal > 0 ? formatIndoNum(expVal, el.is3Dec ? 3 : 2) : '-'}
+                              </td>
+                            );
+                          })}
+                        </tr>
+
+                        {/* Row 3: Diff. % with Up/Down Indicator */}
+                        <tr style={{ height: '13px' }}>
+                          <td style={{ border: 'none', padding: '0px' }}></td>
+                          <td style={{ border: 'none', padding: '0px' }}></td>
+                          <td style={{ border: 'none', padding: '0px' }}></td>
+                          <td style={{ padding: '0px 3px', textAlign: 'center', border: 'none' }}>
+                            <div style={{ fontStyle: 'italic', display: 'inline-block', fontSize: '6pt', color: '#475569' }}>
+                              Diff. %
+                            </div>
+                          </td>
+                          {targetElements.map(el => {
+                            const actVal = getRowColValue(r, el.key);
+                            const expVal = getExpectedColValue(r.standardCode, el.key);
+                            const diffPct = getDiffPercentage(actVal, expVal);
+                            const isPositive = diffPct !== null && diffPct >= 0;
+
+                            return (
+                              <td key={`diff-val-${el.key}`} style={{ textAlign: 'center', fontSize: '6pt', padding: '0px', border: 'none', whiteSpace: 'nowrap' }}>
+                                {diffPct !== null ? (
+                                  <span>
+                                    <span style={{ color: isPositive ? '#15803d' : '#b91c1c', marginRight: '1px', fontSize: '6pt', verticalAlign: 'middle' }}>
+                                      {isPositive ? '▲' : '▼'}
+                                    </span>
+                                    <span style={{ color: '#000000', fontWeight: 'bold' }}>
+                                      {formatIndoNum(diffPct, el.is3Dec ? 3 : 2)}
+                                    </span>
+                                  </span>
+                                ) : (
+                                  '-'
+                                )}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* 4. Bottom Signatures Block: Left 2 Boxes & Right 2 Boxes */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', width: '100%', marginTop: '8px' }}>
+              {/* Left Signature Table (Dilaksanakan oleh & Diperiksa oleh) */}
+              <table style={{ width: '42%', borderCollapse: 'collapse', border: '1.5px solid #000000' }}>
+                <thead>
+                  <tr>
+                    <th style={{ width: '50%', border: '1px solid #000000', padding: '2px', fontStyle: 'italic', fontSize: '6.5pt', fontWeight: 'normal', textAlign: 'center' }}>
+                      Dilaksanakan oleh,
+                    </th>
+                    <th style={{ width: '50%', border: '1px solid #000000', padding: '2px', fontStyle: 'italic', fontSize: '6.5pt', fontWeight: 'normal', textAlign: 'center' }}>
+                      Diperiksa oleh,
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td style={{ border: '1px solid #000000', height: '40px', verticalAlign: 'middle', textAlign: 'center', padding: '1px' }}>
+                      {foremanSignature ? (
+                        <img
+                          src={cleanForemanSignature || foremanSignature}
+                          alt="TTD Foreman"
+                          style={{ maxHeight: '38px', maxWidth: '95%', objectFit: 'contain', margin: 'auto', display: 'block' }}
+                        />
+                      ) : (
+                        <div style={{ height: '38px' }} />
+                      )}
+                    </td>
+                    <td style={{ border: '1px solid #000000', height: '40px', verticalAlign: 'middle', textAlign: 'center', padding: '1px' }}>
+                      {spvSignature ? (
+                        <img
+                          src={cleanSpvSignature || spvSignature}
+                          alt="TTD SPV"
+                          style={{ maxHeight: '38px', maxWidth: '95%', objectFit: 'contain', margin: 'auto', display: 'block' }}
+                        />
+                      ) : (
+                        <div style={{ height: '38px' }} />
+                      )}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style={{ border: '1px solid #000000', padding: '2px', fontSize: '6pt', textAlign: 'center', color: '#000000' }}>
+                      {foremanName && (
+                        <div style={{ fontWeight: 'bold', fontSize: '6.5pt', marginBottom: '1px', color: '#000000' }}>
+                          {foremanName}
+                        </div>
+                      )}
+                      <div>Foreman Laboratorium</div>
+                    </td>
+                    <td style={{ border: '1px solid #000000', padding: '2px', fontSize: '6pt', textAlign: 'center', color: '#000000' }}>
+                      {spvName && (
+                        <div style={{ fontWeight: 'bold', fontSize: '6.5pt', marginBottom: '1px', color: '#000000' }}>
+                          {spvName}
+                        </div>
+                      )}
+                      <div>SPV Laboratorium</div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+
+              {/* Right Signature Table (Disetujui oleh & Diketahui oleh) */}
+              <table style={{ width: '42%', borderCollapse: 'collapse', border: '1.5px solid #000000' }}>
+                <thead>
+                  <tr>
+                    <th style={{ width: '50%', border: '1px solid #000000', padding: '2px', fontStyle: 'italic', fontSize: '6.5pt', fontWeight: 'normal', textAlign: 'center' }}>
+                      Disetujui oleh,
+                    </th>
+                    <th style={{ width: '50%', border: '1px solid #000000', padding: '2px', fontStyle: 'italic', fontSize: '6.5pt', fontWeight: 'normal', textAlign: 'center' }}>
+                      Diketahui oleh,
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td style={{ border: '1px solid #000000', height: '40px', verticalAlign: 'bottom', textAlign: 'center', paddingBottom: '2px', fontWeight: 'bold', fontSize: '7pt', color: '#000000' }}>
+                      Tigwa Anggawikara
+                    </td>
+                    <td style={{ border: '1px solid #000000', height: '40px', verticalAlign: 'bottom', textAlign: 'center', paddingBottom: '2px', fontWeight: 'bold', fontSize: '7pt', color: '#000000' }}>
+                      Deni Nugraha Perdiana
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style={{ border: '1px solid #000000', padding: '2px', fontSize: '6pt', textAlign: 'center', color: '#000000' }}>
+                      Sptd. Laboratorium
+                    </td>
+                    <td style={{ border: '1px solid #000000', padding: '2px', fontSize: '6pt', textAlign: 'center', color: '#000000' }}>
+                      Preparation & Laboratorium Manager
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
           </div>
-        </div>
+        );
 
-        {/* Metadata Table */}
-        <table className="w-full text-[8pt] mb-2 print-border-table">
-          <tbody>
-            <tr>
-              <td className="print-header-cell w-[14%]">Instrumen XRF:</td>
-              <td className="w-[20%] font-bold">{selectedInstrument} ({filteredInstruments.find(i => i.code === selectedInstrument)?.name})</td>
-              <td className="print-header-cell w-[14%]">Tanggal Analisa:</td>
-              <td className="w-[18%] font-bold">{verificationDate}</td>
-              <td className="print-header-cell w-[14%]">Shift / Jam:</td>
-              <td className="w-[20%] font-bold">Shift {shift} ({verificationTime})</td>
-            </tr>
-            <tr>
-              <td className="print-header-cell">Aplikasi / Matriks:</td>
-              <td className="font-bold">{selectedMatrix} ({rows.length} CRM Standard)</td>
-              <td className="print-header-cell">Analis / Operator:</td>
-              <td className="font-bold">{userName} {userNik ? `(${userNik})` : ''}</td>
-              <td className="print-header-cell">Status Verifikasi:</td>
-              <td className={`font-black ${batchStats.overallStatus === 'PASS' ? 'print-status-pass' : batchStats.overallStatus === 'WARNING' ? 'print-status-warn' : 'print-status-action'}`}>
-                {batchStats.overallStatus === 'PASS' ? 'MEMENUHI SYARAT (PASS)' : batchStats.overallStatus === 'WARNING' ? 'PERINGATAN (WARNING)' : 'TIDAK MEMENUHI (ACTION)'}
-              </td>
-            </tr>
-          </tbody>
-        </table>
+        return (
+          <>
+            {/* Absolute Native Print Stylesheet & Container */}
+            <div className="xrf-print-only-container">
+              <style dangerouslySetInnerHTML={{ __html: `
+                @media screen {
+                  .xrf-print-only-container {
+                    display: none !important;
+                  }
+                }
+                @media print {
+                  @page {
+                    size: A4 landscape;
+                    margin: 6mm 8mm;
+                  }
+                  html, body {
+                    margin: 0 !important;
+                    padding: 0 !important;
+                    background: #ffffff !important;
+                    height: 100% !important;
+                    max-height: 100% !important;
+                    overflow: hidden !important;
+                    -webkit-print-color-adjust: exact !important;
+                    print-color-adjust: exact !important;
+                  }
+                  /* Remove height & overflow restrictions on SPA root containers */
+                  #root, #root > div, .min-h-screen, div {
+                    overflow: visible !important;
+                  }
+                  /* Strictly hide UI controls, sidebar, modals, headers & buttons */
+                  .no-print-area, header, aside, nav, button, input, select, .lucide, [role="dialog"], .backdrop-blur-xs {
+                    display: none !important;
+                  }
+                  /* Display the official document strictly on 1 A4 page */
+                  .xrf-print-only-container {
+                    display: block !important;
+                    visibility: visible !important;
+                    width: 100% !important;
+                    max-width: 100% !important;
+                    margin: 0 auto !important;
+                    padding: 0 !important;
+                    background: #ffffff !important;
+                    page-break-inside: avoid !important;
+                    page-break-after: avoid !important;
+                    break-inside: avoid !important;
+                  }
+                  .xrf-official-doc-root {
+                    page-break-inside: avoid !important;
+                    page-break-after: avoid !important;
+                    break-inside: avoid !important;
+                  }
+                  .xrf-print-only-container * {
+                    visibility: visible !important;
+                  }
+                }
+              ` }} />
 
-        {/* Dense Printable Results Table */}
-        <table className="w-full text-center print-border-table mb-2">
-          <thead>
-            <tr className="print-header-cell text-[8pt]">
-              <th className="w-6">No</th>
-              <th className="w-24 text-left">CRM Standar</th>
-              <th className="text-left">Label Sampel</th>
-              {activeColumns.map(c => (
-                <th key={`pr-th-${c}`} className="text-right">{c} (%)</th>
-              ))}
-              <th className="text-right w-12">BC</th>
-              <th className="text-right w-12">Fe/Ni</th>
-              <th className="text-right w-12">Sum%</th>
-              <th className="w-16">Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r, idx) => {
-              const calcs = computeRowCalculations(r);
-              const rowStatus = evaluateRow(r);
-              return (
-                <tr key={`pr-row-${idx}`}>
-                  <td>{idx + 1}</td>
-                  <td className="font-bold text-left">{r.standardCode}</td>
-                  <td className="text-left font-mono text-[7pt]">{r.sampleLabel}</td>
-                  {activeColumns.map(elem => {
-                    const field = elem.toLowerCase() as keyof StandardRowInput;
-                    const val = r[field];
-                    const evalResult = evaluateCell(r.standardCode, elem, val);
-                    const statusClass = evalResult.status === 'ACTION' ? 'print-status-action' : evalResult.status === 'WARNING' ? 'print-status-warn' : '';
+              {renderOfficialContent()}
+            </div>
 
-                    return (
-                      <td key={`pr-cell-${elem}-${idx}`} className={`text-right font-mono ${statusClass}`}>
-                        {val ? Number(val).toFixed(elem === 'Ni' || elem === 'Cr2O3' ? 3 : 2) : '-'}
-                      </td>
-                    );
-                  })}
-                  <td className="text-right font-mono">{calcs.bc}</td>
-                  <td className="text-right font-mono">{calcs.feNi}</td>
-                  <td className="text-right font-mono font-bold">{calcs.sum}</td>
-                  <td className={`font-bold ${rowStatus === 'PASS' ? 'print-status-pass' : rowStatus === 'WARNING' ? 'print-status-warn' : rowStatus === 'ACTION' ? 'print-status-action' : ''}`}>
-                    {rowStatus}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+            {/* Interactive On-Screen Print Preview Modal */}
+            {showPrintPreviewModal && (
+              <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 overflow-y-auto no-print-area">
+                <div className="bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-2xl max-w-6xl w-full max-h-[96vh] flex flex-col shadow-2xl overflow-hidden">
+                  {/* Modal Header */}
+                  <div className="flex items-center justify-between px-6 py-3 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 shrink-0">
+                    <div className="flex items-center gap-2.5">
+                      <div className="p-1.5 bg-teal-50 dark:bg-teal-950/40 text-teal-600 rounded-lg">
+                        <Printer className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h3 className="text-xs font-bold text-slate-900 dark:text-white">
+                          Pratinjau Format Cetak (Fit 1 Halaman A4 Landscape)
+                        </h3>
+                        <p className="text-[10px] text-slate-500">
+                          Template Resmi: DAILY VERIFIKASI SAMPLE STANDARD (TBP / GPS)
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setShowSignatureModal(true)}
+                        className="px-3.5 py-1.5 bg-teal-50 hover:bg-teal-100 dark:bg-teal-950/40 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs active:scale-95"
+                        title="Atur atau bubuhkan tanda tangan digital"
+                      >
+                        <PenTool className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
+                        {foremanSignature || spvSignature ? 'Ubah TTD Digital' : 'Isi TTD Digital'}
+                        {(foremanSignature || spvSignature) && (
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                        )}
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowPrintPreviewModal(false);
+                          setTimeout(() => window.print(), 150);
+                        }}
+                        className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer shadow-sm active:scale-95"
+                      >
+                        <Printer className="w-3.5 h-3.5" />
+                        Cetak Sekarang (A4 Landscape)
+                      </button>
+                      <button
+                        onClick={() => setShowPrintPreviewModal(false)}
+                        className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors cursor-pointer"
+                        title="Tutup Pratinjau"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
 
-        {/* Nominal Reference Guidelines & Standard Notes */}
-        <div className="text-[7pt] text-slate-700 leading-tight mb-2 p-1.5 border border-slate-400 bg-slate-50">
-          <strong>Kriteria Penerimaan Verifikasi XRF:</strong> 
-          (1) Batas Peringatan (Warning) = Nilai Acuan ± 2σ (Perlu pengawasan). 
-          (2) Batas Tindakan (Action) = Nilai Acuan ± 3σ. Apabila hasil analisa berada di luar batas ± 3σ, analisa dihentikan untuk kalibrasi ulang atau pelaporan ke SPV Lab.
-          (3) Nilai Nominal CRM resmi: LIM01 s/d LIM05 dan OREAS/SAP terkalibrasi sesuai sertifikat CRM resmi terlampir (akurasi 3 desimal).
-        </div>
+                  {/* Modal Body: Exact 1-Page A4 Landscape Sheet */}
+                  <div className="p-4 sm:p-6 overflow-y-auto flex-1 flex justify-center bg-slate-300/80 dark:bg-slate-950">
+                    <div className="bg-white text-slate-900 p-5 sm:p-6 rounded-sm shadow-2xl border border-slate-400 w-full max-w-[1020px] box-border">
+                      {renderOfficialContent()}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
 
-        {/* 3 Signatures Block (Dianalisa Oleh [Operator], Diperiksa Oleh [SPV], Disetujui Oleh [SPT]) */}
-        <table className="w-full text-center print-border-table">
-          <thead>
-            <tr className="print-header-cell text-[8pt]">
-              <th className="w-1/3">Dianalisa Oleh (Operator / Analis):</th>
-              <th className="w-1/3">Diperiksa Oleh (Supervisor Laboratory):</th>
-              <th className="w-1/3">Disetujui Oleh (Superintendent Laboratory):</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td className="sign-box align-bottom text-[8pt] pb-1">
-                <div className="font-bold underline">{userName || 'Analis Laboratorium'}</div>
-                <div className="text-[7pt] text-slate-600">NIK: {userNik || '....................................'}</div>
-                <div className="text-[7pt] text-slate-500">Tgl: {verificationDate}</div>
-              </td>
-              <td className="sign-box align-bottom text-[8pt] pb-1">
-                <div className="font-bold underline">( .................................................... )</div>
-                <div className="text-[7pt] text-slate-600">Supervisor QC / Laboratory</div>
-                <div className="text-[7pt] text-slate-500">Tgl: ............................................</div>
-              </td>
-              <td className="sign-box align-bottom text-[8pt] pb-1">
-                <div className="font-bold underline">( .................................................... )</div>
-                <div className="text-[7pt] text-slate-600">Superintendent Laboratory</div>
-                <div className="text-[7pt] text-slate-500">Tgl: ............................................</div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+            {/* Digital Signature Modal */}
+            {showSignatureModal && (
+              <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 overflow-y-auto no-print-area">
+                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-4xl w-full max-h-[92vh] flex flex-col shadow-2xl overflow-hidden">
+                  {/* Modal Header */}
+                  <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-teal-100 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300 rounded-xl">
+                        <PenTool className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                          Pengesahan Tanda Tangan Digital
+                          <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-teal-50 dark:bg-teal-950 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800">
+                            XRF Verification
+                          </span>
+                        </h3>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                          Gunakan PIN tanda tangan tersimpan atau tanda tangan langsung di layar.
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowSignatureModal(false)}
+                      className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+
+                  {/* Modal Body */}
+                  <div className="p-6 overflow-y-auto space-y-6 flex-1">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {/* 1. Foreman Laboratorium */}
+                      <div className="bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <label className="text-xs font-bold text-teal-700 dark:text-teal-300 uppercase tracking-wider flex items-center gap-1.5">
+                            <UserCheck className="w-4 h-4 text-teal-600" />
+                            Dilaksanakan oleh (Foreman)
+                          </label>
+                          {foremanSignature && (
+                            <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/50 px-2 py-0.5 rounded-full flex items-center gap-1">
+                              <Check className="w-3 h-3" /> Tertandatangani
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Officer Selector */}
+                        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-3">
+                          {!isChangingForeman && foremanName ? (
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <p className="font-bold text-sm text-slate-900 dark:text-white">{foremanName}</p>
+                                <p className="text-xs text-slate-500">Foreman Laboratorium {foremanNik ? ('• NIK: ' + foremanNik) : ''}</p>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => setIsChangingForeman(true)}
+                                className="text-xs font-semibold text-teal-600 hover:text-teal-700 dark:text-teal-400 cursor-pointer"
+                              >
+                                Ganti
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="space-y-2">
+                              <div className="relative">
+                                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                                <input
+                                  type="text"
+                                  placeholder="Cari nama Foreman..."
+                                  value={foremanSearch}
+                                  onChange={e => setForemanSearch(e.target.value)}
+                                  className="w-full text-xs pl-9 pr-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
+                                />
+                              </div>
+                              {foremanSearch && (
+                                <div className="max-h-40 overflow-y-auto bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg">
+                                  {employees
+                                    .filter(e => (e.nama || '').toLowerCase().includes(foremanSearch.toLowerCase()))
+                                    .slice(0, 6)
+                                    .map(e => (
+                                      <div
+                                        key={e.nama}
+                                        onClick={() => {
+                                          setForemanName(e.nama);
+                                          setForemanNik(e.nik || '');
+                                          setForemanSearch('');
+                                          setIsChangingForeman(false);
+                                        }}
+                                        className="p-2 hover:bg-teal-50 dark:hover:bg-teal-950/40 cursor-pointer text-xs border-b border-slate-100 dark:border-slate-700 flex justify-between"
+                                      >
+                                        <span className="font-semibold text-slate-800 dark:text-slate-200">{e.nama}</span>
+                                        <span className="text-slate-400">{e.jabatan || 'Foreman'}</span>
+                                      </div>
+                                    ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Verified Signature Pad */}
+                        <VerifiedSignaturePad
+                          signerName={foremanName}
+                          signerNik={foremanNik}
+                          label="Tanda Tangan Foreman"
+                          value={foremanSignature}
+                          onChange={setForemanSignature}
+                          accentColor="teal"
+                          heightClass="h-32"
+                        />
+                      </div>
+
+                      {/* 2. SPV Laboratorium */}
+                      <div className="bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <label className="text-xs font-bold text-blue-700 dark:text-blue-300 uppercase tracking-wider flex items-center gap-1.5">
+                            <Users className="w-4 h-4 text-blue-600" />
+                            Diperiksa oleh (SPV)
+                          </label>
+                          {spvSignature && (
+                            <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/50 px-2 py-0.5 rounded-full flex items-center gap-1">
+                              <Check className="w-3 h-3" /> Tertandatangani
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Officer Selector */}
+                        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-3">
+                          {!isChangingSpv && spvName ? (
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <p className="font-bold text-sm text-slate-900 dark:text-white">{spvName}</p>
+                                <p className="text-xs text-slate-500">SPV Laboratorium {spvNik ? ('• NIK: ' + spvNik) : ''}</p>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => setIsChangingSpv(true)}
+                                className="text-xs font-semibold text-blue-600 hover:text-blue-700 dark:text-blue-400 cursor-pointer"
+                              >
+                                Ganti
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="space-y-2">
+                              <div className="relative">
+                                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                                <input
+                                  type="text"
+                                  placeholder="Cari nama SPV..."
+                                  value={spvSearch}
+                                  onChange={e => setSpvSearch(e.target.value)}
+                                  className="w-full text-xs pl-9 pr-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
+                                />
+                              </div>
+                              {spvSearch && (
+                                <div className="max-h-40 overflow-y-auto bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg">
+                                  {employees
+                                    .filter(e => (e.nama || '').toLowerCase().includes(spvSearch.toLowerCase()))
+                                    .slice(0, 6)
+                                    .map(e => (
+                                      <div
+                                        key={e.nama}
+                                        onClick={() => {
+                                          setSpvName(e.nama);
+                                          setSpvNik(e.nik || '');
+                                          setSpvSearch('');
+                                          setIsChangingSpv(false);
+                                        }}
+                                        className="p-2 hover:bg-blue-50 dark:hover:bg-blue-950/40 cursor-pointer text-xs border-b border-slate-100 dark:border-slate-700 flex justify-between"
+                                      >
+                                        <span className="font-semibold text-slate-800 dark:text-slate-200">{e.nama}</span>
+                                        <span className="text-slate-400">{e.jabatan || 'Supervisor'}</span>
+                                      </div>
+                                    ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Verified Signature Pad */}
+                        <VerifiedSignaturePad
+                          signerName={spvName}
+                          signerNik={spvNik}
+                          label="Tanda Tangan SPV"
+                          value={spvSignature}
+                          onChange={setSpvSignature}
+                          accentColor="blue"
+                          heightClass="h-32"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Modal Footer */}
+                  <div className="px-6 py-3.5 bg-slate-50 dark:bg-slate-800/80 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between">
+                    <p className="text-xs text-slate-500">
+                      Tanda tangan akan otomatis disematkan ke lembar cetak A4 Landscape.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setShowSignatureModal(false)}
+                      className="px-5 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-sm active:scale-95 flex items-center gap-1.5"
+                    >
+                      <Check className="w-4 h-4" />
+                      Selesai & Terapkan
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+          </>
+        );
+      })()}
 
       {/* Modal Quick Paste from Excel */}
       {showPasteModal && (

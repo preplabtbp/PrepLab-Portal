@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { VerifiedBadge } from '../VerifiedBadge';
 import { 
   Search, User, Check, X, AlertCircle, ShieldCheck, 
   Loader2, ChevronDown, CheckCircle2
@@ -548,8 +549,8 @@ export function EmployeeRosterSelect({
       ) : helperText ? (
         <p className="text-[10.5px] text-slate-400 italic mt-0.5">{helperText}</p>
       ) : (
-        <div className="flex items-center gap-1 text-[10px] text-slate-400 dark:text-slate-500">
-          <ShieldCheck className="w-3 h-3 text-emerald-600 dark:text-emerald-500" />
+        <div className="flex items-center gap-1.5 text-[10px] text-slate-400 dark:text-slate-500">
+          <VerifiedBadge size="xs" title="Terverifikasi Data Roster" />
           <span>PIC divalidasi ketat terhadap database roster agar personil dapat dipertanggungjawabkan.</span>
         </div>
       )}

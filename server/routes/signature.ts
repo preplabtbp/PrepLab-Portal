@@ -13,11 +13,12 @@ import {
 export const signatureRouter = Router();
 
 // Auto-check and create DB columns if not exists
-let isColumnsChecked = false;
+let isColumnsChecked = true;
 async function ensureSignatureColumns() {
   if (isColumnsChecked) return;
   try {
     await pool.query(`
+      SET LOCAL lock_timeout = '2s';
       ALTER TABLE employees ADD COLUMN IF NOT EXISTS signature_encrypted text;
       ALTER TABLE employees ADD COLUMN IF NOT EXISTS signature_iv text;
       ALTER TABLE employees ADD COLUMN IF NOT EXISTS signature_tag text;

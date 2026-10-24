@@ -2238,19 +2238,33 @@ router.post("/api/settings", async (req, res) => {
     }
   });
 
-// --- SHARED HOME WIDGETS & NOTES (ACCROSS DEVICES & USERS) ---
-router.get("/api/widgets/configs", async (_req, res) => {
+// --- PERSONALIZED HOME WIDGETS CONFIGURATION PER EMPLOYEE ---
+router.get("/api/widgets/configs", async (req, res) => {
   try {
-    const row = await db.select().from(appSettings).where(eq(appSettings.settingKey, 'shared_home_widgets_config')).limit(1);
-    if (row.length > 0 && row[0].settingValue) {
-      try {
-        const parsed = JSON.parse(row[0].settingValue);
-        return res.json({ success: true, configs: parsed, updatedAt: row[0].updatedAt });
-      } catch {
-        return res.json({ success: true, configs: null });
+    const userNik = String(req.query.userNik || req.query.nik || getRequesterNik(req) || '').trim();
+
+    // 1. Cek konfigurasi spesifik karyawan (per-user) jika NIK tersedia
+    if (userNik && userNik !== 'default') {
+      const userSettingKey = `widgets_config_${userNik}`;
+      const userRow = await db.select().from(appSettings).where(eq(appSettings.settingKey, userSettingKey)).limit(1);
+      if (userRow.length > 0 && userRow[0].settingValue) {
+        try {
+          const parsed = JSON.parse(userRow[0].settingValue);
+          return res.json({ success: true, configs: parsed, userNik, isPersonal: true, updatedAt: userRow[0].updatedAt });
+        } catch {}
       }
     }
-    return res.json({ success: true, configs: null });
+
+    // 2. Fallback ke konfigurasi default portal jika karyawan belum pernah mengubah tataletak
+    const defaultRow = await db.select().from(appSettings).where(eq(appSettings.settingKey, 'shared_home_widgets_config')).limit(1);
+    if (defaultRow.length > 0 && defaultRow[0].settingValue) {
+      try {
+        const parsed = JSON.parse(defaultRow[0].settingValue);
+        return res.json({ success: true, configs: parsed, userNik, isPersonal: false, updatedAt: defaultRow[0].updatedAt });
+      } catch {}
+    }
+
+    return res.json({ success: true, configs: null, userNik });
   } catch (error) {
     console.error('Error fetching widget configs:', error);
     res.status(500).json({ success: false, error: "Failed to fetch widget configs" });
@@ -2259,14 +2273,22 @@ router.get("/api/widgets/configs", async (_req, res) => {
 
 router.post("/api/widgets/configs", async (req, res) => {
   try {
-    const { configs } = req.body;
+    const { configs, userNik: bodyNik } = req.body;
     if (!Array.isArray(configs)) {
       return res.status(400).json({ success: false, error: "Invalid configs payload" });
     }
 
-    const settingKey = 'shared_home_widgets_config';
+    const userNik = String(bodyNik || req.query.userNik || req.query.nik || getRequesterNik(req) || 'default').trim();
+    
+    // Simpan khusus per karyawan jika ada NIK, agar tidak menimpa karyawan lain
+    const settingKey = (userNik && userNik !== 'default')
+      ? `widgets_config_${userNik}`
+      : 'shared_home_widgets_config';
+
     const settingValue = JSON.stringify(configs);
-    const description = 'Shared home widgets layout, order, size and active status across all devices';
+    const description = (userNik && userNik !== 'default')
+      ? `Personalized home widgets layout for employee ${userNik}`
+      : 'Default shared home widgets layout';
 
     const existing = await db.select().from(appSettings).where(eq(appSettings.settingKey, settingKey)).limit(1);
     if (existing.length > 0) {
@@ -2278,14 +2300,17 @@ router.post("/api/widgets/configs", async (req, res) => {
         .values({ settingKey, settingValue, description });
     }
 
-    // Broadcast update to all connected clients via Socket.IO
+    // Broadcast update HANYA untuk device/tab milik karyawan yang bersangkutan
     try {
-      getIoInstance()?.emit('widgets:config_updated', configs);
+      if (userNik && userNik !== 'default') {
+        getIoInstance()?.emit(`widgets:config_updated:${userNik}`, configs);
+      }
+      getIoInstance()?.emit('widgets:config_updated', { userNik, configs });
     } catch (sockErr) {
       console.warn('Socket emit failed for widget configs:', sockErr);
     }
 
-    res.json({ success: true });
+    res.json({ success: true, userNik });
   } catch (error) {
     console.error('Error saving widget configs:', error);
     res.status(500).json({ success: false, error: "Failed to save widget configs" });

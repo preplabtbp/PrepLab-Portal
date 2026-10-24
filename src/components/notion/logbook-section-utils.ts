@@ -59,6 +59,28 @@ export function getCanonicalSection(s: string): string {
   return subPrefix ? base + ':' + subPrefix : base;
 }
 
+export function getCanonicalBaseSection(s: string): string {
+  if (!s) return '';
+  const clean = s.replace(/^[#\s\-*]+/, '').replace(/^section-/, '').replace(/-/g, ' ').trim().toLowerCase();
+  if (clean.includes('lab') || clean.includes('aas') || clean.includes('xrf')) return 'laboratory';
+  if (clean.includes('prep') || clean.includes('crusher')) return 'preparation';
+  if (clean.includes('admin') || clean.includes('surat') || clean.includes('cuti')) return 'administration';
+  if (clean.includes('mutu') || clean.includes('iso') || clean.includes('qa') || clean.includes('quality')) return 'quality_assurance';
+  if (clean.includes('maint') || clean.includes('teknik') || clean.includes('mesin')) return 'maintenance';
+  if (clean.includes('ware') || clean.includes('gudang') || clean.includes('stok') || clean.includes('inven')) return 'inventory';
+  if (clean.includes('prosedur') || clean.includes('procedure')) return 'procedure';
+  if (clean.includes('general issue') || clean.includes('issue')) return 'general_issue';
+  return clean.replace(/[^a-z0-9]/g, '');
+}
+
+export function isSameBaseSection(a: string, b: string): boolean {
+  if (!a || !b) return false;
+  const canA = getCanonicalBaseSection(a);
+  const canB = getCanonicalBaseSection(b);
+  if (canA && canB && canA === canB) return true;
+  return false;
+}
+
 /**
  * Checks if two section strings refer to the same section (supporting English/Indonesian aliases).
  * e.g. "Laboratorium" and "Laboratory" -> true
@@ -520,6 +542,7 @@ export function parseTableFromMarkdown(content: string): { headers: string[]; ro
   let currentRow = '';
 
   for (let i = separatorIdx + 1; i < lines.length; i++) {
+    if (rows.length >= 500) break; // Defensive cap to guarantee 60fps responsiveness
     const line = lines[i];
     const trimmed = line.trim();
 
@@ -565,9 +588,19 @@ export function parseTableFromMarkdown(content: string): { headers: string[]; ro
 }
 
 function parseRowLine(line: string, headers: string[]): TableRowData | null {
-  const parts = line.split('|').map(p => p.trim());
+  const parts = line.split(/(?<!\\)\|/).map(p => p.replace(/\\\|/g, '|').trim());
   const cellValues = parts.slice(1, parts.length - 1);
   if (cellValues.length === 0) return null;
+
+  // Defensive: Discard completely blank ghost rows to prevent memory explosion & browser freezing
+  const isAllBlank = cellValues.every(c => {
+    const clean = c.replace(/<!--[\s\S]*?-->/g, '').replace(/[-|\s]/g, '');
+    return clean.length === 0;
+  });
+  const hasSpecialMeta = line.includes('<!--task-id:') || line.includes('<!--is-logbook:') || line.includes('<!--origin-id:');
+  if (isAllBlank && !hasSpecialMeta) {
+    return null;
+  }
 
   const rowStr = cellValues.join(' ');
   const taskMatch = rowStr.match(/<!--task-id:([^>]+)-->/);
@@ -2015,13 +2048,13 @@ export function resolveOriginPostId(
       if (secMatch) return String(secMatch.id);
     }
 
-    // 1C. Substring match across all posts (guaranteeing non-empty strings)
+    // 1C. High-fidelity substring match across all posts (minimum 8 characters to avoid false matches like "GPS")
     const postByTitle = allPosts.find(p => {
       const pTitle = (p.title || '').trim().toLowerCase();
-      if (!pTitle || pTitle.length < 3) return false;
+      if (!pTitle || pTitle.length < 8) return false;
       const cleanPTitle = cleanFrontEndText(pTitle).toLowerCase();
-      return (asal.length > 4 && pTitle.includes(asal)) || (pTitle.length > 4 && asal.includes(pTitle)) ||
-             (cleanPTitle.length > 4 && cleanPTitle.includes(asal));
+      return (asal.length >= 8 && pTitle.includes(asal)) || (pTitle.length >= 8 && asal.includes(pTitle)) ||
+             (cleanPTitle.length >= 8 && cleanPTitle.includes(asal));
     });
     if (postByTitle) return String(postByTitle.id);
   }

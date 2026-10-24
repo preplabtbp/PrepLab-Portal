@@ -62,6 +62,33 @@ export const QC_ELEMENTS_LIST = [
  * Menjamin titik chart selalu menampilkan Tanggal & Jam (baik data GTS yang jam saja,
  * data lengkap, maupun data lama).
  */
+/**
+ * Normalisasi tanggal format apa pun (DD/MM/YY, DD/MM/YYYY, dsb) ke ISO YYYY-MM-DD
+ */
+export function normalizeIsoDate(datePart: string): string {
+  if (!datePart) return '';
+  const clean = datePart.trim();
+
+  // Already YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(clean)) {
+    return clean;
+  }
+
+  // DD/MM/YY or DD/MM/YYYY or DD-MM-YYYY
+  const m = clean.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})$/);
+  if (m) {
+    let day = parseInt(m[1], 10);
+    let month = parseInt(m[2], 10);
+    let year = parseInt(m[3], 10);
+    if (year < 100) year = 2000 + year;
+    if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+      return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    }
+  }
+
+  return clean;
+}
+
 export function formatPointDisplayDate(analyzedAt?: string | null, batchDate?: string | null): string {
   const cleanAnalyzed = (analyzedAt || '').trim();
   const cleanDate = (batchDate || '').trim();
@@ -70,16 +97,25 @@ export function formatPointDisplayDate(analyzedAt?: string | null, batchDate?: s
 
   // 1. Jika analyzedAt HANYA berupa jam (misal: "08:00", "01:05", "00:26", "08:00:15")
   if (/^\d{1,2}:\d{2}(:\d{2})?$/.test(cleanAnalyzed)) {
-    return cleanDate ? `${cleanDate} ${cleanAnalyzed}` : cleanAnalyzed;
+    const timePad = cleanAnalyzed.slice(0, 5).padStart(5, '0');
+    const normDate = normalizeIsoDate(cleanDate);
+    return normDate ? `${normDate} ${timePad}` : timePad;
   }
 
   // 2. Jika analyzedAt sudah memuat tanggal dan jam
   if (cleanAnalyzed) {
-    return cleanAnalyzed;
+    const parts = cleanAnalyzed.split(/\s+/);
+    if (parts.length >= 2) {
+      const normDate = normalizeIsoDate(parts[0]);
+      const timePart = parts[1].slice(0, 5).padStart(5, '0');
+      return `${normDate} ${timePart}`;
+    }
+    const normDate = normalizeIsoDate(cleanAnalyzed);
+    return normDate;
   }
 
   // 3. Fallback ke batchDate
-  return cleanDate || '-';
+  return normalizeIsoDate(cleanDate) || '-';
 }
 
 /**
@@ -94,7 +130,8 @@ export function parsePointDateTimeParts(analyzedAt?: string | null, batchDate?: 
     return { dateStr: parts[0], timeStr: parts.slice(1).join(' ') };
   }
   if (/^\d{1,2}:\d{2}/.test(parts[0])) {
-    return { dateStr: batchDate || '-', timeStr: parts[0] };
+    const normBatch = normalizeIsoDate(batchDate || '');
+    return { dateStr: normBatch || '-', timeStr: parts[0].padStart(5, '0') };
   }
   return { dateStr: parts[0], timeStr: '' };
 }

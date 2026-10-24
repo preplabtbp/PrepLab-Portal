@@ -1,13 +1,35 @@
-import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { NotionContextMenu, NotionContextMenuData, isPostFavorite, togglePostFavorite } from './notion/NotionContextMenu';
+import React, { useState, useEffect, useMemo, useCallback, useRef, Suspense } from "react";
 import { translateDisplayText, isSameSection } from './notion/logbook-section-utils';
 import { TbpDashboard } from "./TbpDashboard";
 import { SectionHubDashboard, COVER_PRESETS } from "./SectionHubDashboard";
-import { NotionDatabaseTable, TableRowData, extractDriveId } from "./NotionDatabaseTable";
+import { VerifiedBadge } from "./VerifiedBadge";
+import type { TableRowData } from "./NotionDatabaseTable";
 import { isLogbookPost, getSectionFromPost, getLogbookTableData, aggregateSectionActiveTasks, KNOWN_SECTIONS, getUserAllowedSections, isUserAllowedToAccessSection } from "./notion/logbook-section-utils";
-import { EnterpriseWysiwygEditor } from "./notion/EnterpriseWysiwygEditor";
-import { PortalImagePickerModal } from "./PortalImagePickerModal";
 import { BannerCover } from "./BannerCover";
 import { Card, Button, Input } from "./ui";
+
+import { NotionDatabaseTable } from "./NotionDatabaseTable";
+const EnterpriseWysiwygEditor = React.lazy(() =>
+  import("./notion/EnterpriseWysiwygEditor").then((m) => ({ default: m.EnterpriseWysiwygEditor }))
+);
+const PortalImagePickerModal = React.lazy(() =>
+  import("./PortalImagePickerModal").then((m) => ({ default: m.PortalImagePickerModal }))
+);
+
+export const extractDriveId = (item: any): string | null => {
+  if (!item) return null;
+  if (typeof item === 'string') {
+    const directMatch = item.match(/\/d\/([a-zA-Z0-9_-]+)/);
+    if (directMatch) return directMatch[1];
+    const idMatch = item.match(/id=([a-zA-Z0-9_-]+)/);
+    if (idMatch) return idMatch[1];
+    const viewMatch = item.match(/\/view\/([a-zA-Z0-9_-]+)/);
+    if (viewMatch) return viewMatch[1];
+    if (/^[a-zA-Z0-9_-]{25,}$/.test(item.trim())) return item.trim();
+  }
+  return null;
+};
 import { motion, AnimatePresence } from "motion/react";
 import {
   Search,
@@ -154,7 +176,21 @@ export function BulletinBoard({
 
   const userUniverse = userPt === 'GTS' ? 'GTS' : 'TBP';
 
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem("preplab_labnote_sidebar_open");
+      if (saved !== null) return saved === "true";
+      return typeof window !== "undefined" ? window.innerWidth >= 1024 : true;
+    } catch {
+      return true;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("preplab_labnote_sidebar_open", String(sidebarOpen));
+    } catch {}
+  }, [sidebarOpen]);
   // Restore selected post immediately on initial render from sessionStorage ONLY if URL explicitly specifies a post ID (prevents flash on refresh while keeping root URL on dashboard)
   const [selectedPost, setSelectedPost] = useState<any | null>(() => {
     try {
@@ -181,7 +217,85 @@ export function BulletinBoard({
     } catch {}
     return null;
   });
+  const selectedPostRef = useRef<any>(selectedPost);
+  useEffect(() => {
+    selectedPostRef.current = selectedPost;
+  }, [selectedPost]);
   const [navHistory, setNavHistory] = useState<any[]>([]);
+  const [forwardHistory, setForwardHistory] = useState<any[]>([]);
+
+  // Helper to extract or derive a suitable emoji icon for a post
+  const getPostEmoji = useCallback((post: any): string => {
+    if (!post) return '📄';
+    const title = (getPostTitle(post) || '').trim();
+    // Check if title already starts with an emoji
+    const emojiMatch = title.match(/^(\p{Extended_Pictographic}|\p{Emoji_Presentation})/u);
+    if (emojiMatch) return emojiMatch[0];
+
+    const category = ((post.category || post.section || '') + ' ' + title).toUpperCase();
+    if (category.includes('NON ROUTINE') || category.includes('INVENTORY') || category.includes('WAREHOUSE')) return '🛒';
+    if (category.includes('LABORATORIUM') || category.includes('LAB') || category.includes('XRF')) return '🥼';
+    if (category.includes('PREPARASI') || category.includes('PREP')) return '⚗️';
+    if (category.includes('MAINTENANCE') || category.includes('PERAWATAN')) return '🔧';
+    if (category.includes('PROSEDUR') || category.includes('SOP') || category.includes('IK')) return '📖';
+    if (category.includes('CUTI') || category.includes('LEAVE')) return '✈️';
+    if (category.includes('KARYAWAN') || category.includes('CREW')) return '👷';
+    if (category.includes('MUTU') || category.includes('QA') || category.includes('QC')) return '🛡️';
+    if (category.includes('ADMIN')) return '📁';
+    if (category.includes('AGENDA') || category.includes('JADWAL')) return '📅';
+    if (category.includes('LOGBOOK') || category.includes('CATATAN')) return '📝';
+    return '📄';
+  }, []);
+
+  // Notion-Style Multi-Tab Navigation State
+  const [openTabs, setOpenTabs] = useState<Array<{ tabId: string; postId: string | number | null; title: string; icon?: string; post?: any }>>(() => {
+    try {
+      const saved = sessionStorage.getItem("preplab_labnote_open_tabs");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed.map((t: any, idx: number) => ({
+            tabId: t.tabId || `tab_${idx}_${t.id || 'tab'}`,
+            postId: t.postId !== undefined ? t.postId : (t.id === 'dashboard' ? null : t.id),
+            title: t.title || 'Tab',
+            icon: t.icon || '📝',
+            post: t.post
+          }));
+        }
+      }
+    } catch {}
+    const params = new URLSearchParams(window.location.search);
+    const initPageId = params.get("page") || params.get("postId") || params.get("id");
+    if (initPageId) {
+      return [{ tabId: 'tab_1', postId: initPageId, title: 'Memuat...', icon: '📝' }];
+    }
+    return [{ tabId: 'tab_1', postId: null, title: 'Dashboard', icon: '🏠' }];
+  });
+
+    // Notion Right-Click Context Menu State
+  const [notionContextMenu, setNotionContextMenu] = useState<NotionContextMenuData | null>(null);
+
+  const [activeTabId, setActiveTabId] = useState<string>(() => {
+    try {
+      const savedActive = sessionStorage.getItem("preplab_labnote_active_tab_id");
+      if (savedActive) return savedActive;
+    } catch {}
+    return 'tab_1';
+  });
+
+  // Save lightweight tab references to sessionStorage
+  useEffect(() => {
+    try {
+      const lightweight = openTabs.map(t => ({
+        tabId: t.tabId,
+        postId: t.postId,
+        title: t.title,
+        icon: t.icon
+      }));
+      sessionStorage.setItem("preplab_labnote_open_tabs", JSON.stringify(lightweight));
+      sessionStorage.setItem("preplab_labnote_active_tab_id", activeTabId);
+    } catch {}
+  }, [openTabs, activeTabId]);
 
   // Keep sessionStorage in sync with selectedPost
   useEffect(() => {
@@ -197,8 +311,14 @@ export function BulletinBoard({
   // Instantly load cached posts from localStorage/sessionStorage to eliminate delay when entering section pages
   const [posts, setPosts] = useState<any[]>(() => {
     try {
-      const cacheKey = `preplab_cached_bulletin_posts_${userPt || 'TBP'}`;
-      const cached = localStorage.getItem(cacheKey) || localStorage.getItem('preplab_cached_bulletin_posts_TBP') || sessionStorage.getItem('preplab_cached_bulletin_posts');
+      const activeUniverse = isDev ? 'ALL' : (userPt || 'TBP');
+      const cacheKey = `preplab_cached_bulletin_posts_${activeUniverse}`;
+      const cached = 
+        localStorage.getItem(cacheKey) || 
+        localStorage.getItem('preplab_cached_bulletin_posts_ALL') || 
+        localStorage.getItem('preplab_cached_bulletin_posts_TBP') || 
+        localStorage.getItem('preplab_cached_bulletin_posts') ||
+        sessionStorage.getItem('preplab_cached_bulletin_posts');
       if (cached) {
         const parsed = JSON.parse(cached);
         if (Array.isArray(parsed) && parsed.length > 0) return parsed;
@@ -215,6 +335,52 @@ export function BulletinBoard({
   const [isFocusMode, setIsFocusMode] = useState(true);
   const [isLibraryActive, setIsLibraryActive] = useState<boolean>(false);
   const [libraryDocType, setLibraryDocType] = useState<LibraryDocType>('ALL');
+
+  // Synchronize the ACTIVE TAB automatically whenever selectedPost or library status changes (never spawns a new tab)
+  useEffect(() => {
+    let postTitle = 'Dashboard';
+    let postIcon = '🏠';
+    let postId: string | number | null = null;
+
+    if (isLibraryActive) {
+      postTitle = `Library: ${libraryDocType || 'Hub'}`;
+      postIcon = '📚';
+      postId = 'library';
+    } else if (selectedPost) {
+      postTitle = getPostTitle(selectedPost) || 'Dokumen';
+      postIcon = getPostEmoji(selectedPost) || '📝';
+      postId = selectedPost.id;
+    }
+
+    setOpenTabs(prev => {
+      const targetIdx = prev.findIndex(t => t.tabId === activeTabId);
+      if (targetIdx === -1) {
+        if (prev.length > 0) {
+          setActiveTabId(prev[0].tabId);
+          const copy = [...prev];
+          copy[0] = { ...copy[0], postId, title: postTitle, icon: postIcon, post: selectedPost };
+          return copy;
+        }
+        return [{ tabId: activeTabId, postId, title: postTitle, icon: postIcon, post: selectedPost }];
+      }
+
+      const current = prev[targetIdx];
+      if (current.postId === postId && current.title === postTitle && current.icon === postIcon && current.post === selectedPost) {
+        return prev;
+      }
+
+      const updated = [...prev];
+      updated[targetIdx] = {
+        ...current,
+        postId,
+        title: postTitle,
+        icon: postIcon,
+        post: selectedPost
+      };
+      return updated;
+    });
+  }, [selectedPost, isLibraryActive, libraryDocType, activeTabId, getPostEmoji]);
+
 
   // Sync focus mode state from portal layout
   useEffect(() => {
@@ -313,15 +479,26 @@ export function BulletinBoard({
   const [saveToAgenda, setSaveToAgenda] = useState(true);
   const [saveToBulletin, setSaveToBulletin] = useState(true);
 
-  // Recents Post Tracking
+  // Recents Post Tracking (Strictly isolated per universe)
+  const currentActivePt = (selectedPtFilter === 'GTS' || pt === 'GTS') ? 'GTS' : (selectedPtFilter || pt || 'TBP');
   const [recentPostIds, setRecentPostIds] = useState<number[]>(() => {
     try {
-      const saved = localStorage.getItem("bulletin_recent_post_ids");
+      const saved = localStorage.getItem(`bulletin_recent_post_ids_${currentActivePt}`);
       return saved ? JSON.parse(saved) : [];
     } catch (e) {
       return [];
     }
   });
+
+  // Re-sync recent post IDs when active universe changes
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(`bulletin_recent_post_ids_${currentActivePt}`);
+      setRecentPostIds(saved ? JSON.parse(saved) : []);
+    } catch (e) {
+      setRecentPostIds([]);
+    }
+  }, [currentActivePt]);
 
   // New Post State
   const [isEditing, setIsEditing] = useState(false);
@@ -339,11 +516,15 @@ export function BulletinBoard({
     fetchPosts();
     fetchAgenda();
     fetchNotifications();
-  }, [pt, inspectorNik]);
+  }, [pt, inspectorNik, selectedPtFilter]);
 
   const fetchAgenda = async () => {
     try {
-      const res = await fetch("/api/agenda");
+      const activeUniverse = (selectedPtFilter === 'GTS' || pt === 'GTS') ? 'GTS' : 'TBP';
+      const params = new URLSearchParams();
+      params.set('pt', activeUniverse);
+      if (inspectorNik) params.set('nik', inspectorNik);
+      const res = await fetch(`/api/agenda?${params.toString()}`);
       if (res.ok) {
         const d = await res.json();
         if (d.status === "success" && Array.isArray(d.data)) {
@@ -389,39 +570,39 @@ export function BulletinBoard({
     setRecentPostIds((prev) => {
       const updated = [postId, ...prev.filter((id) => id !== postId)].slice(0, 12);
       try {
-        localStorage.setItem("bulletin_recent_post_ids", JSON.stringify(updated));
+        localStorage.setItem(`bulletin_recent_post_ids_${currentActivePt}`, JSON.stringify(updated));
       } catch (e) {}
       return updated;
     });
-  }, []);
+  }, [currentActivePt]);
 
   const fetchPosts = async () => {
-    setLoading(true);
+    // Only show full blocking spinner if no cached posts are currently displayed
+    if (!posts || posts.length === 0) {
+      setLoading(true);
+    }
     try {
+      const targetPt = selectedPtFilter !== 'ALL' ? selectedPtFilter : (isDev ? "ALL" : userUniverse);
+
       // Load cached posts from localStorage on initial run if state is empty
-      if (posts.length === 0) {
+      if (!posts || posts.length === 0) {
         try {
-          const cached = localStorage.getItem('preplab_cached_bulletin_posts');
+          const cached = 
+            localStorage.getItem(`preplab_cached_bulletin_posts_${targetPt}`) ||
+            localStorage.getItem(`preplab_cached_bulletin_posts_ALL`) ||
+            sessionStorage.getItem("preplab_cached_bulletin_posts");
           if (cached) {
             const parsed = JSON.parse(cached);
             if (Array.isArray(parsed) && parsed.length > 0) {
               setPosts(parsed);
+              setLoading(false);
             }
           }
         } catch {}
       }
-
-      // If user is Developer / SuperAdmin, load ALL bulletin posts across all PTs!
-      const targetPt = isDev ? "ALL" : userUniverse;
       const fetchUrl =
         `/api/bulletin?pt=${targetPt}&nik=${encodeURIComponent(inspectorNik || "")}&_t=${Date.now()}`;
-      const res = await fetch(fetchUrl, {
-        cache: "no-store",
-        headers: {
-          Pragma: "no-cache",
-          "Cache-Control": "no-cache",
-        },
-      });
+      const res = await fetch(fetchUrl);
       const data = await res.json();
       if (data.status === "success" && Array.isArray(data.data) && data.data.length > 0) {
         const allPosts: any[] = data.data;
@@ -438,16 +619,31 @@ export function BulletinBoard({
         if (allPosts.length > 0) {
           setPosts(allPosts);
           try {
-            // Remove duplicate key to save localStorage quota
-            localStorage.removeItem('preplab_cached_bulletin_posts');
-            localStorage.setItem(`preplab_cached_bulletin_posts_${targetPt}`, JSON.stringify(allPosts));
-            sessionStorage.setItem("preplab_cached_bulletin_posts", JSON.stringify(allPosts));
+            // Store lightweight posts (<120 KB vs 2.17 MB) to guarantee 100% reliable cache without exceeding browser quota
+            const lightweightPosts = allPosts.map((p: any) => {
+              const isSmall = typeof p.content === 'string' && p.content.length < 500;
+              const isFolder = isFolderPost(p);
+              return {
+                id: p.id,
+                title: p.title,
+                pt: p.pt,
+                category: p.category,
+                department: p.department,
+                authorNik: p.authorNik,
+                authorName: p.authorName,
+                createdAt: p.createdAt,
+                originalCreatedAt: p.originalCreatedAt,
+                coverImage: p.coverImage,
+                tags: p.tags,
+                universe: p.universe,
+                content: isSmall ? p.content : (isFolder ? '## \n\n' : ''),
+              };
+            });
+
+            localStorage.setItem(`preplab_cached_bulletin_posts_${targetPt}`, JSON.stringify(lightweightPosts));
+            sessionStorage.setItem("preplab_cached_bulletin_posts", JSON.stringify(lightweightPosts));
           } catch (storageErr) {
-            console.warn('[Bulletin] localStorage quota exceeded for posts cache, gracefully skipping');
-            try {
-              localStorage.removeItem('preplab_cached_bulletin_posts');
-              localStorage.removeItem('preplab_bulletin_media');
-            } catch {}
+            console.warn('[Bulletin] localStorage cache notice:', storageErr);
           }
         }
       } else if (data.status !== "success" || !data.data || data.data.length === 0) {
@@ -498,7 +694,7 @@ export function BulletinBoard({
           }
         }
       } catch (err) {}
-    }, 6000);
+    }, 10000); // 10 seconds interval: optimal near-realtime collaboration for active documents
 
     return () => {
       isMounted = false;
@@ -589,6 +785,84 @@ export function BulletinBoard({
     return false;
   }, []);
 
+  // Canonical Section Mapping for Known Section Routine Posts
+  const KNOWN_SECTION_POST_MAPPING: Record<number, string> = {
+    // Administrasi
+    425: 'ADMINISTRATION',
+    517: 'ADMINISTRATION',
+    519: 'ADMINISTRATION',
+    520: 'ADMINISTRATION',
+    521: 'ADMINISTRATION',
+    522: 'ADMINISTRATION',
+    523: 'ADMINISTRATION',
+    // Maintenance
+    412: 'MAINTENANCE',
+    427: 'MAINTENANCE',
+    424: 'MAINTENANCE',
+    663: 'MAINTENANCE',
+    422: 'MAINTENANCE',
+    664: 'MAINTENANCE',
+    428: 'MAINTENANCE',
+    665: 'MAINTENANCE',
+    465: 'MAINTENANCE',
+    464: 'MAINTENANCE',
+    // Laboratory
+    535: 'LABORATORY',
+    414: 'LABORATORY',
+    541: 'LABORATORY',
+    450: 'LABORATORY',
+    538: 'LABORATORY',
+    542: 'LABORATORY',
+    418: 'LABORATORY',
+    543: 'LABORATORY',
+    413: 'LABORATORY',
+    545: 'LABORATORY',
+    415: 'LABORATORY',
+    549: 'LABORATORY',
+    474: 'LABORATORY',
+    564: 'LABORATORY',
+    473: 'LABORATORY',
+    // Preparasi
+    637: 'PREPARASI',
+    447: 'PREPARASI',
+    638: 'PREPARASI',
+    417: 'PREPARASI',
+    639: 'PREPARASI',
+    416: 'PREPARASI',
+    640: 'PREPARASI',
+    445: 'PREPARASI',
+    641: 'PREPARASI',
+    472: 'PREPARASI',
+    642: 'PREPARASI',
+    471: 'PREPARASI',
+    // Quality Assurance
+    586: 'QUALITY ASSURANCE',
+    448: 'QUALITY ASSURANCE',
+    587: 'QUALITY ASSURANCE',
+    419: 'QUALITY ASSURANCE',
+    588: 'QUALITY ASSURANCE',
+    420: 'QUALITY ASSURANCE',
+    589: 'QUALITY ASSURANCE',
+    421: 'QUALITY ASSURANCE',
+    590: 'QUALITY ASSURANCE',
+    475: 'QUALITY ASSURANCE',
+    591: 'QUALITY ASSURANCE',
+    470: 'QUALITY ASSURANCE',
+    // Inventory / Warehouse
+    669: 'WAREHOUSE / INVENTORY CONTROL',
+    463: 'WAREHOUSE / INVENTORY CONTROL',
+    670: 'WAREHOUSE / INVENTORY CONTROL',
+    466: 'WAREHOUSE / INVENTORY CONTROL',
+    671: 'WAREHOUSE / INVENTORY CONTROL',
+    467: 'WAREHOUSE / INVENTORY CONTROL',
+    672: 'WAREHOUSE / INVENTORY CONTROL',
+    468: 'WAREHOUSE / INVENTORY CONTROL',
+    673: 'WAREHOUSE / INVENTORY CONTROL',
+    469: 'WAREHOUSE / INVENTORY CONTROL',
+    674: 'WAREHOUSE / INVENTORY CONTROL',
+    476: 'WAREHOUSE / INVENTORY CONTROL',
+  };
+
   // Find parent post dynamically only for true subpages within the same PT universe
   const findParentPost = useCallback(
     (currentPost: any): any | null => {
@@ -597,6 +871,13 @@ export function BulletinBoard({
 
       const currentUniverse = currentPost.pt === "GTS" ? "GTS" : "TBP";
       const samePtPosts = posts.filter((p) => (p.pt === "GTS" ? "GTS" : "TBP") === currentUniverse);
+
+      // 0. Explicit canonical mapping for known section routine posts (e.g. 425 -> ADMINISTRATION)
+      const mappedSection = currentPost.id ? KNOWN_SECTION_POST_MAPPING[Number(currentPost.id)] : undefined;
+      if (mappedSection) {
+        const canonicalHub = samePtPosts.find((p) => isSectionHubPost(p) && isSameSection(getPostTitle(p), mappedSection));
+        if (canonicalHub) return canonicalHub;
+      }
 
       const currentTitle = getPostTitle(currentPost).toLowerCase();
       const currentCategory = (currentPost.category || currentPost.section || "").toLowerCase().trim();
@@ -613,17 +894,20 @@ export function BulletinBoard({
       });
       if (sectionHub) return sectionHub;
 
-      // 2. Check if a parent post explicitly links to this markdown title (e.g. ## Title) within same PT
-      for (const p of samePtPosts) {
-        if (p.id === currentPost.id) continue;
-        if (!isSectionHubPost(p) && !isFolderPost(p)) continue;
-        if (
-          p.content &&
-          (p.content.includes(`## ${getPostTitle(currentPost)}`) ||
-            p.content.includes(`### ${getPostTitle(currentPost)}`) ||
-            p.content.includes(`[${getPostTitle(currentPost)}]`))
-        ) {
-          return p;
+      // 2. Check if a parent post explicitly links to this markdown title (e.g. ## Title or [Title]) within same PT
+      const curT = getPostTitle(currentPost).trim();
+      if (curT.length > 1) {
+        const escaped = curT.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        // Match exact line heading to prevent "## Daily" from false-matching "## Daily Maintenance"
+        const headingRegex = new RegExp(`^(?:##|###)\\s+${escaped}\\s*$`, 'm');
+        const linkRegex = new RegExp(`\\[${escaped}\\]`, 'i');
+
+        for (const p of samePtPosts) {
+          if (p.id === currentPost.id) continue;
+          if (!isSectionHubPost(p) && !isFolderPost(p)) continue;
+          if (p.content && (headingRegex.test(p.content) || linkRegex.test(p.content))) {
+            return p;
+          }
         }
       }
 
@@ -687,10 +971,11 @@ export function BulletinBoard({
   }, [selectedPost, navHistory, findParentPost, isSectionHubPost]);
 
   // Navigate to specific post and maintain history
-  const navigateToPost = (post: any | null) => {
+  const navigateToPost = (post: any | null, resetHistory: boolean = false) => {
     setIsLibraryActive(false);
     if (post === null) {
       setNavHistory([]);
+      selectedPostRef.current = null;
       setSelectedPost(null);
       setIsEditing(false);
       setIsLibraryActive(false);
@@ -698,7 +983,9 @@ export function BulletinBoard({
         localStorage.removeItem("preplab_active_bulletin_page");
         sessionStorage.removeItem("preplab_cached_selected_post");
         const targetPt = selectedPtFilter !== 'ALL' ? selectedPtFilter : (pt || userUniverse || 'TBP');
-        navigate(`/bulletin/${targetPt}`, { replace: true });
+        const cleanUrl = `/bulletin/${targetPt}`;
+        window.history.replaceState({}, "", cleanUrl);
+        navigate(cleanUrl, { replace: true });
       } catch {}
       return;
     }
@@ -717,7 +1004,14 @@ export function BulletinBoard({
       }
     }
 
+    setForwardHistory([]);
     setNavHistory((prev) => {
+      if (resetHistory) {
+        if (isSectionHubPost(freshPost)) return [freshPost];
+        const parent = findParentPost(freshPost);
+        if (parent && parent.id !== freshPost.id) return [parent, freshPost];
+        return [freshPost];
+      }
       const idx = prev.findIndex((h) => h?.id === freshPost.id);
       if (idx !== -1) {
         // Return to earlier history point
@@ -737,6 +1031,7 @@ export function BulletinBoard({
       return [...prev, freshPost];
     });
 
+    selectedPostRef.current = freshPost;
     setSelectedPost(freshPost);
     setIsEditing(false);
 
@@ -757,7 +1052,9 @@ export function BulletinBoard({
       if (freshPost?.id) {
         localStorage.setItem("preplab_active_bulletin_page", String(freshPost.id));
         const targetPt = selectedPtFilter !== 'ALL' ? selectedPtFilter : (freshPost.pt || pt || userUniverse || 'TBP');
-        navigate(`/bulletin/${targetPt}?page=${encodeURIComponent(String(freshPost.id))}`, { replace: true });
+        const targetUrl = `/bulletin/${targetPt}?page=${encodeURIComponent(String(freshPost.id))}`;
+        window.history.replaceState({}, "", targetUrl);
+        navigate(targetUrl, { replace: true });
       }
     } catch {}
   };
@@ -782,8 +1079,9 @@ export function BulletinBoard({
 
     const defaultContent = `# ${logbookTitle}\n\n*Logbook Terpadu Seksi ${cleanSection}: Menampilkan seluruh kegiatan Routine & Non-Routine yang sedang aktif.*\n\n| Number | Jenis Kegiatan | Keterangan | Created time | Tanggal Selesai | Status | PIC | Priority | Aktivitas | Period | Asal Halaman |\n| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n`;
 
-    const cacheKey = `preplab_logbook_content_${logbookId}`;
-    let savedContent = logbookCacheRef.current[logbookId];
+    const cacheKey = `preplab_logbook_content_${targetUniverse.toLowerCase()}_${logbookId}`;
+    const memKey = `${targetUniverse.toLowerCase()}_${logbookId}`;
+    let savedContent = logbookCacheRef.current[memKey] || logbookCacheRef.current[logbookId];
     if (!savedContent) {
       try {
         savedContent = localStorage.getItem(cacheKey) || '';
@@ -848,7 +1146,8 @@ export function BulletinBoard({
 
       // If user accesses the root Labnote page with no parameters, always show the initial dashboard
       if (!urlPostId && !urlLogbook) {
-        if (selectedPost !== null) {
+        if (selectedPostRef.current !== null) {
+          selectedPostRef.current = null;
           setSelectedPost(null);
           setNavHistory([]);
           setIsLibraryActive(false);
@@ -865,7 +1164,19 @@ export function BulletinBoard({
       // 1. Explicit Post ID from URL (e.g. from notification click ?postId=123&topic=...)
       // Always prioritize urlPostId even if another post was previously active
       if (urlPostId) {
-        if (!selectedPost || String(selectedPost.id) !== String(urlPostId)) {
+        // Skip if already viewing this post
+        if (selectedPostRef.current && String(selectedPostRef.current.id) === String(urlPostId)) {
+          return;
+        }
+
+        // Direct deep link to section logbook
+        if (String(urlPostId).startsWith('logbook-')) {
+          const cleanSec = String(urlPostId).replace(/^logbook-/, '').replace(/-/g, ' ').trim();
+          openSectionLogbook(cleanSec);
+          return;
+        }
+
+        if (!selectedPostRef.current || String(selectedPostRef.current.id) !== String(urlPostId)) {
           let target = posts.find((p) => String(p.id) === String(urlPostId));
           if (!target && String(urlPostId).startsWith('section-')) {
             const cleanSec = String(urlPostId).replace(/^section-/, '').replace(/-/g, ' ').trim();
@@ -893,6 +1204,17 @@ export function BulletinBoard({
             }
             setSelectedPost(target);
             addRecentPost(target.id);
+            if (typeof target.id === 'number' && (!target.content || target.content.length < 50)) {
+              fetch(`/api/bulletin/${target.id}`)
+                .then(res => res.json())
+                .then(json => {
+                  if (json.status === 'success' && json.data?.content) {
+                    setSelectedPost(json.data);
+                    setPosts(prev => prev.map(p => p.id === json.data.id ? json.data : p));
+                  }
+                })
+                .catch(() => {});
+            }
             return;
           }
         }
@@ -910,8 +1232,13 @@ export function BulletinBoard({
       }
 
       // Check if current selectedPost is a dummy fallback (e.g. doc-* or section-*) or not set
-      const isDummySelectedPost = selectedPost && (String(selectedPost.id).startsWith('doc-') || String(selectedPost.id).startsWith('section-'));
-      if (targetId && (!selectedPost || isDummySelectedPost)) {
+      const isDummySelectedPost = selectedPostRef.current && (String(selectedPostRef.current.id).startsWith('doc-') || String(selectedPostRef.current.id).startsWith('section-'));
+      if (targetId && (!selectedPostRef.current || isDummySelectedPost)) {
+        if (String(targetId).startsWith('logbook-')) {
+          const cleanSec = String(targetId).replace(/^logbook-/, '').replace(/-/g, ' ').trim();
+          openSectionLogbook(cleanSec);
+          return;
+        }
         let target = posts.find((p) => String(p.id) === String(targetId));
 
         // If not found by direct ID and targetId is a doc-* slug (e.g. doc-daily-laboratory)
@@ -982,6 +1309,17 @@ export function BulletinBoard({
           }
           setSelectedPost(target);
           addRecentPost(target.id);
+          if (typeof target.id === 'number' && (!target.content || target.content.length < 50)) {
+            fetch(`/api/bulletin/${target.id}`)
+              .then(res => res.json())
+              .then(json => {
+                if (json.status === 'success' && json.data?.content) {
+                  setSelectedPost(json.data);
+                  setPosts(prev => prev.map(p => p.id === json.data.id ? json.data : p));
+                }
+              })
+              .catch(() => {});
+          }
 
           // Update URL if resolved from a doc-* or section-* slug to real numeric ID
           if ((String(targetId).startsWith('doc-') || String(targetId).startsWith('section-')) && target.id) {
@@ -996,7 +1334,7 @@ export function BulletinBoard({
         }
       }
     } catch (e) {}
-  }, [posts, location.search, addRecentPost, selectedPost, openSectionLogbook, canAccessAllSections, userAllowedSections, userProfile]);
+  }, [posts, location.search, addRecentPost, openSectionLogbook, canAccessAllSections, userAllowedSections, userProfile]);
 
   // Listen for direct custom event from notification bell when user clicks while already in bulletin
   useEffect(() => {
@@ -1023,6 +1361,288 @@ export function BulletinBoard({
   }, [posts, navigateToPost]);
 
   // Go back to previous history or parent
+  // Forward history navigation
+  const goForward = () => {
+    if (forwardHistory.length === 0) return;
+    const nextPost = forwardHistory[0];
+    setForwardHistory(f => f.slice(1));
+    navigateToPost(nextPost);
+  };
+
+  // Tab click handler: activate tab and display its content
+  const handleSelectTab = (tab: { tabId: string; postId: string | number | null; title: string; icon?: string; post?: any }, resetHistory: boolean = false) => {
+    setActiveTabId(tab.tabId);
+
+    if (tab.postId === 'library') {
+      openLibraryHub('ALL');
+      return;
+    }
+
+    if (tab.postId === null) {
+      navigateToPost(null, resetHistory);
+      return;
+    }
+
+    if (selectedPost && String(selectedPost.id) === String(tab.postId) && !isEditing) return;
+
+    if (tab.post) {
+      navigateToPost(tab.post, resetHistory);
+      return;
+    }
+
+    const found = posts.find(p => String(p.id) === String(tab.postId));
+    if (found) {
+      navigateToPost(found, resetHistory);
+      return;
+    }
+
+    // Check if it's a section hub (e.g. section-preparasi or logbook-preparasi)
+    if (String(tab.postId).startsWith('section-') || String(tab.postId).startsWith('logbook-')) {
+      const cleanSec = String(tab.postId).replace(/^(section-|logbook-)/, '').replace(/-/g, ' ').trim();
+      openSectionLogbook(cleanSec);
+      return;
+    }
+
+    // Fallback load
+    fetch(`/api/bulletin/${tab.postId}`)
+      .then(res => res.json())
+      .then(json => {
+        if (json.status === 'success' && json.data) {
+          navigateToPost(json.data, resetHistory);
+        } else {
+          toast.error('Halaman tidak ditemukan');
+          handleCloseTab(tab.tabId);
+        }
+      })
+      .catch(() => {
+        handleCloseTab(tab.tabId);
+      });
+  };
+
+  // Tab close handler
+  const handleCloseTab = (tabIdToClose: string, e?: React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+
+    setOpenTabs(prev => {
+      const targetIdx = prev.findIndex(t => t.tabId === tabIdToClose);
+      if (targetIdx === -1) return prev;
+
+      // If it's the last remaining tab, reset it to Dashboard instead of closing
+      if (prev.length === 1) {
+        const resetTab = {
+          tabId: prev[0].tabId,
+          postId: null,
+          title: 'Dashboard',
+          icon: '🏠',
+          post: null
+        };
+        navigateToPost(null, true);
+        return [resetTab];
+      }
+
+      const remaining = prev.filter(t => t.tabId !== tabIdToClose);
+
+      // If closing currently active tab, calculate next tab to switch to
+      if (activeTabId === tabIdToClose) {
+        const nextActive = remaining[Math.max(0, targetIdx - 1)] || remaining[0];
+        if (nextActive) {
+          setActiveTabId(nextActive.tabId);
+          setTimeout(() => {
+            handleSelectTab(nextActive, true);
+          }, 0);
+        }
+      }
+
+      return remaining;
+    });
+  };
+
+  // Explicitly create a new tab and focus on it (Dashboard / New Workspace)
+  const handleNewTab = () => {
+    const newTabId = 'tab_' + Date.now();
+    const newTab = {
+      tabId: newTabId,
+      postId: null,
+      title: 'Dashboard',
+      icon: '🏠',
+      post: null
+    };
+
+    setOpenTabs(prev => {
+      if (prev.length >= 12) {
+        toast.info('Maksimal 12 tab dapat dibuka bersamaan');
+        return prev;
+      }
+      return [...prev, newTab];
+    });
+
+    setActiveTabId(newTabId);
+    navigateToPost(null, true);
+  };
+
+  
+  // Open post in a new Notion-style in-app tab
+  const openInNewNotionTab = (targetPost: any) => {
+    if (!targetPost) return;
+    const newTabId = 'tab_' + Date.now();
+    const title = getPostTitle(targetPost) || targetPost.title || 'Dokumen';
+    const icon = getNotionIcon(targetPost) || targetPost.icon || '📝';
+    const newTab = {
+      tabId: newTabId,
+      postId: targetPost.id,
+      title: typeof title === 'string' ? title : 'Dokumen',
+      icon: typeof icon === 'string' ? icon : '📝',
+      post: targetPost
+    };
+
+    setOpenTabs(prev => {
+      const existing = prev.find(t => String(t.postId) === String(targetPost.id));
+      if (existing) {
+        setActiveTabId(existing.tabId);
+        navigateToPost(targetPost, true);
+        return prev;
+      }
+      if (prev.length >= 12) {
+        toast.info('Maksimal 12 tab dapat dibuka bersamaan');
+        return prev;
+      }
+      return [...prev, newTab];
+    });
+
+    setActiveTabId(newTabId);
+    navigateToPost(targetPost, true);
+  };
+
+  // Duplicate document handler
+  const handleDuplicatePost = async (sourcePost: any) => {
+    if (!sourcePost) return;
+    const toastId = toast.loading('Menduplikasi dokumen...');
+    try {
+      const copyTitle = `${getPostTitle(sourcePost)} (Salinan)`;
+      const res = await fetch('/api/bulletin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...sourcePost,
+          id: undefined,
+          title: copyTitle,
+          createdAt: new Date().toISOString()
+        })
+      });
+      const json = await res.json();
+      if (json.status === 'success' && json.data) {
+        toast.dismiss(toastId);
+        toast.success(`Berhasil menduplikasi "${copyTitle}"`);
+        setPosts(prev => [json.data, ...prev]);
+        openInNewNotionTab(json.data);
+      } else {
+        toast.dismiss(toastId);
+        toast.error('Gagal menduplikasi dokumen');
+      }
+    } catch {
+      toast.dismiss(toastId);
+      toast.error('Gagal menduplikasi dokumen');
+    }
+  };
+
+  // Right-click context menu on Horizontal Notion Tab
+  const handleTabContextMenu = (e: React.MouseEvent, tab: { tabId: string; postId: string | number | null; title: string; icon?: string; post?: any }) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const targetPost = tab.post || posts.find(p => String(p.id) === String(tab.postId));
+    const isFav = targetPost?.id ? isPostFavorite(targetPost.id) : false;
+
+    setNotionContextMenu({
+      x: e.clientX,
+      y: e.clientY,
+      title: tab.title,
+      icon: tab.icon || '📝',
+      post: targetPost,
+      isTabContext: true,
+      isFavorite: isFav,
+      onOpen: () => handleSelectTab(tab),
+      onOpenInNewBrowserTab: () => {
+        if (targetPost) {
+          const pt = targetPost.pt || 'TBP';
+          const pId = targetPost.id;
+          const url = pId ? `/bulletin/${pt}?page=${encodeURIComponent(String(pId))}` : `/bulletin/${pt}`;
+          window.open(url, '_blank');
+        } else if (tab.postId) {
+          window.open(`/bulletin/TBP?page=${encodeURIComponent(String(tab.postId))}`, '_blank');
+        } else {
+          window.open('/bulletin/TBP', '_blank');
+        }
+      },
+      onCopyLink: () => {
+        const pt = targetPost?.pt || 'TBP';
+        const pId = targetPost?.id || tab.postId;
+        const fullUrl = pId
+          ? `${window.location.origin}/bulletin/${pt}?page=${encodeURIComponent(String(pId))}`
+          : `${window.location.origin}/bulletin/${pt}`;
+        navigator.clipboard.writeText(fullUrl);
+        toast.success('Tautan tab disalin ke clipboard!');
+      },
+      onCloseTab: () => handleCloseTab(tab.tabId),
+      onCloseOtherTabs: () => {
+        setOpenTabs([tab]);
+        setActiveTabId(tab.tabId);
+        toast.info('Tab lainnya telah ditutup');
+      }
+    });
+  };
+
+  // Right-click context menu on Sidebar Post / Document
+  const handleSidebarPostContextMenu = (e: React.MouseEvent, postItem: any) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const isFav = postItem?.id ? isPostFavorite(postItem.id) : false;
+    const title = getPostTitle(postItem);
+    const icon = getNotionIcon(postItem);
+
+    setNotionContextMenu({
+      x: e.clientX,
+      y: e.clientY,
+      title: title,
+      icon: typeof icon === 'string' ? icon : '📄',
+      post: postItem,
+      isFavorite: isFav,
+      onOpen: () => {
+        addRecentPost(postItem.id);
+        navigateToPost(postItem);
+      },
+      onOpenInNewNotionTab: () => openInNewNotionTab(postItem),
+      onOpenInNewBrowserTab: () => {
+        const pt = postItem.pt || 'TBP';
+        const pId = postItem.id;
+        const url = pId ? `/bulletin/${pt}?page=${encodeURIComponent(String(pId))}` : `/bulletin/${pt}`;
+        window.open(url, '_blank');
+      },
+      onCopyLink: () => {
+        const pt = postItem.pt || 'TBP';
+        const pId = postItem.id;
+        const fullUrl = `${window.location.origin}/bulletin/${pt}?page=${encodeURIComponent(String(pId))}`;
+        navigator.clipboard.writeText(fullUrl);
+        toast.success('Tautan disalin ke clipboard!');
+      },
+      onToggleFavorite: postItem.id ? () => {
+        const next = togglePostFavorite(postItem.id, title);
+        setNotionContextMenu(prev => prev ? { ...prev, isFavorite: next } : null);
+      } : undefined,
+      onDuplicate: () => handleDuplicatePost(postItem),
+      canDelete: Boolean(isDev || postItem.authorName === userProfile?.name || postItem.authorNik === inspectorNik),
+      onDelete: () => {
+        if (typeof postItem.id === 'number') {
+          deletePost(postItem.id);
+        }
+      }
+    });
+  };
+
   const goBack = () => {
     if (isEditing) {
       setIsEditing(false);
@@ -1035,6 +1655,9 @@ export function BulletinBoard({
     if (navHistory.length > 1) {
       const newHistory = navHistory.slice(0, -1);
       const previousPost = newHistory[newHistory.length - 1];
+      if (selectedPost) {
+        setForwardHistory(f => [selectedPost, ...f.slice(0, 9)]);
+      }
       setNavHistory(newHistory);
       setSelectedPost(previousPost);
       setIsEditing(false);
@@ -1051,9 +1674,8 @@ export function BulletinBoard({
       return;
     }
 
-    // 2. If navHistory is 1 or empty (e.g. user refreshed or arrived via direct URL),
-    // find the dynamic parent post so we don't jump directly to home!
-    if (selectedPost) {
+    // 2. If navHistory is 1 or empty and current post is NOT a Section Hub, try to navigate to its parent post
+    if (selectedPost && !isSectionHubPost(selectedPost)) {
       const parent = findParentPost(selectedPost);
       if (parent && String(parent.id) !== String(selectedPost.id)) {
         navigateToPost(parent);
@@ -1061,7 +1683,7 @@ export function BulletinBoard({
       }
     }
 
-    // 3. Otherwise (already at Section Hub or root), go directly back to dashboard
+    // 3. Otherwise (Section Hub, or root document, or no parent), return directly to Dashboard!
     navigateToPost(null);
   };
 
@@ -1150,7 +1772,7 @@ export function BulletinBoard({
             category: editCategory,
             title: editTitle,
             content: finalContent,
-            pt: pt || "TBP",
+            pt: (selectedPtFilter === 'GTS' || pt === 'GTS') ? 'GTS' : (selectedPtFilter || pt || 'TBP'),
             authorNik: inspectorNik,
             authorName: inspectorName,
           }),
@@ -1200,7 +1822,11 @@ export function BulletinBoard({
         }),
       });
       setSelectedPost((prev: any) => prev ? { ...prev, content: newContent } : null);
-      setPosts((prev) => prev.map((p) => p.id === selectedPost.id ? { ...p, content: newContent } : p));
+      selectedPostRef.current = { ...selectedPost, content: newContent };
+      try {
+        sessionStorage.setItem("preplab_cached_selected_post", JSON.stringify(selectedPostRef.current));
+      } catch {}
+      setPosts((prev) => prev.map((p) => String(p.id) === String(selectedPost.id) ? { ...p, content: newContent } : p));
       toast.success("Tabel topik berhasil dibuat!", { id: "init-table" });
     } catch (e) {
       toast.error("Gagal membuat tabel", { id: "init-table" });
@@ -1610,7 +2236,7 @@ export function BulletinBoard({
 
 **📅 Tanggal & Waktu**: ${new Date(aiMeetingDate).toLocaleString("id-ID", { dateStyle: "full", timeStyle: "short" })}  
 **👤 PIC / Pemimpin Rapat**: ${aiMeetingPic || inspectorName}  
-**🏢 Departemen**: Preparation & Laboratory (PT. TBP & GPS)  
+**🏢 Departemen**: Preparation & Laboratory (${selectedPtFilter === 'GTS' ? 'PT. Gane Tambang Sentosa - Site Fluk' : 'PT. TBP & GPS'})  
 **🤖 AI Status**: *Teringkas Otomatis oleh AI Assistant*
 
 ---
@@ -1656,6 +2282,7 @@ ${aiMeetingNotes
     try {
       // 1. Save to Agenda if checked
       if (saveToAgenda) {
+        const activeUniverse = (selectedPtFilter === 'GTS' || pt === 'GTS') ? 'GTS' : 'TBP_GPS';
         await fetch("/api/agenda", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -1668,6 +2295,8 @@ ${aiMeetingNotes
             deskripsi: finalContent,
             creatorNik: inspectorNik,
             department: "Prep & Lab",
+            universe: activeUniverse,
+            pt: (selectedPtFilter === 'GTS' || pt === 'GTS') ? 'GTS' : 'TBP',
           }),
         });
         fetchAgenda();
@@ -1675,6 +2304,7 @@ ${aiMeetingNotes
 
       // 2. Save to Bulletin if checked
       if (saveToBulletin) {
+        const activePt = (selectedPtFilter === 'GTS' || pt === 'GTS') ? 'GTS' : (selectedPtFilter || pt || 'TBP');
         const res = await fetch("/api/bulletin", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -1683,7 +2313,7 @@ ${aiMeetingNotes
             category: "MEETING",
             title: `[MEETING] ${aiMeetingTitle}`,
             content: finalContent,
-            pt: pt || "TBP",
+            pt: activePt,
             authorNik: inspectorNik,
             authorName: inspectorName,
           }),
@@ -2129,6 +2759,7 @@ ${aiMeetingNotes
                         addRecentPost(post.id);
                         navigateToPost(post);
                       }}
+                      onContextMenu={(e) => handleSidebarPostContextMenu(e, post)}
                       className={`flex items-center gap-2.5 px-2 py-1.5 text-xs rounded-md cursor-pointer transition-all ${
                         isSelected
                           ? "font-medium shadow-xs"
@@ -2181,254 +2812,339 @@ ${aiMeetingNotes
 
       {/* Main Content Area */}
       <div 
-        className="flex-1 flex flex-col h-full relative overflow-y-auto transition-colors"
+        className="flex-1 flex flex-col h-full overflow-hidden transition-colors"
         style={{
           backgroundColor: 'var(--bg-main, #ffffff)',
           color: 'var(--text-main, #1e293b)'
         }}
       >
-        {/* Topbar with Hierarchical Navigation */}
+        {/* Top Header: Navigation, Notion Tabs & Breadcrumb Subbar (Fixed at top, never scrolls away) */}
         <div 
-          className="h-12 border-b flex items-center px-4 justify-between sticky top-0 backdrop-blur-md z-40 transition-colors shadow-2xs"
+          className="flex-shrink-0 z-30 border-b select-none flex flex-col transition-colors shadow-2xs"
           style={{
             backgroundColor: 'var(--card-bg, #ffffff)',
             borderColor: 'var(--border-main, #e2e8f0)',
             color: 'var(--text-main, #1e293b)'
           }}
         >
-          <div className="flex items-center gap-2 overflow-hidden flex-1 mr-2">
-            {/* Toggle Sidebar Button (Tombol Garis 3) */}
-            <button
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="p-1.5 rounded-lg hover:bg-white/10 transition-all cursor-pointer flex items-center justify-center shrink-0"
-              style={{ 
-                color: sidebarOpen ? 'var(--primary, #2A9D8F)' : 'var(--text-muted, #94a3b8)',
-                backgroundColor: sidebarOpen ? 'rgba(42, 157, 143, 0.15)' : 'transparent'
-              }}
-              title={sidebarOpen ? "Sembunyikan Sidebar" : "Buka Sidebar (Garis 3)"}
-            >
-              <Menu className="w-4 h-4" />
-            </button>
-
-            {/* Back Button (Only when inside a document or editing) */}
-            {(selectedPost || isEditing) && (
+          {/* Row 1: Notion-Style Tabs Header */}
+          <div
+            className="h-10 border-b flex items-center px-2 transition-colors gap-1.5 overflow-x-auto no-scrollbar"
+            style={{
+              backgroundColor: 'var(--input-bg, #f1f5f9)',
+              borderColor: 'var(--border-main, #e2e8f0)',
+              color: 'var(--text-main, #1e293b)'
+            }}
+          >
+            {/* Sidebar Toggle & Navigation Arrows (< and >) */}
+            <div className="flex items-center gap-1 shrink-0 pr-2 border-r border-[var(--border-main,rgba(148,163,184,0.3))]">
+              <button
+                onClick={() => setSidebarOpen(!sidebarOpen)}
+                className={`p-1 px-2.5 rounded-md transition-all flex items-center gap-1.5 font-medium text-xs cursor-pointer ${
+                  sidebarOpen
+                    ? 'hover:bg-black/5 dark:hover:bg-white/10 text-[var(--text-muted,#64748b)] hover:text-[var(--text-main,#1e293b)]'
+                    : 'bg-teal-600 text-white hover:bg-teal-700 shadow-xs'
+                }`}
+                title={sidebarOpen ? "Tutup Sidebar Menu" : "Buka Sidebar Menu (Garis 3)"}
+              >
+                <Menu className="w-3.5 h-3.5 shrink-0" />
+                <span className="text-[11px] font-semibold">{sidebarOpen ? "Menu" : "Buka Menu"}</span>
+              </button>
               <button
                 onClick={goBack}
-                className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border transition-all shadow-xs group cursor-pointer"
-                style={{
-                  backgroundColor: 'var(--input-bg, #282828)',
-                  borderColor: 'var(--border-main, #334155)',
-                  color: 'var(--text-main, #cbd5e1)'
-                }}
-                title={`Kembali ke ${immediateParentTitle} (Esc / Alt+←)`}
+                disabled={!selectedPost && !isLibraryActive && navHistory.length <= 1}
+                className="h-7 w-7 rounded-lg border border-slate-300/80 dark:border-slate-700 bg-white/90 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-all flex items-center justify-center shadow-2xs disabled:opacity-35 disabled:cursor-not-allowed disabled:bg-slate-100/50 dark:disabled:bg-slate-800/40 disabled:border-slate-200 dark:disabled:border-slate-800 disabled:text-slate-400 cursor-pointer shrink-0"
+                title="Kembali ke halaman sebelumnya (<)"
               >
-                <ArrowLeft className="w-3.5 h-3.5 text-teal-400 group-hover:-translate-x-0.5 transition-transform" />
-                <span className="hidden sm:inline font-semibold">Kembali</span>
+                <ChevronLeft className="w-4 h-4 shrink-0 stroke-[2.5]" />
               </button>
-            )}
-
-            {/* Interactive Breadcrumb Hierarchy */}
-            <nav
-              aria-label="Breadcrumb"
-              className="flex items-center text-xs gap-1 overflow-x-auto no-scrollbar py-1"
-              style={{ color: 'var(--text-muted, #94a3b8)' }}
-            >
-              {/* Root Dashboard Link */}
               <button
-                onClick={() => {
-                  setIsLibraryActive(false);
-                  navigateToPost(null);
-                }}
-                className="flex items-center gap-1 px-1.5 py-1 rounded-md transition-colors flex-shrink-0 cursor-pointer hover:opacity-80"
-                style={{
-                  color: (!selectedPost && !isEditing && !isLibraryActive) ? 'var(--primary, #2A9D8F)' : 'var(--text-muted, #94a3b8)',
-                  fontWeight: (!selectedPost && !isEditing && !isLibraryActive) ? 'bold' : 'normal'
-                }}
+                onClick={goForward}
+                disabled={forwardHistory.length === 0}
+                className="h-7 w-7 rounded-lg border border-slate-300/80 dark:border-slate-700 bg-white/90 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-all flex items-center justify-center shadow-2xs disabled:opacity-35 disabled:cursor-not-allowed disabled:bg-slate-100/50 dark:disabled:bg-slate-800/40 disabled:border-slate-200 dark:disabled:border-slate-800 disabled:text-slate-400 cursor-pointer shrink-0"
+                title="Maju ke halaman berikutnya (>)"
               >
-                <Home className="w-3.5 h-3.5" />
-                <span>Dashboard</span>
+                <ChevronRight className="w-4 h-4 shrink-0 stroke-[2.5]" />
               </button>
+            </div>
 
-              {isLibraryActive && (
-                <>
-                  <ChevronRight className="w-3 h-3 opacity-40 flex-shrink-0" />
-                  <span className="px-1.5 py-0.5 rounded-md text-amber-400 font-bold bg-amber-500/10 border border-amber-500/30 flex items-center gap-1">
-                    <BookOpen className="w-3 h-3" />
-                    <span>Company Library</span>
-                  </span>
-                </>
-              )}
-
-              {/* Breadcrumb Steps */}
-              {breadcrumbTrail.map((crumb, idx) => {
-                const isLast = idx === breadcrumbTrail.length - 1 && !isEditing;
-                const crumbTitle = getPostTitle(crumb);
-
+            {/* Horizontal Scrollable Tabs Strip */}
+            <div className="flex items-center gap-1 overflow-x-auto no-scrollbar flex-1 h-full pt-1">
+              {openTabs.map((tab) => {
+                const isActive = tab.tabId === activeTabId;
+                const canClose = openTabs.length > 1 || tab.postId !== null;
                 return (
-                  <React.Fragment key={crumb.id || idx}>
-                    <ChevronRight className="w-3 h-3 opacity-40 flex-shrink-0" />
-                    <button
-                      onClick={() => navigateToPost(crumb)}
-                      disabled={isLast}
-                      className="px-1.5 py-1 rounded-md truncate max-w-[160px] transition-colors"
-                      style={{
-                        color: isLast ? 'var(--primary, #2dd4bf)' : 'var(--text-muted, #94a3b8)',
-                        fontWeight: isLast ? '600' : 'normal',
-                        backgroundColor: isLast ? 'var(--input-bg, rgba(30, 60, 47, 0.4))' : 'transparent',
-                        border: isLast ? '1px solid var(--border-main, rgba(20, 184, 166, 0.3))' : 'none',
-                        cursor: isLast ? 'default' : 'pointer'
-                      }}
-                      title={translateDisplayText(crumbTitle)}
-                    >
-                      {translateDisplayText(crumbTitle)}
-                    </button>
-                  </React.Fragment>
+                  <div
+                    key={tab.tabId}
+                    onClick={() => handleSelectTab(tab)}
+                    onContextMenu={(e) => handleTabContextMenu(e, tab)}
+                    className={`group relative h-8 px-3 rounded-t-lg flex items-center gap-1.5 text-xs transition-all cursor-pointer border-t border-x shrink-0 max-w-[210px] ${
+                      isActive
+                        ? 'bg-[var(--card-bg,#ffffff)] text-[var(--text-main,#1e293b)] font-semibold border-[var(--border-main,#e2e8f0)] shadow-2xs z-10'
+                        : 'bg-transparent text-[var(--text-muted,#64748b)] hover:text-[var(--text-main,#1e293b)] hover:bg-black/5 dark:hover:bg-white/5 border-transparent'
+                    }`}
+                    title={tab.title}
+                  >
+                    <span className="text-xs shrink-0">{tab.icon || '📝'}</span>
+                    <span className="truncate flex-1 text-[11.5px]">{tab.title}</span>
+                    {canClose && (
+                      <button
+                        onClick={(e) => handleCloseTab(tab.tabId, e)}
+                        className={`p-0.5 rounded-md hover:bg-black/10 dark:hover:bg-white/20 text-[var(--text-muted,#64748b)] hover:text-[var(--text-main,#1e293b)] transition-opacity ${
+                          isActive ? 'opacity-70 hover:opacity-100' : 'opacity-0 group-hover:opacity-70 hover:opacity-100'
+                        }`}
+                        title="Tutup Tab"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    )}
+                  </div>
                 );
               })}
 
-              {isEditing && (
-                <>
-                  <ChevronRight className="w-3 h-3 opacity-40 flex-shrink-0" />
-                  <span className="text-amber-300 font-medium px-1.5 py-0.5 bg-amber-950/40 rounded border border-amber-600/30">
-                    {selectedPost ? "Edit Mode" : "New Page"}
-                  </span>
-                </>
-              )}
-            </nav>
+              {/* New Tab Button (+) */}
+              <button
+                onClick={handleNewTab}
+                className="p-1.5 rounded-md hover:bg-black/5 dark:hover:bg-white/10 text-[var(--text-muted,#64748b)] hover:text-[var(--text-main,#1e293b)] transition-colors cursor-pointer shrink-0 ml-0.5"
+                title="Buka Tab Baru (+)"
+              >
+                <Plus className="w-3.5 h-3.5" />
+              </button>
+            </div>
           </div>
 
-          {/* Action Buttons */}
-          <div className="flex items-center gap-2 flex-shrink-0">
-            {/* Direct Jump to Log Book Section */}
-            <div className="relative">
-              <button
-                onClick={() => {
-                  if (selectedPost && !isLogbookPost(selectedPost)) {
-                    const sec = getSectionFromPost(selectedPost);
-                    openSectionLogbook(sec);
-                  } else {
-                    setShowLogbookDropdown(prev => !prev);
-                  }
-                }}
-                className={`px-2.5 py-1 rounded-lg border text-xs flex items-center gap-1.5 transition-all shadow-xs cursor-pointer ${
-                  isLogbookPost(selectedPost)
-                    ? 'bg-teal-600 border-teal-500 text-white font-bold shadow-teal-900/30'
-                    : 'bg-slate-800/60 border-slate-700 text-slate-300 hover:text-white hover:border-teal-500/50'
-                }`}
-                title="Buka Log Book Seksi Terpadu (Routine & Non-Routine Aktif)"
-              >
-                <ClipboardList className="w-3.5 h-3.5 text-teal-400" />
-                <span className="hidden md:inline">
-                  {isLogbookPost(selectedPost) ? `Logbook ${getSectionFromPost(selectedPost)}` : 'Log Book'}
-                </span>
-                <ChevronDown className="w-3 h-3 text-slate-400" />
-              </button>
+          {/* Row 2: Subbar (Breadcrumbs Hierarchy & Page Actions) */}
+          <div 
+            className="h-10 flex items-center px-4 justify-between transition-colors shadow-2xs"
+            style={{
+              backgroundColor: 'var(--card-bg, #ffffff)',
+              borderColor: 'var(--border-main, #e2e8f0)',
+              color: 'var(--text-main, #1e293b)'
+            }}
+          >
+            <div className="flex items-center gap-2 overflow-hidden flex-1 mr-2">
+              {/* Quick Sidebar Toggle in Breadcrumb row if closed */}
+              {!sidebarOpen && (
+                <button
+                  onClick={() => setSidebarOpen(true)}
+                  className="mr-1 p-1 rounded-md text-teal-600 hover:bg-teal-50 dark:hover:bg-white/10 transition-colors flex items-center gap-1 cursor-pointer shrink-0"
+                  title="Buka Sidebar Menu (Garis 3)"
+                >
+                  <Menu className="w-4 h-4" />
+                </button>
+              )}
 
-              {/* Logbook Section Quick Dropdown */}
-              {showLogbookDropdown && (
-                <div 
-                  className="absolute right-0 mt-1 w-56 rounded-xl border shadow-xl py-1 z-50 animate-in fade-in zoom-in-95 duration-100"
+              {/* Interactive Breadcrumb Hierarchy */}
+              <nav
+                aria-label="Breadcrumb"
+                className="flex items-center text-xs gap-1 overflow-x-auto no-scrollbar py-1"
+                style={{ color: 'var(--text-muted, #94a3b8)' }}
+              >
+                {/* Root Dashboard Link */}
+                <button
+                  onClick={() => {
+                    setIsLibraryActive(false);
+                    navigateToPost(null);
+                  }}
+                  className="flex items-center gap-1 px-1.5 py-1 rounded-md transition-colors flex-shrink-0 cursor-pointer hover:opacity-80"
                   style={{
-                    backgroundColor: 'var(--card-bg, #1e293b)',
-                    borderColor: 'var(--border-main, #334155)'
+                    color: (!selectedPost && !isEditing && !isLibraryActive) ? 'var(--primary, #2A9D8F)' : 'var(--text-muted, #94a3b8)',
+                    fontWeight: (!selectedPost && !isEditing && !isLibraryActive) ? 'bold' : 'normal'
                   }}
                 >
-                  <div className="px-3 py-1.5 border-b text-[11px] font-bold uppercase tracking-wider text-teal-400 flex items-center justify-between" style={{ borderColor: 'var(--border-main, #334155)' }}>
-                    <span>Pilih Logbook Seksi</span>
-                    <button onClick={() => setShowLogbookDropdown(false)} className="text-slate-400 hover:text-white">
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                  <div className="py-1 max-h-64 overflow-y-auto">
-                    {dropdownSections.map((sec) => (
+                  <Home className="w-3.5 h-3.5" />
+                  <span>Dashboard</span>
+                </button>
+
+                {isLibraryActive && (
+                  <>
+                    <ChevronRight className="w-3 h-3 opacity-40 flex-shrink-0" />
+                    <span className="px-1.5 py-0.5 rounded-md text-amber-400 font-bold bg-amber-500/10 border border-amber-500/30 flex items-center gap-1">
+                      <BookOpen className="w-3 h-3" />
+                      <span>Company Library</span>
+                    </span>
+                  </>
+                )}
+
+                {/* Breadcrumb Steps */}
+                {breadcrumbTrail.map((crumb, idx) => {
+                  const isLast = idx === breadcrumbTrail.length - 1 && !isEditing;
+                  const crumbTitle = getPostTitle(crumb);
+
+                  return (
+                    <React.Fragment key={crumb.id || idx}>
+                      <ChevronRight className="w-3 h-3 opacity-40 flex-shrink-0" />
                       <button
-                        key={sec}
-                        onClick={() => openSectionLogbook(sec)}
-                        className="w-full text-left px-3 py-2 text-xs hover:bg-teal-500/10 hover:text-teal-300 transition-colors flex items-center gap-2 text-slate-200 cursor-pointer"
+                        onClick={() => navigateToPost(crumb)}
+                        disabled={isLast}
+                        className="px-1.5 py-1 rounded-md truncate max-w-[160px] transition-colors"
+                        style={{
+                          color: isLast ? 'var(--primary, #2dd4bf)' : 'var(--text-muted, #94a3b8)',
+                          fontWeight: isLast ? '600' : 'normal',
+                          backgroundColor: isLast ? 'var(--input-bg, rgba(30, 60, 47, 0.4))' : 'transparent',
+                          border: isLast ? '1px solid var(--border-main, rgba(20, 184, 166, 0.3))' : 'none',
+                          cursor: isLast ? 'default' : 'pointer'
+                        }}
+                        title={translateDisplayText(crumbTitle)}
                       >
-                        <span className="text-sm">📔</span>
-                        <span className="font-medium">Logbook {sec}</span>
+                        {translateDisplayText(crumbTitle)}
                       </button>
-                    ))}
-                  </div>
-                  <div className="border-t pt-1 px-1" style={{ borderColor: 'var(--border-main, #334155)' }}>
-                    <button
-                      onClick={() => {
-                        setShowLogbookDropdown(false);
-                        navigate('/logbook');
-                      }}
-                      className="w-full text-left px-3 py-1.5 text-[11px] text-slate-400 hover:text-white hover:bg-slate-700/50 rounded-lg flex items-center gap-1.5"
-                    >
-                      <span>📊 Buka Halaman Logbook Penuh</span>
-                    </button>
-                  </div>
-                </div>
-              )}
+                    </React.Fragment>
+                  );
+                })}
+
+                {isEditing && (
+                  <>
+                    <ChevronRight className="w-3 h-3 opacity-40 flex-shrink-0" />
+                    <span className="text-amber-300 font-medium px-1.5 py-0.5 bg-amber-950/40 rounded border border-amber-600/30">
+                      {selectedPost ? "Edit Mode" : "New Page"}
+                    </span>
+                  </>
+                )}
+              </nav>
             </div>
 
-            {selectedPost && !isEditing && (
-              <>
+            {/* Action Buttons */}
+            <div className="flex items-center gap-2 flex-shrink-0">
+              {/* Direct Jump to Log Book Section */}
+              <div className="relative">
                 <button
                   onClick={() => {
-                    const rawContent = cleanLegacyMenuInfo(getRenderableContent(selectedPost));
-                    setEditTitle(selectedPost.title || "");
-                    setEditCategory(selectedPost.category || "");
-                    setEditContent(rawContent);
-
-                    const tbl = extractMarkdownTable(rawContent);
-                    if (tbl) {
-                      setEditBeforeTable(cleanLegacyMenuInfo(tbl.beforeText).trim());
-                      setEditAfterTable(cleanLegacyMenuInfo(tbl.afterText).trim());
-                      setEditTableRaw(tbl.rawTable);
-                      setEditTableHeaders(tbl.headers);
-                      setEditTableRowCount(tbl.rows.length);
+                    if (selectedPost && !isLogbookPost(selectedPost)) {
+                      const sec = getSectionFromPost(selectedPost);
+                      openSectionLogbook(sec);
                     } else {
-                      setEditBeforeTable(cleanLegacyMenuInfo(rawContent).trim());
-                      setEditAfterTable("");
-                      setEditTableRaw(null);
-                      setEditTableHeaders([]);
-                      setEditTableRowCount(0);
+                      setShowLogbookDropdown(prev => !prev);
                     }
-                    setEditorMode('wysiwyg');
-                    setIsEditing(true);
                   }}
-                  className="p-1.5 text-slate-400 hover:text-blue-400 rounded-md hover:bg-slate-800 transition-colors"
-                  title="Edit Halaman"
+                  className={`px-2.5 py-1 rounded-lg border text-xs flex items-center gap-1.5 transition-all shadow-xs cursor-pointer ${
+                    isLogbookPost(selectedPost)
+                      ? 'bg-teal-600 border-teal-500 text-white font-bold shadow-teal-900/30'
+                      : 'bg-slate-800/60 border-slate-700 text-slate-300 hover:text-white hover:border-teal-500/50'
+                  }`}
+                  title="Buka Log Book Seksi Terpadu (Routine & Non-Routine Aktif)"
                 >
-                  <Edit2 className="w-4 h-4" />
+                  <ClipboardList className="w-3.5 h-3.5 text-teal-400" />
+                  <span className="hidden md:inline">
+                    {isLogbookPost(selectedPost) ? `Logbook ${getSectionFromPost(selectedPost)}` : 'Log Book'}
+                  </span>
+                  <ChevronDown className="w-3 h-3 text-slate-400" />
                 </button>
-                <button
-                  onClick={() => deletePost(selectedPost.id)}
-                  className="p-1.5 text-slate-400 hover:text-red-400 rounded-md hover:bg-slate-800 transition-colors"
-                  title="Hapus Halaman"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </>
-            )}
-            {isEditing && (
-              <>
-                <Button
-                  onClick={() => {
-                    setIsEditing(false);
-                    if (!selectedPost) setEditTitle("");
-                  }}
-                  variant="secondary"
-                  className="h-7 text-xs px-2.5 shadow-sm border border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700"
-                >
-                  <X className="w-3 h-3 mr-1" /> Batal
-                </Button>
-                <Button
-                  onClick={handleSavePost}
-                  className="h-7 text-xs px-3 shadow-sm bg-teal-600 hover:bg-teal-700 text-white font-medium"
-                >
-                  <Check className="w-3 h-3 mr-1" /> Simpan
-                </Button>
-              </>
-            )}
+
+                {/* Logbook Section Quick Dropdown */}
+                {showLogbookDropdown && (
+                  <div 
+                    className="absolute right-0 mt-1 w-56 rounded-xl border shadow-xl py-1 z-50 animate-in fade-in zoom-in-95 duration-100"
+                    style={{
+                      backgroundColor: 'var(--card-bg, #1e293b)',
+                      borderColor: 'var(--border-main, #334155)'
+                    }}
+                  >
+                    <div className="px-3 py-1.5 border-b text-[11px] font-bold uppercase tracking-wider text-teal-400 flex items-center justify-between" style={{ borderColor: 'var(--border-main, #334155)' }}>
+                      <span>Pilih Logbook Seksi</span>
+                      <button onClick={() => setShowLogbookDropdown(false)} className="text-slate-400 hover:text-white">
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+
+                    <div className="max-h-60 overflow-y-auto py-1">
+                      {KNOWN_SECTIONS.map((sec) => (
+                        <button
+                          key={sec}
+                          onClick={() => {
+                            setShowLogbookDropdown(false);
+                            openSectionLogbook(sec);
+                          }}
+                          className={`w-full text-left px-3 py-2 text-xs flex items-center gap-2 hover:bg-slate-700/50 transition-colors ${
+                            selectedPost && getSectionFromPost(selectedPost) === sec ? 'text-teal-400 font-bold bg-teal-500/10' : 'text-slate-200'
+                          }`}
+                        >
+                          <span className="text-sm">📔</span>
+                          <span>Logbook {sec}</span>
+                        </button>
+                      ))}
+                    </div>
+                    <div className="border-t pt-1 px-1" style={{ borderColor: 'var(--border-main, #334155)' }}>
+                      <button
+                        onClick={() => {
+                          setShowLogbookDropdown(false);
+                          navigate('/logbook');
+                        }}
+                        className="w-full text-left px-3 py-1.5 text-[11px] text-slate-400 hover:text-white hover:bg-slate-700/50 rounded-lg flex items-center gap-1.5"
+                      >
+                        <span>📊 Buka Halaman Logbook Penuh</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {selectedPost && !isEditing && (
+                <>
+                  <button
+                    onClick={() => {
+                      const rawContent = cleanLegacyMenuInfo(getRenderableContent(selectedPost));
+                      setEditTitle(selectedPost.title || "");
+                      setEditCategory(selectedPost.category || "");
+                      setEditContent(rawContent);
+
+                      const tbl = extractMarkdownTable(rawContent);
+                      if (tbl) {
+                        setEditBeforeTable(cleanLegacyMenuInfo(tbl.beforeText).trim());
+                        setEditAfterTable(cleanLegacyMenuInfo(tbl.afterText).trim());
+                        setEditTableRaw(tbl.rawTable);
+                        setEditTableHeaders(tbl.headers);
+                        setEditTableRowCount(tbl.rows.length);
+                      } else {
+                        setEditBeforeTable(cleanLegacyMenuInfo(rawContent).trim());
+                        setEditAfterTable("");
+                        setEditTableRaw(null);
+                        setEditTableHeaders([]);
+                        setEditTableRowCount(0);
+                      }
+                      setEditorMode('wysiwyg');
+                      setIsEditing(true);
+                    }}
+                    className="p-1.5 text-slate-400 hover:text-blue-400 rounded-md hover:bg-slate-800 transition-colors"
+                    title="Edit Halaman"
+                  >
+                    <Edit2 className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => deletePost(selectedPost.id)}
+                    className="p-1.5 text-slate-400 hover:text-red-400 rounded-md hover:bg-slate-800 transition-colors"
+                    title="Hapus Halaman"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </>
+              )}
+              {isEditing && (
+                <>
+                  <Button
+                    onClick={() => {
+                      setIsEditing(false);
+                      if (!selectedPost) setEditTitle("");
+                    }}
+                    variant="secondary"
+                    className="h-7 text-xs px-2.5 shadow-sm border border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700"
+                  >
+                    <X className="w-3 h-3 mr-1" /> Batal
+                  </Button>
+                  <Button
+                    onClick={handleSavePost}
+                    className="h-7 text-xs px-3 shadow-sm bg-teal-600 hover:bg-teal-700 text-white font-medium"
+                  >
+                    <Check className="w-3 h-3 mr-1" /> Simpan
+                  </Button>
+                </>
+              )}
+            </div>
           </div>
         </div>
 
+        {/* Scrollable Content Body (Content scrolls underneath fixed topbar) */}
+        <div className="flex-1 overflow-y-auto relative">
         {/* Content Body */}
         <div className={`flex-1 w-full ${isSectionHubPost(selectedPost) ? 'p-2 sm:p-4 md:p-6 pb-32' : parsedTableData ? 'p-0 sm:px-2 md:px-3 pt-0 pb-0' : 'p-4 md:p-6 lg:p-8 pb-32'}`}>
           {!selectedPost && !isEditing ? (
@@ -2603,14 +3319,16 @@ ${aiMeetingNotes
                           Visual WYSIWYG
                         </span>
                       </div>
-                      <EnterpriseWysiwygEditor
-                        value={editBeforeTable}
-                        onChange={setEditBeforeTable}
-                        placeholder="Tuliskan catatan, petunjuk, atau pengantar sebelum tabel topik..."
-                        allowModeSwitch={true}
-                        defaultMode="text"
-                        rows={6}
-                      />
+                      <Suspense fallback={<div className="h-40 rounded-xl bg-slate-50 border border-slate-200 animate-pulse flex items-center justify-center text-xs text-slate-400">Memuat editor visual...</div>}>
+                        <EnterpriseWysiwygEditor
+                          value={editBeforeTable}
+                          onChange={setEditBeforeTable}
+                          placeholder="Tuliskan catatan, petunjuk, atau pengantar sebelum tabel topik..."
+                          allowModeSwitch={true}
+                          defaultMode="text"
+                          rows={6}
+                        />
+                      </Suspense>
                     </div>
 
                     {/* Connected Database Table Card (No messy raw pipes!) */}
@@ -2679,14 +3397,16 @@ ${aiMeetingNotes
                             <span>Catatan Penutup (Setelah Tabel)</span>
                           </span>
                         </div>
-                        <EnterpriseWysiwygEditor
-                          value={editAfterTable}
-                          onChange={setEditAfterTable}
-                          placeholder="Tuliskan catatan tambahan setelah tabel (opsional)..."
-                          allowModeSwitch={true}
-                          defaultMode="text"
-                          rows={4}
-                        />
+                        <Suspense fallback={<div className="h-32 rounded-xl bg-slate-50 border border-slate-200 animate-pulse flex items-center justify-center text-xs text-slate-400">Memuat editor visual...</div>}>
+                          <EnterpriseWysiwygEditor
+                            value={editAfterTable}
+                            onChange={setEditAfterTable}
+                            placeholder="Tuliskan catatan tambahan setelah tabel (opsional)..."
+                            allowModeSwitch={true}
+                            defaultMode="text"
+                            rows={4}
+                          />
+                        </Suspense>
                       </div>
                     )}
                   </div>
@@ -2699,14 +3419,16 @@ ${aiMeetingNotes
                       borderColor: 'var(--border-main, #334155)'
                     }}
                   >
-                    <EnterpriseWysiwygEditor
-                      value={editContent}
-                      onChange={setEditContent}
-                      placeholder="Tulis dokumen dalam format visual (teks, heading, checklist subtask, dll)..."
-                      allowModeSwitch={true}
-                      defaultMode="text"
-                      rows={20}
-                    />
+                    <Suspense fallback={<div className="h-64 rounded-xl bg-slate-50 border border-slate-200 animate-pulse flex items-center justify-center text-xs text-slate-400">Memuat editor visual...</div>}>
+                      <EnterpriseWysiwygEditor
+                        value={editContent}
+                        onChange={setEditContent}
+                        placeholder="Tulis dokumen dalam format visual (teks, heading, checklist subtask, dll)..."
+                        allowModeSwitch={true}
+                        defaultMode="text"
+                        rows={20}
+                      />
+                    </Suspense>
                   </div>
                 )
               ) : (
@@ -2728,7 +3450,7 @@ ${aiMeetingNotes
               {/* View Mode Contextual Header Bar */}
               <div className="flex items-center justify-between pb-3 border-b border-slate-200/80">
                 <button
-                  onClick={goBack}
+                  onClick={() => navigateToPost(null)}
                   className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 shadow-2xs transition-all group cursor-pointer"
                 >
                   <ArrowLeft className="w-3.5 h-3.5 text-slate-500 group-hover:-translate-x-0.5 transition-transform" />
@@ -2747,6 +3469,8 @@ ${aiMeetingNotes
                 posts={posts}
                 activePt={selectedPtFilter !== 'ALL' ? selectedPtFilter : (selectedPost.pt || 'TBP')}
                 onSelectPost={(p) => navigateToPost(p)}
+                onOpenInNewNotionTab={openInNewNotionTab}
+                onDuplicatePost={handleDuplicatePost}
                 onGoHome={() => navigateToPost(null)}
                 agendaEvents={agendaEventsList}
                 onOpenCalendar={() => navigate('/agenda')}
@@ -2988,6 +3712,7 @@ ${aiMeetingNotes
 
               {/* Interactive Notion Database Table */}
               <NotionDatabaseTable
+                key={selectedPost.id}
                 postId={selectedPost.id}
                 headers={parsedTableData.headers}
                 rows={parsedTableData.rows}
@@ -3008,17 +3733,34 @@ ${aiMeetingNotes
                 onPostContentUpdate={(newContent: string) => {
                   if (selectedPost && String(selectedPost.id).startsWith('logbook-')) {
                     const logbookId = String(selectedPost.id);
+                    const activeUni = (selectedPtFilter === 'GTS' || pt === 'GTS') ? 'gts' : 'tbp';
+                    const memKey = `${activeUni}_${logbookId}`;
+                    logbookCacheRef.current[memKey] = newContent;
                     logbookCacheRef.current[logbookId] = newContent;
                     try {
-                      localStorage.setItem(`preplab_logbook_content_${logbookId}`, newContent);
+                      localStorage.setItem(`preplab_logbook_content_${activeUni}_${logbookId}`, newContent);
                     } catch {}
                   }
-                  setSelectedPost((prev: any) => (prev ? { ...prev, content: newContent } : null));
-                  setPosts((prev) =>
-                    prev.map((p) =>
-                      p.id === selectedPost.id ? { ...p, content: newContent } : p
-                    )
-                  );
+                  setSelectedPost((prev: any) => {
+                    const updated = prev ? { ...prev, content: newContent } : null;
+                    selectedPostRef.current = updated;
+                    try {
+                      if (updated?.id) {
+                        sessionStorage.setItem("preplab_cached_selected_post", JSON.stringify(updated));
+                      }
+                    } catch {}
+                    return updated;
+                  });
+                  setPosts((prev) => {
+                    const updated = prev.map((p) =>
+                      String(p.id) === String(selectedPost.id) ? { ...p, content: newContent } : p
+                    );
+                    try {
+                      const activeUniverse = isDev ? 'ALL' : (userPt || 'TBP');
+                      localStorage.setItem(`preplab_cached_bulletin_posts_${activeUniverse}`, JSON.stringify(updated));
+                    } catch {}
+                    return updated;
+                  });
                 }}
               />
 
@@ -3130,9 +3872,10 @@ ${aiMeetingNotes
               {/* Title & Metadata */}
               <div>
                 <h1 
-                  className="text-3xl md:text-5xl font-black tracking-tight leading-tight mb-3 text-slate-900"
+                  className="text-3xl md:text-5xl font-black tracking-tight leading-tight mb-3 text-slate-900 flex items-center gap-2.5 flex-wrap"
                 >
-                  {translateDisplayText(getPostTitle(selectedPost))}
+                  <span>{translateDisplayText(getPostTitle(selectedPost))}</span>
+                  <VerifiedBadge size="md" title="Dokumen Resmi Terverifikasi Labnote" />
                 </h1>
 
                 <div 
@@ -3142,6 +3885,7 @@ ${aiMeetingNotes
                   <div className="flex items-center gap-1.5">
                     <User className="w-3.5 h-3.5 opacity-70" />
                     <span>{selectedPost.authorName || "System"}</span>
+                    <VerifiedBadge size="xs" title="Penulis Resmi Terverifikasi" />
                   </div>
                   <span>•</span>
                   <div className="flex items-center gap-1.5">
@@ -3390,6 +4134,7 @@ ${aiMeetingNotes
               </div>
             </div>
           )}
+        </div>
         </div>
       </div>
 
@@ -3898,6 +4643,7 @@ ${aiMeetingNotes
                         <span>Seksi: <strong className="text-slate-200">{p.department || p.category || 'General'}</strong></span>
                         <span>•</span>
                         <span>Penulis: <strong className="text-slate-200">{p.authorName || 'Personil'}</strong></span>
+                        <VerifiedBadge size="xs" title="Terverifikasi" />
                         <span>•</span>
                         <span>Universe: <strong className="text-teal-300">{p.pt || 'TBP'}</strong></span>
                       </div>
@@ -3911,16 +4657,22 @@ ${aiMeetingNotes
       )}
 
       {/* Universal Google Drive Galeri & Upload Cover Modal */}
-      <PortalImagePickerModal
-        isOpen={showCoverModal}
-        onClose={() => setShowCoverModal(false)}
-        onSelectImage={(url) => handleSaveCover(url)}
-        currentImage={selectedPost?.coverImage || ''}
-        title={`Ubah Cover Halaman - ${selectedPost?.title || 'Dokumen'}`}
-        description="Pilih foto dari Galeri Portal Google Drive, upload foto baru, atau gunakan preset tema resmi."
-        allowClear={true}
-        onClearImage={() => handleSaveCover('')}
-      />
+      {showCoverModal && (
+        <Suspense fallback={null}>
+          <PortalImagePickerModal
+            isOpen={showCoverModal}
+            onClose={() => setShowCoverModal(false)}
+            onSelectImage={(url) => handleSaveCover(url)}
+            currentImage={selectedPost?.coverImage || ''}
+            title={`Ubah Cover Halaman - ${selectedPost?.title || 'Dokumen'}`}
+            description="Pilih foto dari Galeri Portal Google Drive, upload foto baru, atau gunakan preset tema resmi."
+            allowClear={true}
+            onClearImage={() => handleSaveCover('')}
+          />
+        </Suspense>
+      )}
+      {/* Notion-Style Right-Click Context Menu */}
+      <NotionContextMenu data={notionContextMenu} onClose={() => setNotionContextMenu(null)} />
     </div>
   );
 }

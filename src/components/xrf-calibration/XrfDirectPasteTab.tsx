@@ -478,7 +478,7 @@ export const XrfDirectPasteTab: React.FC<XrfDirectPasteTabProps> = ({
           sampleLabel,
           standardCode,
           displayName,
-          analyzedAt: rawDateStr || `${parsedIsoDate} ${parsedTime}`,
+          analyzedAt: `${parsedIsoDate} ${parsedTime.slice(0, 5).padStart(5, '0')}`,
           ni,
           co,
           fe,
