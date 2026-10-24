@@ -17,6 +17,7 @@ import {
   isCatatanDisabledForEmployee,
   isCutiRosterStatus,
   isLeaveOrPermissionRosterStatus,
+  isOffRosterStatus,
   isTuesdayWednesdaySaturday,
   isWorkOrOffRosterStatus,
   type MealChoice,
@@ -1184,26 +1185,29 @@ export async function syncMealOrdersFromRoster(date: string, updatedBy = 'system
     const prevKL = prevKLMap.get(nik);
     const prevStatus = prevStatuses.get(nik);
     const wasLeaveYesterday = isLeaveOrPermissionRosterStatus(prevStatus);
+    const wasOffYesterday = isOffRosterStatus(prevStatus);
     const isTodayCuti = isCutiRosterStatus(rosterEmp.status) || String(rosterEmp.status || '').trim().toUpperCase() === 'CUTI';
     const isTodayWorkOrOff = isWorkOrOffRosterStatus(rosterEmp.status);
 
     let effectiveKL: string | null | undefined = undefined;
     if (current && current.keteranganLapor && /belum\s*lapor|wajib\s*lapor/i.test(String(current.keteranganLapor))) {
-      // Admin secara eksplisit menandai Wajib Lapor / Belum Lapor pada orderan
+      // Admin secara eksplisit menandai Wajib Lapor pada orderan
       effectiveKL = 'Wajib Lapor';
     } else if (isTodayCuti) {
       // Default: Jika cuti masih berjalan dan tidak ada tanda Wajib Lapor manual, biarkan null
       effectiveKL = null;
     } else if (current && current.keteranganLapor !== undefined) {
-      effectiveKL = current.keteranganLapor;
+      effectiveKL = current.keteranganLapor === '-' || current.keteranganLapor === '' ? null : current.keteranganLapor;
+    } else if (wasOffYesterday) {
+      // PERMINTAAN USER: Untuk karyawan off pada hari ini di hari berikutnya tidak perlu wajib lapor
+      effectiveKL = null;
     } else if (wasLeaveYesterday && isTodayWorkOrOff) {
-      // Saat berganti ke Masuk seperti D/Off/N/LS barulah Wajib Lapor
+      // Saat berganti dari Cuti ke Masuk barulah Wajib Lapor
       effectiveKL = 'Wajib Lapor';
-    } else if (prevKL && /wajib\s*lapor|belum\s*lapor/i.test(prevKL) && isTodayWorkOrOff) {
-      // Wajib lapor kemarin bertahan di hari kerja/off dan belum diubah manual oleh Admin
-      effectiveKL = prevKL;
-    } else if (prevKL === null || prevKL === '-' || prevKL === '') {
-      // Kemarin sudah diubah/dibersihkan oleh Admin -> konsisten tetap bersih
+    } else if (prevKL && /wajib\s*lapor|belum\s*lapor/i.test(prevKL) && !wasOffYesterday) {
+      // PERMINTAAN USER: Wajib Lapor hanya bisa diedit manual, tidak bisa dihilangkan di hari berikutnya
+      effectiveKL = 'Wajib Lapor';
+    } else {
       effectiveKL = null;
     }
 
@@ -1705,13 +1709,16 @@ async function getMealOrderRowsWithLatestProfiles(date: string) {
       const isTodayCuti = isCutiRosterStatus(r.status) || isCutiRosterStatus(r.shiftKerja) || String(r.status || '').toUpperCase() === 'CUTI' || String(r.shiftKerja || '').toUpperCase() === 'CUTI';
       const isTodayWorkOrOff = isWorkOrOffRosterStatus(r.status) || isWorkOrOffRosterStatus(r.shiftKerja);
 
+      const wasOffYesterday = isOffRosterStatus(prevStatus);
       let effectiveKL: string | null = null;
       if (isTodayCuti) {
         effectiveKL = null;
+      } else if (wasOffYesterday) {
+        effectiveKL = null;
       } else if (wasLeaveYesterday && isTodayWorkOrOff) {
         effectiveKL = 'Wajib Lapor';
-      } else if (prevKL && /wajib\s*lapor|belum\s*lapor/i.test(prevKL) && isTodayWorkOrOff) {
-        effectiveKL = prevKL;
+      } else if (prevKL && /wajib\s*lapor|belum\s*lapor/i.test(prevKL) && !wasOffYesterday) {
+        effectiveKL = 'Wajib Lapor';
       } else {
         effectiveKL = null;
       }
@@ -1935,10 +1942,30 @@ mealOrdersRouter.post("/api/meal-orders/copy", requireMealManager, async (req, r
 
     const by = updatedByOf(req);
     const now = new Date();
-    // Konfirmasi batch & keterangan lapor direset untuk hari baru
-    const values = source.map(({ id, createdAt, updatedAt, updatedBy, orderDate, ...rest }) => ({
-      ...rest, orderDate: to, batchPagi: null, batchSore: null, keteranganLapor: null, updatedBy: by, updatedAt: now,
-    }));
+    // Konfirmasi batch direset untuk hari baru, TAPI Wajib Lapor tetap bertahan (hanya bisa diedit manual, tidak bisa dihilangkan di hari berikutnya)
+    const values = source.map(({ id, createdAt, updatedAt, updatedBy, orderDate, ...rest }) => {
+      const isWL = rest.keteranganLapor && /wajib\s*lapor|belum\s*lapor/i.test(rest.keteranganLapor);
+      return {
+        ...rest,
+        orderDate: to,
+        batchPagi: null,
+        batchSore: null,
+        keteranganLapor: isWL ? 'Wajib Lapor' : null,
+        pagiKantin: isWL ? null : rest.pagiKantin,
+        pagiLapangan: isWL ? null : rest.pagiLapangan,
+        sahurKantin: isWL ? null : rest.sahurKantin,
+        sahurLapangan: isWL ? null : rest.sahurLapangan,
+        siangKantin: isWL ? null : rest.siangKantin,
+        siangLapangan: isWL ? null : rest.siangLapangan,
+        soreKantin: isWL ? null : rest.soreKantin,
+        soreLapangan: isWL ? null : rest.soreLapangan,
+        takjilLapangan: isWL ? null : rest.takjilLapangan,
+        malamLapangan: isWL ? null : rest.malamLapangan,
+        catatan: isWL ? null : rest.catatan,
+        updatedBy: by,
+        updatedAt: now,
+      };
+    });
     // Karyawan yang sudah ada di tanggal tujuan tidak ditimpa
     const inserted = await db.insert(mealOrders).values(values)
       .onConflictDoNothing({ target: [mealOrders.orderDate, mealOrders.nik] }).returning({ id: mealOrders.id });

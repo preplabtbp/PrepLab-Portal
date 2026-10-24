@@ -106,7 +106,7 @@ const PROFILE_FIELDS: { key: keyof MealOrder; label: string; placeholder?: strin
   { key: 'tidakPuasa', label: 'Keterangan: Tidak Puasa', placeholder: '-' },
   { key: 'tempatTinggal', label: 'Residence', placeholder: 'mis. Nirwana' },
   { key: 'status', label: 'Status' },
-  { key: 'keteranganLapor', label: 'Keterangan (Belum Lapor)', placeholder: 'mis. Belum Lapor 1' },
+  { key: 'keteranganLapor', label: 'Wajib Lapor', placeholder: 'Wajib Lapor' },
   { key: 'catatan', label: 'Catatan', placeholder: 'mis. DINAS / PHK' },
 ];
 
@@ -1238,12 +1238,12 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
     try {
       const res = await fetch(`/api/meal-orders/${r.id}/clear-belum-lapor`, { method: 'POST' });
       const json = await res.json();
-      if (!res.ok || json.status !== 'success') throw new Error(json.message || 'Gagal mematikan Belum Lapor');
+      if (!res.ok || json.status !== 'success') throw new Error(json.message || 'Gagal mematikan Wajib Lapor');
       patchLocal(r.id, json.data);
       const shift = json.data?.shiftKerja ? ` · ${json.data.shiftKerja === 'MALAM' ? 'Malam' : json.data.shiftKerja === 'LONGSHIFT' ? 'Longshift' : json.data.shiftKerja}` : '';
       toast.success(json.rosterCode
-        ? `${r.nama}: Belum Lapor dimatikan — kembali ke roster ${json.rosterCode}${shift}`
-        : `${r.nama}: Belum Lapor dimatikan — kode roster tanggal ini tidak ditemukan, orderan dihitung sebagai hari kerja biasa`);
+        ? `${r.nama}: Wajib Lapor dimatikan — kembali ke roster ${json.rosterCode}${shift}`
+        : `${r.nama}: Wajib Lapor dimatikan — kode roster tanggal ini tidak ditemukan, orderan dihitung sebagai hari kerja biasa`);
     } catch (e: any) {
       patchLocal(r.id, { keteranganLapor: r.keteranganLapor });
       toast.error(e.message);
@@ -1260,7 +1260,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
     const isCustomCatatan = rawCatatan && !['-', 'Bungkusan Pagi', 'Bungkusan Sore', 'Bungkusan Pagi dan Bungkusan Sore'].includes(rawCatatan);
 
     const disabledTitle = isBelumLapor
-      ? 'Belum Lapor: Matikan status Belum Lapor terlebih dahulu agar orderan & catatan aktif'
+      ? 'Wajib Lapor: Matikan status Wajib Lapor terlebih dahulu agar orderan & catatan aktif'
       : isKawasi
       ? 'Matikan Catatan ini atau tidak bisa di Pilih (Kampung Kawasi)'
       : !canManage
@@ -1427,10 +1427,10 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
             {renderTotalBungkusCard(opts.cards, opts.scope)}
           </button>
           {columnVisibility.statusNotes && (() => {
-            const cf = f('belumLapor', 'Belum Lapor');
+            const cf = f('belumLapor', 'Wajib Lapor');
             return (
-              <button type="button" onClick={() => pickCard(cf)} className={cardBtn(cf)} title="Klik untuk melihat karyawan yang belum lapor">
-                <p className={UI.statLabel}>Belum Lapor</p>
+              <button type="button" onClick={() => pickCard(cf)} className={cardBtn(cf)} title="Klik untuk melihat karyawan yang wajib lapor">
+                <p className={UI.statLabel}>Wajib Lapor</p>
                 <p className={`${UI.statValue} ${opts.confirmed.belumLapor ? '!text-rose-600' : ''}`}>{opts.confirmed.belumLapor}</p>
                 <p className={UI.statHint}>karyawan</p>
               </button>
@@ -1892,7 +1892,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                       <label className="flex items-center justify-between p-2 rounded-xl hover:bg-slate-50 cursor-pointer select-none">
                         <div>
                           <p className="font-semibold text-slate-800">Status, Lapor & Catatan</p>
-                          <p className="text-[10px] text-slate-500">Status, Belum Lapor, dan Catatan samping</p>
+                          <p className="text-[10px] text-slate-500">Status, Wajib Lapor, dan Catatan samping</p>
                         </div>
                         <input
                           type="checkbox"
@@ -2120,7 +2120,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                               </button>
                             </div>
                           </th>
-                          <th rowSpan={2} className={thSticky1}>Keterangan<br />(Belum Lapor)</th>
+                          <th rowSpan={2} className={thSticky1}>Wajib Lapor</th>
                           <th rowSpan={2} className={thSticky1}>Catatan</th>
                         </>
                       )}
@@ -2239,21 +2239,17 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                             <td className={`${tdBase} text-center p-1`}>
                               {canManage ? (
                                 <select
-                                  value={r.keteranganLapor && r.keteranganLapor !== '-' ? (r.keteranganLapor.toLowerCase().includes('wajib') ? 'Wajib Lapor' : r.keteranganLapor) : '-'}
+                                  value={r.keteranganLapor && r.keteranganLapor !== '-' ? 'Wajib Lapor' : '-'}
                                   onChange={e => handleToggleBelumLapor(r, e.target.value)}
                                   className={`rounded-md text-xs font-semibold px-2 py-1 cursor-pointer focus:outline-none transition-all ${
                                     r.keteranganLapor && r.keteranganLapor !== '-'
                                       ? 'bg-rose-100 text-rose-700 font-bold border border-rose-300 hover:bg-rose-200'
                                       : 'bg-slate-100 text-slate-500 hover:bg-slate-200 border border-slate-200'
                                   }`}
-                                  title="Pilih Keterangan (Belum Lapor / Wajib Lapor) — jika aktif, orderan makan otomatis kosong"
+                                  title="Pilih status Wajib Lapor - jika aktif, orderan makan otomatis kosong dan hanya bisa diedit manual"
                                 >
                                   <option value="-">-</option>
                                   <option value="Wajib Lapor">Wajib Lapor</option>
-                                  <option value="Belum Lapor">Belum Lapor</option>
-                                  {r.keteranganLapor && r.keteranganLapor !== '-' && r.keteranganLapor !== 'Belum Lapor' && r.keteranganLapor !== 'Wajib Lapor' && (
-                                    <option value={r.keteranganLapor}>{r.keteranganLapor}</option>
-                                  )}
                                 </select>
                               ) : (
                                 <span className={`inline-block px-2 py-0.5 rounded text-xs ${
@@ -2261,7 +2257,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                                     ? 'text-rose-700 font-bold bg-rose-100 border border-rose-200'
                                     : 'text-slate-400'
                                 }`}>
-                                  {r.keteranganLapor && r.keteranganLapor !== '-' ? r.keteranganLapor : '-'}
+                                  {r.keteranganLapor && r.keteranganLapor !== '-' ? 'Wajib Lapor' : '-'}
                                 </span>
                               )}
                             </td>
@@ -2289,7 +2285,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                       {columnVisibility.statusNotes && (
                         <>
                           <td className={tdBase} />
-                          <td className={`${tdBase} text-rose-600`}>{tableConfirmed.belumLapor ? `${tableConfirmed.belumLapor} belum lapor` : ''}</td>
+                          <td className={`${tdBase} text-rose-600`}>{tableConfirmed.belumLapor ? `${tableConfirmed.belumLapor} wajib lapor` : ''}</td>
                           <td className={tdBase} />
                         </>
                       )}
@@ -2349,7 +2345,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                             <span className="text-slate-500">Lapor:</span>
                             {canManage ? (
                               <select
-                                value={r.keteranganLapor && r.keteranganLapor !== '-' ? (r.keteranganLapor.toLowerCase().includes('wajib') ? 'Wajib Lapor' : r.keteranganLapor) : '-'}
+                                value={r.keteranganLapor && r.keteranganLapor !== '-' ? 'Wajib Lapor' : '-'}
                                 onChange={e => handleToggleBelumLapor(r, e.target.value)}
                                 className={`rounded px-1.5 py-0.5 text-xs font-semibold ${
                                   r.keteranganLapor && r.keteranganLapor !== '-' ? 'bg-rose-100 text-rose-700 font-bold' : 'bg-slate-100 text-slate-500'
@@ -2357,7 +2353,6 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                               >
                                 <option value="-">-</option>
                                 <option value="Wajib Lapor">Wajib Lapor</option>
-                                <option value="Belum Lapor">Belum Lapor</option>
                               </select>
                             ) : (
                               <span className={r.keteranganLapor && r.keteranganLapor !== '-' ? 'text-rose-600 font-bold' : 'text-slate-400'}>
@@ -2402,13 +2397,12 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                 f.key === 'keteranganLapor' ? (
                   <Select
                     key={f.key}
-                    label={f.label}
-                    value={form.keteranganLapor && form.keteranganLapor !== '-' ? (form.keteranganLapor.toLowerCase().includes('wajib') ? 'Wajib Lapor' : form.keteranganLapor) : ''}
+                    label="Wajib Lapor"
+                    value={form.keteranganLapor && form.keteranganLapor !== '-' ? 'Wajib Lapor' : ''}
                     onChange={e => updateForm('keteranganLapor', e.target.value)}
                   >
                     <option value="">-</option>
                     <option value="Wajib Lapor">Wajib Lapor</option>
-                    <option value="Belum Lapor">Belum Lapor</option>
                   </Select>
                 ) : f.key === 'catatan' ? (
                   <Select

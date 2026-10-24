@@ -101,6 +101,18 @@ export function isCutiRosterStatus(val: string | null | undefined): boolean {
  * Cek apakah keterangan/status roster tanggal saat ini adalah kerja atau off:
  * D, N, LS, Atau OFF
  */
+/**
+ * Cek apakah keterangan/status roster tanggal saat ini adalah OFF:
+ * OFF, OFF 1, OFF-1, dsb.
+ */
+export function isOffRosterStatus(val: string | null | undefined): boolean {
+  if (!val) return false;
+  const s = val.trim().toUpperCase();
+  if (s === 'OFF') return true;
+  if (s.startsWith('OFF ') || s.startsWith('OFF-') || s.startsWith('OFF(') || s.startsWith('OFF/')) return true;
+  return false;
+}
+
 export function isWorkOrOffRosterStatus(val: string | null | undefined): boolean {
   if (!val) return false;
   const s = val.trim().toUpperCase();
@@ -517,13 +529,15 @@ export function computeMealOrderByRoster(
     }
   }
 
-  // Aturan status Belum Lapor / Wajib Lapor:
+  // Aturan status Wajib Lapor:
   // 1. Cek apakah status hari ini adalah Cuti (Cuti masih berjalan)
   const isTodayCuti = isCutiRosterStatus(code) || isCutiRosterStatus(res.shiftKerja) || isCutiRosterStatus(res.statusKerja) || isCutiRosterStatus(res.status) || res.status === 'CUTI' || res.shiftKerja === 'CUTI';
-  // 2. Jika kode roster hari ini secara eksplisit bertuliskan Belum Lapor / Wajib Lapor / BL:
+  // 2. Jika kode roster hari ini secara eksplisit bertuliskan Wajib Lapor / WL / Belum Lapor:
   const isExplicitRosterBL = /belum\s*lapor|wajib\s*lapor|\bBL\b|\bWL\b/i.test(rawCode) || /belum\s*lapor|wajib\s*lapor/i.test(String(emp.status || ''));
-  // 3. Cek apakah di baris yang sudah ada, Belum Lapor / Wajib Lapor sudah dimatikan / diedit oleh admin (bukan 'Belum Lapor' / bukan 'Wajib Lapor')
+  // 3. Cek apakah di baris yang sudah ada, Wajib Lapor sudah dimatikan / diedit oleh admin (bukan 'Wajib Lapor')
   const isAlreadyClearedByAdmin = emp.keteranganLapor !== undefined && (emp.keteranganLapor === null || emp.keteranganLapor === '-' || !/belum\s*lapor|wajib\s*lapor/i.test(String(emp.keteranganLapor || '')));
+  // 4. Karyawan yang OFF hari kemarin/hari ini, di hari berikutnya TIDAK PERLU wajib lapor
+  const isPrevOff = isOffRosterStatus(prevRosterStatus);
 
   if (isTodayCuti) {
     // Kebijakan: Jika cuti masih berjalan TIDAK PERLU diberikan Wajib Lapor
@@ -533,12 +547,15 @@ export function computeMealOrderByRoster(
   } else if (isAlreadyClearedByAdmin) {
     // Admin sudah mematikan/mengedit status sebelumnya -> JANGAN aktifkan kembali saat sinkronisasi!
     res.keteranganLapor = null;
+  } else if (isPrevOff) {
+    // PERMINTAAN USER: Untuk karyawan off pada hari ini di hari berikutnya tidak perlu wajib lapor
+    res.keteranganLapor = null;
   } else if (isLeaveOrPermissionRosterStatus(prevRosterStatus) && (isWorkOrOffRosterStatus(code) || isWorkOrOffRosterStatus(res.shiftKerja))) {
-    // Saat berganti ke Masuk seperti D/Off/N/LS barulah otomatis Wajib Lapor
+    // Saat berganti dari Cuti ke Masuk barulah otomatis Wajib Lapor (kecuali jika kemarin OFF)
     res.keteranganLapor = 'Wajib Lapor';
-  } else if (emp.keteranganLapor && /wajib\s*lapor|belum\s*lapor/i.test(String(emp.keteranganLapor || ''))) {
-    // Status Wajib Lapor sebelumnya bertahan selama masih berstatus kerja/off sampai diubah oleh admin
-    res.keteranganLapor = emp.keteranganLapor;
+  } else if (emp.keteranganLapor && /wajib\s*lapor|belum\s*lapor/i.test(String(emp.keteranganLapor || '')) && !isPrevOff) {
+    // PERMINTAAN USER: Wajib Lapor hanya bisa diedit manual, tidak bisa dihilangkan di hari berikutnya
+    res.keteranganLapor = 'Wajib Lapor';
   }
 
   // JIKA STATUS WAJIB LAPOR / BELUM LAPOR AKTIF:
