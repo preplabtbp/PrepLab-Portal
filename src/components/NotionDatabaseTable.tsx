@@ -1664,6 +1664,11 @@ export function NotionDatabaseTable({
         if (val !== undefined && val !== '') return val;
         if (fallbackVal === undefined) fallbackVal = val;
       }
+      if ((targetLower === 'files & media' || targetLower === 'files' || targetLower === 'media' || targetLower === 'lampiran' || targetLower === 'attachments' || cleanTarget.includes('file') || cleanTarget.includes('media') || cleanTarget.includes('lampiran')) &&
+          (cleanKey.includes('file') || cleanKey.includes('media') || cleanKey.includes('lampiran') || cleanKey.includes('attachment') || cleanKey.includes('berkas'))) {
+        if (val !== undefined && val !== '') return val;
+        if (fallbackVal === undefined) fallbackVal = val;
+      }
     }
     return fallbackVal ?? row[colName] ?? '';
   }, []);
@@ -4567,9 +4572,18 @@ export function NotionDatabaseTable({
       const targetRow = { ...copy[targetRowIndex] };
       
       const colLower = colName.toLowerCase().trim();
+      const cleanCol = colLower.replace(/^[^a-z0-9]+/i, '').trim();
+      const isFilesCol = cleanCol.includes('file') || cleanCol.includes('media') || cleanCol.includes('lampiran') || cleanCol.includes('attachment') || cleanCol.includes('berkas');
+
       let keyToSet = colName;
       for (const k of Object.keys(targetRow)) {
-        if (k.toLowerCase().trim() === colLower) {
+        const kLower = k.toLowerCase().trim();
+        const kClean = kLower.replace(/^[^a-z0-9]+/i, '').trim();
+        if (kLower === colLower || (kClean && kClean === cleanCol)) {
+          keyToSet = k;
+          break;
+        }
+        if (isFilesCol && (kClean.includes('file') || kClean.includes('media') || kClean.includes('lampiran') || kClean.includes('attachment') || kClean.includes('berkas'))) {
           keyToSet = k;
           break;
         }
@@ -7492,7 +7506,7 @@ export function NotionDatabaseTable({
       {/* NOTION MINIMALIST DATABASE HEADER (Icon-First with Smart Hover Tooltips)  */}
       {/* ========================================================================= */}
       <div 
-        className={`sticky top-0 md:top-12 z-30 transition-all border-b shadow-xs backdrop-blur-md ${
+        className={`transition-all border-b shadow-xs backdrop-blur-md ${
           isNotionLight ? 'bg-white/95 border-[#cbd5e1]' : 'bg-[#191919]/95 border-[#2d2d2d]'
         }`}
       >
