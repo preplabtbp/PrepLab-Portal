@@ -890,7 +890,9 @@ export function BulletinBoard({
         localStorage.removeItem("preplab_active_bulletin_page");
         sessionStorage.removeItem("preplab_cached_selected_post");
         const targetPt = selectedPtFilter !== 'ALL' ? selectedPtFilter : (pt || userUniverse || 'TBP');
-        navigate(`/bulletin/${targetPt}`, { replace: true });
+        const cleanUrl = `/bulletin/${targetPt}`;
+        window.history.replaceState({}, "", cleanUrl);
+        navigate(cleanUrl, { replace: true });
       } catch {}
       return;
     }
@@ -1558,9 +1560,8 @@ export function BulletinBoard({
       return;
     }
 
-    // 2. If navHistory is 1 or empty (e.g. user refreshed or arrived via direct URL),
-    // find the dynamic parent post so we don't jump directly to home!
-    if (selectedPost) {
+    // 2. If navHistory is 1 or empty and current post is NOT a Section Hub, try to navigate to its parent post
+    if (selectedPost && !isSectionHubPost(selectedPost)) {
       const parent = findParentPost(selectedPost);
       if (parent && String(parent.id) !== String(selectedPost.id)) {
         navigateToPost(parent);
@@ -1568,7 +1569,7 @@ export function BulletinBoard({
       }
     }
 
-    // 3. Otherwise (already at Section Hub or root), go directly back to dashboard
+    // 3. Otherwise (Section Hub, or root document, or no parent), return directly to Dashboard!
     navigateToPost(null);
   };
 
@@ -2733,7 +2734,7 @@ ${aiMeetingNotes
               </button>
               <button
                 onClick={goBack}
-                disabled={navHistory.length <= 1}
+                disabled={!selectedPost && !isLibraryActive && navHistory.length <= 1}
                 className="h-7 w-7 rounded-lg border border-slate-300/80 dark:border-slate-700 bg-white/90 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-all flex items-center justify-center shadow-2xs disabled:opacity-35 disabled:cursor-not-allowed disabled:bg-slate-100/50 dark:disabled:bg-slate-800/40 disabled:border-slate-200 dark:disabled:border-slate-800 disabled:text-slate-400 cursor-pointer shrink-0"
                 title="Kembali ke halaman sebelumnya (<)"
               >
@@ -3331,7 +3332,7 @@ ${aiMeetingNotes
               {/* View Mode Contextual Header Bar */}
               <div className="flex items-center justify-between pb-3 border-b border-slate-200/80">
                 <button
-                  onClick={goBack}
+                  onClick={() => navigateToPost(null)}
                   className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 shadow-2xs transition-all group cursor-pointer"
                 >
                   <ArrowLeft className="w-3.5 h-3.5 text-slate-500 group-hover:-translate-x-0.5 transition-transform" />
