@@ -59,6 +59,28 @@ export function getCanonicalSection(s: string): string {
   return subPrefix ? base + ':' + subPrefix : base;
 }
 
+export function getCanonicalBaseSection(s: string): string {
+  if (!s) return '';
+  const clean = s.replace(/^[#\s\-*]+/, '').replace(/^section-/, '').replace(/-/g, ' ').trim().toLowerCase();
+  if (clean.includes('lab') || clean.includes('aas') || clean.includes('xrf')) return 'laboratory';
+  if (clean.includes('prep') || clean.includes('crusher')) return 'preparation';
+  if (clean.includes('admin') || clean.includes('surat') || clean.includes('cuti')) return 'administration';
+  if (clean.includes('mutu') || clean.includes('iso') || clean.includes('qa') || clean.includes('quality')) return 'quality_assurance';
+  if (clean.includes('maint') || clean.includes('teknik') || clean.includes('mesin')) return 'maintenance';
+  if (clean.includes('ware') || clean.includes('gudang') || clean.includes('stok') || clean.includes('inven')) return 'inventory';
+  if (clean.includes('prosedur') || clean.includes('procedure')) return 'procedure';
+  if (clean.includes('general issue') || clean.includes('issue')) return 'general_issue';
+  return clean.replace(/[^a-z0-9]/g, '');
+}
+
+export function isSameBaseSection(a: string, b: string): boolean {
+  if (!a || !b) return false;
+  const canA = getCanonicalBaseSection(a);
+  const canB = getCanonicalBaseSection(b);
+  if (canA && canB && canA === canB) return true;
+  return false;
+}
+
 /**
  * Checks if two section strings refer to the same section (supporting English/Indonesian aliases).
  * e.g. "Laboratorium" and "Laboratory" -> true

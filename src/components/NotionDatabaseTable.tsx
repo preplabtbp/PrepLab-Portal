@@ -3850,12 +3850,12 @@ export function NotionDatabaseTable({
           }
         }
 
-        // Upload to /api/upload with strict 6s timeout so UI never hangs
-        let uploadedUrl = finalBase64;
+        // Upload to /api/upload with 45s timeout for large attachments
+        let uploadedUrl = '';
         let driveId: string | null = null;
         try {
           const abortCtrl = new AbortController();
-          const abortTimer = setTimeout(() => abortCtrl.abort(), 6000);
+          const abortTimer = setTimeout(() => abortCtrl.abort(), 45000);
 
           const upRes = await fetch('/api/upload', {
             method: 'POST',
@@ -3869,18 +3869,25 @@ export function NotionDatabaseTable({
             })
           });
           clearTimeout(abortTimer);
-          const upJson = await upRes.json();
-          if (upJson.url) {
-            uploadedUrl = upJson.url;
-            driveId = upJson.fileId || extractDriveId(uploadedUrl);
+          if (upRes.ok) {
+            const upJson = await upRes.json();
+            if (upJson.url) {
+              uploadedUrl = upJson.url;
+              driveId = upJson.fileId || extractDriveId(uploadedUrl);
+            }
           }
         } catch (uErr) {
-          console.warn('Upload API quick fallback to local storage:', uErr);
+          console.warn('Upload API error:', uErr);
+        }
+
+        // Never embed raw base64 into markdown table cells
+        if (!uploadedUrl || uploadedUrl.startsWith('data:')) {
+          throw new Error(`Gagal mengunggah "${file.name}". Pastikan koneksi stabil.`);
         }
 
         const directUrl = driveId ? `/api/drive/view/${driveId}` : uploadedUrl;
         const driveViewUrl = driveId ? `https://drive.google.com/file/d/${driveId}/view?usp=sharing` : undefined;
-        const driveDownloadUrl = driveId ? `/api/drive/download/${driveId}` : undefined;
+        const driveDownloadUrl = driveId ? `/api/drive/download/${driveId}` : directUrl;
 
         uploadedAttachments.push({
           id: driveId || undefined,
@@ -3897,14 +3904,39 @@ export function NotionDatabaseTable({
 
       // Existing cell attachments
       const targetRow = localRows[rowIndex];
+      if (!targetRow) throw new Error('Baris tabel tidak ditemukan');
       const existingVal = getRowVal(targetRow, colName);
       const existingAttachments = parseCommentAttachments(existingVal);
       const combined = [...existingAttachments, ...uploadedAttachments];
-
       const serialized = JSON.stringify(combined);
-      handleUpdateCellDirect(rowIndex, colName, serialized);
 
-      toast.success(`${uploadedAttachments.length} file berhasil dilampirkan!`, { id: toastId });
+      // Construct updated copy and persist to backend
+      const nextRows = [...localRows];
+      const updatedRow = { ...nextRows[rowIndex] };
+      let keyToSet = colName;
+      const colLower = colName.toLowerCase().trim();
+      const cleanCol = colLower.replace(/^[^a-z0-9]+/i, '').trim();
+      for (const k of Object.keys(updatedRow)) {
+        const kLower = k.toLowerCase().trim();
+        const kClean = kLower.replace(/^[^a-z0-9]+/i, '').trim();
+        if (kLower === colLower || (kClean && kClean === cleanCol)) {
+          keyToSet = k;
+          break;
+        }
+      }
+      updatedRow[keyToSet] = serialized;
+      nextRows[rowIndex] = updatedRow;
+
+      setLocalRows(nextRows);
+      onRowsChange?.(nextRows);
+
+      toast.loading('Menyimpan perubahan ke server...', { id: toastId });
+      const saveOk = await saveTableToBackend(nextRows);
+      if (saveOk) {
+        toast.success(`${uploadedAttachments.length} file berhasil disimpan permanen!`, { id: toastId });
+      } else {
+        toast.error('File berhasil diunggah tapi gagal disimpan ke server. Coba simpan ulang.', { id: toastId });
+      }
     } catch (err: any) {
       console.error('Gagal upload file ke cell:', err);
       toast.error('Gagal mengunggah file. Silakan coba lagi.', { id: toastId });
