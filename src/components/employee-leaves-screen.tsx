@@ -2706,7 +2706,7 @@ export function EmployeeLeavesScreen({
                       </td>
 
                       {/* Jabatan - Kolom Baru di samping Nama Karyawan (Inline Editable) */}
-                      <td className="py-3 px-3.5 overflow-hidden" onClick={(e) => e.stopPropagation()}>
+                      <td className="py-3 px-3.5 text-center overflow-hidden" onClick={(e) => e.stopPropagation()}>
                         <input
                           type="text"
                           defaultValue={item.jabatan || ''}
@@ -2723,14 +2723,14 @@ export function EmployeeLeavesScreen({
                             }
                           }}
                           placeholder="Jabatan..."
-                          className="w-full min-w-0 px-2 py-1 text-xs font-semibold rounded bg-transparent hover:bg-slate-100 dark:hover:bg-slate-800 focus:bg-white dark:focus:bg-slate-800 border border-transparent hover:border-slate-300 dark:hover:border-slate-700 focus:border-indigo-500 text-slate-800 dark:text-slate-200 outline-none transition-all truncate"
+                          className="w-full min-w-0 px-2 py-1 text-xs text-center font-semibold rounded bg-transparent hover:bg-slate-100 dark:hover:bg-slate-800 focus:bg-white dark:focus:bg-slate-800 border border-transparent hover:border-slate-300 dark:hover:border-slate-700 focus:border-indigo-500 text-slate-800 dark:text-slate-200 outline-none transition-all truncate"
                           title={item.jabatan || 'Edit jabatan langsung di tabel'}
                         />
                       </td>
 
                       {/* Tempat Tinggal - Inline Editable */}
-                      <td className="py-3 px-3.5 overflow-hidden" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center gap-1.5 w-full min-w-0">
+                      <td className="py-3 px-3.5 text-center overflow-hidden" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-center gap-1.5 w-full min-w-0">
                           <Building2 className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
                           <input
                             type="text"
@@ -2748,18 +2748,18 @@ export function EmployeeLeavesScreen({
                               }
                             }}
                             placeholder="Isi tempat tinggal..."
-                            className="w-full min-w-0 px-2 py-1 text-xs font-semibold rounded bg-transparent hover:bg-slate-100 dark:hover:bg-slate-800 focus:bg-white dark:focus:bg-slate-800 border border-transparent hover:border-slate-300 dark:hover:border-slate-700 focus:border-indigo-500 text-slate-800 dark:text-slate-200 outline-none transition-all truncate"
+                            className="w-full min-w-0 px-2 py-1 text-xs text-center font-semibold rounded bg-transparent hover:bg-slate-100 dark:hover:bg-slate-800 focus:bg-white dark:focus:bg-slate-800 border border-transparent hover:border-slate-300 dark:hover:border-slate-700 focus:border-indigo-500 text-slate-800 dark:text-slate-200 outline-none transition-all truncate"
                             title={item.tempatTinggal || 'Edit tempat tinggal langsung di tabel'}
                           />
                         </div>
                       </td>
 
                       {/* Bagian & Shift - Inline Editable */}
-                      <td className="py-3 px-3.5 overflow-hidden" onClick={(e) => e.stopPropagation()}>
-                        <div className="font-semibold text-slate-800 dark:text-slate-200 truncate" title={item.penempatan || item.section}>
+                      <td className="py-3 px-3.5 text-center overflow-hidden" onClick={(e) => e.stopPropagation()}>
+                        <div className="font-semibold text-slate-800 dark:text-slate-200 text-center truncate" title={item.penempatan || item.section}>
                           {item.penempatan || item.section}
                         </div>
-                        <div className="text-[10.5px] text-slate-500 mt-1 flex items-center gap-1.5 flex-wrap">
+                        <div className="text-[10.5px] text-slate-500 mt-1 flex items-center justify-center gap-1.5 flex-wrap">
                           <select
                             value={item.shift || 'Shift A'}
                             onChange={(e) => handleInlineUpdate(item.id, 'shift', e.target.value)}
@@ -2777,8 +2777,8 @@ export function EmployeeLeavesScreen({
                       </td>
 
                       {/* Tanggal Izin - Format [$-id-id] dd-mmm-yyyy & Inline Editable */}
-                      <td className="py-3 px-3.5 whitespace-nowrap overflow-hidden" onClick={(e) => e.stopPropagation()}>
-                        <div className="relative inline-flex items-center group max-w-full">
+                      <td className="py-3 px-3.5 text-center whitespace-nowrap overflow-hidden" onClick={(e) => e.stopPropagation()}>
+                        <div className="relative inline-flex items-center justify-center group max-w-full mx-auto">
                           <div className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold font-mono bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/80 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 shadow-2xs transition-all cursor-pointer">
                             <Calendar className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400 shrink-0 group-hover:scale-110 transition-transform" />
                             <span className="tracking-wide">
@@ -2850,7 +2850,7 @@ export function EmployeeLeavesScreen({
                       </td>
 
                       {/* Alasan Izin - Inline Editable */}
-                      <td className="py-3 px-3.5 overflow-hidden" onClick={(e) => e.stopPropagation()}>
+                      <td className="py-3 px-3.5 text-center overflow-hidden" onClick={(e) => e.stopPropagation()}>
                         <input
                           type="text"
                           defaultValue={item.alasanAbsensi || ''}
@@ -2867,14 +2867,14 @@ export function EmployeeLeavesScreen({
                             }
                           }}
                           placeholder="Ketik alasan izin..."
-                          className="w-full min-w-0 px-2.5 py-1 text-xs font-medium rounded bg-slate-50/60 dark:bg-slate-800/60 hover:bg-white dark:hover:bg-slate-800 focus:bg-white dark:focus:bg-slate-800 border border-slate-200/80 dark:border-slate-700 focus:border-indigo-500 text-slate-800 dark:text-slate-200 outline-none transition-all shadow-2xs truncate"
+                          className="w-full min-w-0 px-2.5 py-1 text-xs text-center font-medium rounded bg-slate-50/60 dark:bg-slate-800/60 hover:bg-white dark:hover:bg-slate-800 focus:bg-white dark:focus:bg-slate-800 border border-slate-200/80 dark:border-slate-700 focus:border-indigo-500 text-slate-800 dark:text-slate-200 outline-none transition-all shadow-2xs truncate"
                           title={item.alasanAbsensi || 'Edit alasan izin langsung di tabel (Excel-style)'}
                         />
                       </td>
 
                       {/* Pengawas Mengetahui - Kolom Otomatis Melebar & Inline Editable */}
-                      <td className="py-3 px-3.5 overflow-hidden" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center gap-1.5 w-full min-w-0">
+                      <td className="py-3 px-3.5 text-center overflow-hidden" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-center gap-1.5 w-full min-w-0">
                           <ShieldCheck className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400 shrink-0" />
                           <input
                             type="text"
@@ -2892,7 +2892,7 @@ export function EmployeeLeavesScreen({
                               }
                             }}
                             placeholder="Pengawas..."
-                            className="w-full min-w-0 px-2.5 py-1 text-xs font-semibold rounded bg-slate-50/70 dark:bg-slate-800/60 hover:bg-white dark:hover:bg-slate-800 focus:bg-white dark:focus:bg-slate-800 border border-slate-200/80 dark:border-slate-700 focus:border-slate-400 text-slate-800 dark:text-slate-200 outline-none transition-all shadow-2xs truncate"
+                            className="w-full min-w-0 px-2.5 py-1 text-xs text-center font-semibold rounded bg-slate-50/70 dark:bg-slate-800/60 hover:bg-white dark:hover:bg-slate-800 focus:bg-white dark:focus:bg-slate-800 border border-slate-200/80 dark:border-slate-700 focus:border-slate-400 text-slate-800 dark:text-slate-200 outline-none transition-all shadow-2xs truncate"
                             title={item.pengawasMengetahui || 'Edit pengawas mengetahui langsung di tabel (Excel-style)'}
                           />
                         </div>
