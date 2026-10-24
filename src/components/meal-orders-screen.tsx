@@ -723,7 +723,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
             if (isMessNR && isResidenceNirwana(r, emp)) {
               const kVal = String((r as any)[`${c.slot}Kantin`] || '').trim();
               if (kVal === '1' && (c.slot === 'pagi' || c.slot === 'siang' || c.slot === 'sore')) {
-                const lapCount = mealPortions((r as any)[`${c.slot}Lapangan`]);
+                const lapCount = portions((r as any)[`${c.slot}Lapangan`]);
                 return lapCount > 0 ? lapCount : '';
               }
             }
