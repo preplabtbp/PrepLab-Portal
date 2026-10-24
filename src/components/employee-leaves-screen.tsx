@@ -41,6 +41,7 @@ import * as XLSX from 'xlsx';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { toast } from 'sonner';
 import { EmployeeLeavesAnalyticsChart } from './employee-leaves-analytics-chart';
+import DisplayCards, { DisplayCardProps } from './ui/display-cards';
 
 export type DownloadScopeType = 'filtered' | 'today' | 'last_4_days' | 'last_7_days' | 'this_month' | 'all';
 export type PeriodShortcut = 'ALL' | 'TODAY' | 'WEEK' | 'MONTH' | 'YEAR' | 'CUSTOM';
@@ -302,25 +303,25 @@ export const KATEGORI_IZIN_CONFIG: Record<string, KategoriIzinMeta> = {
   'I': {
     code: 'I',
     label: 'Izin Biasa',
-    badgeClass: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200 border-slate-200 dark:border-slate-700',
-    dotColor: '#64748b'
+    badgeClass: 'bg-sky-50 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300 border-sky-300 dark:border-sky-700',
+    dotColor: '#0284c7'
   },
   'IK': {
     code: 'IK',
     label: 'Izin Khusus',
-    badgeClass: 'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-200 border-slate-300 dark:border-slate-700',
-    dotColor: '#475569'
+    badgeClass: 'bg-purple-50 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300 border-purple-300 dark:border-purple-700',
+    dotColor: '#9333ea'
   },
   'SS': {
     code: 'SS',
     label: 'Sakit Site',
-    badgeClass: 'bg-rose-50/70 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300 border-rose-200/80 dark:border-rose-800/60',
+    badgeClass: 'bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300 border-rose-300 dark:border-rose-700',
     dotColor: '#e11d48'
   },
   'SL': {
     code: 'SL',
     label: 'Sakit Luar Site',
-    badgeClass: 'bg-amber-50/70 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 border-amber-200/80 dark:border-amber-800/60',
+    badgeClass: 'bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 border-amber-300 dark:border-amber-700',
     dotColor: '#d97706'
   }
 };
@@ -350,6 +351,33 @@ const SOURCE_OPTIONS = [
   { value: 'ALL', label: 'Semua Sumber' },
   { value: 'google_sheet', label: 'Google Sheet (PrepLab Cloud)' },
   { value: 'web', label: 'Web Portal' }
+];
+
+export interface LeaveColumnDef {
+  id: string;
+  label: string;
+  defaultWidth: number;
+  minWidth: number;
+  align?: 'left' | 'center' | 'right';
+}
+
+export const LEAVE_COL_STORAGE_KEY = 'preplab_leave_table_col_widths_v1';
+
+export const LEAVE_COLUMNS: LeaveColumnDef[] = [
+  { id: 'no', label: 'No', defaultWidth: 55, minWidth: 42, align: 'center' },
+  { id: 'karyawan', label: 'Karyawan', defaultWidth: 190, minWidth: 120, align: 'left' },
+  { id: 'jabatan', label: 'Jabatan', defaultWidth: 170, minWidth: 100, align: 'left' },
+  { id: 'tempatTinggal', label: 'Tempat Tinggal', defaultWidth: 160, minWidth: 110, align: 'left' },
+  { id: 'bagianShift', label: 'Bagian & Shift', defaultWidth: 175, minWidth: 120, align: 'left' },
+  { id: 'tanggalIzin', label: 'Tanggal Izin', defaultWidth: 155, minWidth: 120, align: 'left' },
+  { id: 'jumlahIzin', label: 'Jumlah Izin', defaultWidth: 120, minWidth: 95, align: 'center' },
+  { id: 'kategoriIzin', label: 'Kategori Izin', defaultWidth: 145, minWidth: 115, align: 'center' },
+  { id: 'alasanIzin', label: 'Alasan Izin', defaultWidth: 230, minWidth: 120, align: 'left' },
+  { id: 'pengawasMengetahui', label: 'Pengawas Mengetahui', defaultWidth: 230, minWidth: 140, align: 'left' },
+  { id: 'buktiLampiran', label: 'Bukti / Lampiran', defaultWidth: 130, minWidth: 95, align: 'center' },
+  { id: 'keterangan', label: 'Keterangan', defaultWidth: 135, minWidth: 95, align: 'center' },
+  { id: 'warning', label: 'Warning', defaultWidth: 150, minWidth: 95, align: 'center' },
+  { id: 'aksi', label: 'Aksi', defaultWidth: 100, minWidth: 75, align: 'center' },
 ];
 
 export function EmployeeLeavesScreen({
@@ -472,15 +500,161 @@ export function EmployeeLeavesScreen({
   const [summary, setSummary] = useState<any>(null);
   const [isLeaveStatsOpen, setIsLeaveStatsOpen] = useState(false);
 
-  // Sheet Tabs: 'daftar' (Daftar Rekapan Izin) vs 'diagram' (Diagram & Analitik Manpower)
-  const [activeSheet, setActiveSheet] = useState<'daftar' | 'diagram'>(() => {
+  // Interactive Column Widths State & Handlers
+  const [columnWidths, setColumnWidths] = useState<Record<string, number>>(() => {
+    try {
+      const saved = localStorage.getItem(LEAVE_COL_STORAGE_KEY);
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return {};
+  });
+
+  const [resizingCol, setResizingCol] = useState<string | null>(null);
+  const resizeInfoRef = useRef<{
+    colId: string;
+    startX: number;
+    startWidth: number;
+    minWidth: number;
+  } | null>(null);
+
+  const handleResizeStart = (e: React.MouseEvent | React.TouchEvent, colId: string, currentDomWidth: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const colDef = LEAVE_COLUMNS.find(c => c.id === colId);
+    const minWidth = colDef?.minWidth || 45;
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+    const initialWidth = columnWidths[colId] || currentDomWidth || colDef?.defaultWidth || 150;
+
+    resizeInfoRef.current = {
+      colId,
+      startX: clientX,
+      startWidth: initialWidth,
+      minWidth
+    };
+    setResizingCol(colId);
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+
+    const handleMouseMove = (moveEvent: MouseEvent | TouchEvent) => {
+      const info = resizeInfoRef.current;
+      if (!info) return;
+      const currentX = 'touches' in moveEvent ? moveEvent.touches[0].clientX : moveEvent.clientX;
+      const deltaX = currentX - info.startX;
+      const newWidth = Math.max(info.minWidth, Math.min(1200, Math.round(info.startWidth + deltaX)));
+
+      setColumnWidths(prev => ({
+        ...prev,
+        [info.colId]: newWidth
+      }));
+    };
+
+    const handleMouseUp = () => {
+      if (resizeInfoRef.current) {
+        setColumnWidths(prev => {
+          try {
+            localStorage.setItem(LEAVE_COL_STORAGE_KEY, JSON.stringify(prev));
+          } catch {}
+          return prev;
+        });
+      }
+      resizeInfoRef.current = null;
+      setResizingCol(null);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+      window.removeEventListener('touchmove', handleMouseMove);
+      window.removeEventListener('touchend', handleMouseUp);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    window.addEventListener('touchmove', handleMouseMove, { passive: false });
+    window.addEventListener('touchend', handleMouseUp);
+  };
+
+  const handleResetColumn = (colId: string) => {
+    setColumnWidths(prev => {
+      const updated = { ...prev };
+      delete updated[colId];
+      try {
+        localStorage.setItem(LEAVE_COL_STORAGE_KEY, JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+    toast.info('Lebar kolom dikembalikan ke ukuran bawaan');
+  };
+
+  const handleResetAllColumns = () => {
+    setColumnWidths({});
+    try {
+      localStorage.removeItem(LEAVE_COL_STORAGE_KEY);
+    } catch {}
+    toast.success('Semua ukuran kolom rekapan izin dikembalikan ke ukuran standar');
+  };
+
+  const getColWidth = (colId: string): number => {
+    return columnWidths[colId] || LEAVE_COLUMNS.find(c => c.id === colId)?.defaultWidth || 150;
+  };
+
+  const totalTableWidth = useMemo(() => {
+    return LEAVE_COLUMNS.reduce((sum, col) => {
+      return sum + (columnWidths[col.id] || col.defaultWidth);
+    }, 0);
+  }, [columnWidths]);
+
+  const isAnyColumnResized = useMemo(() => {
+    return Object.keys(columnWidths).length > 0;
+  }, [columnWidths]);
+
+  // Sheet Tabs: 'landing' (Pusat Menu 3D) vs 'daftar' (Daftar Rekapan Izin) vs 'diagram' (Diagram & Analitik Manpower)
+  const [activeSheet, setActiveSheet] = useState<'landing' | 'daftar' | 'diagram'>(() => {
     try {
       const params = new URLSearchParams(window.location.search);
       const s = params.get('tab') || params.get('sheet');
       if (s === 'diagram' || s === 'analytics') return 'diagram';
+      if (s === 'daftar' || s === 'table') return 'daftar';
     } catch {}
-    return 'daftar';
+    return 'landing';
   });
+
+  // Kartu DisplayCards untuk Landing View Modul Rekapan Izin Karyawan (3D)
+  const leaveDisplayCards: DisplayCardProps[] = useMemo(() => [
+    {
+      icon: <FileSpreadsheet className="w-4 h-4 text-teal-600" />,
+      title: "Daftar Izin Karyawan",
+      description: "Rekap data izin, kategori dispensasi, tanggal & approval pengawas",
+      date: `${leaves.length} Data Izin Terdata`,
+      iconClassName: activeSheet === 'daftar' ? "bg-teal-100 text-teal-700 ring-2 ring-teal-500/40" : "bg-slate-100 text-teal-600",
+      titleClassName: "text-teal-800",
+      className: activeSheet === 'daftar' ? "border-teal-500/70 shadow-md ring-2 ring-teal-500/20 bg-teal-50/30" : "",
+      onClick: () => setActiveSheet('daftar')
+    },
+    {
+      icon: <BarChart3 className="w-4 h-4 text-indigo-600" />,
+      title: "Diagram & Analitik",
+      description: "Visualisasi tren cuti, distribusi per shift, departemen & kategori izin",
+      date: "Grafik & Analisis Manpower",
+      iconClassName: activeSheet === 'diagram' ? "bg-indigo-100 text-indigo-700 ring-2 ring-indigo-500/40" : "bg-slate-100 text-indigo-600",
+      titleClassName: "text-indigo-800",
+      className: activeSheet === 'diagram' ? "border-indigo-500/70 shadow-md ring-2 ring-indigo-500/20 bg-indigo-50/30" : "",
+      onClick: () => setActiveSheet('diagram')
+    },
+    {
+      icon: <FileText className="w-4 h-4 text-purple-600" />,
+      title: "Form Pelaporan Izin",
+      description: "Formulir online resmi pengajuan izin & cuti PrepLab Cloud",
+      date: "Formulir Pelaporan Resmi",
+      iconClassName: "bg-purple-100 text-purple-700",
+      titleClassName: "text-purple-800",
+      className: "border-purple-300 hover:border-purple-500/70",
+      onClick: () => {
+        if (onNav) onNav('pelaporan-izin');
+        else setActiveSheet('daftar');
+      }
+    }
+  ], [activeSheet, leaves.length, onNav]);
 
   // Handler Inline Edit langsung pada tabel tanpa bantuan modal
   const handleInlineUpdate = async (id: string | number, field: string, value: any) => {
@@ -1648,12 +1822,20 @@ export function EmployeeLeavesScreen({
                 <ArrowLeft className="w-4 h-4" />
                 <span>Kembali ke Labnote</span>
               </button>
-            ) : onBack && (
+            ) : (
               <button
                 type="button"
-                onClick={onBack}
+                onClick={() => {
+                  if (activeSheet !== 'landing') {
+                    setActiveSheet('landing');
+                    return;
+                  }
+                  if (onBack) onBack();
+                  else if (onNav) onNav('home');
+                  else window.history.back();
+                }}
                 className="p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 hover:text-slate-900 transition-colors mr-1 cursor-pointer"
-                title="Kembali"
+                title={activeSheet !== 'landing' ? "Kembali ke Menu Tab (3D)" : "Kembali"}
               >
                 <ArrowLeft className="w-5 h-5" />
               </button>
@@ -1778,29 +1960,6 @@ export function EmployeeLeavesScreen({
                   </div>
                 </button>
 
-                {/* 3. Unduh PDF Resmi */}
-                <button
-                  type="button"
-                  disabled={isGeneratingPdf}
-                  onClick={() => {
-                    setIsDownloadMenuOpen(false);
-                    handleExportPdf('filtered');
-                  }}
-                  className="w-full p-2.5 rounded-xl hover:bg-rose-50 dark:hover:bg-rose-950/40 text-left flex items-start gap-2.5 transition-colors cursor-pointer group disabled:opacity-60"
-                >
-                  <div className="w-7 h-7 rounded-lg bg-rose-100 dark:bg-rose-950 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0">
-                    <Printer className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <p className="font-bold text-slate-900 dark:text-white group-hover:text-rose-600 transition-colors">
-                      {isGeneratingPdf ? 'Menyusun Dokumen...' : 'Unduh Laporan PDF Resmi'}
-                    </p>
-                    <p className="text-[10.5px] text-slate-500">
-                      Format cetak resmi dengan kop surat & pengesahan
-                    </p>
-                  </div>
-                </button>
-
                 {/* 4. Unduh PNG Hasil Filter */}
                 <button
                   type="button"
@@ -1919,53 +2078,118 @@ export function EmployeeLeavesScreen({
             )}
           </div>
         </div>
+
+        {/* ================= BAR NAVIGASI LEMBAR KERJA ================= */}
+        {activeSheet !== 'landing' && (
+          <div className="w-full flex items-center justify-between gap-2 mt-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+            <button
+              type="button"
+              onClick={() => setActiveSheet('landing')}
+              className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-bold rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-teal-50/60 dark:hover:bg-teal-950/40 hover:border-teal-300 transition-all cursor-pointer shadow-2xs"
+              title="Kembali ke Menu Tab (3D)"
+            >
+              <ChevronLeft className="w-4 h-4 text-teal-600 dark:text-teal-400" />
+              <span>← Kembali ke Menu Tab (3D)</span>
+            </button>
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                Lembar Kerja:
+              </span>
+              <span className="text-xs font-bold px-2.5 py-1 rounded-lg bg-teal-50 dark:bg-teal-950 text-teal-800 dark:text-teal-300 border border-teal-200/70 dark:border-teal-800 shadow-2xs">
+                {activeSheet === 'daftar'
+                  ? `📋 Daftar Izin (${leaves.length} Data)`
+                  : '📈 Diagram & Analitik Manpower'}
+              </span>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ==================================================== */}
       {/* SHEET TABS: DAFTAR IZIN vs DIAGRAM & ANALITIK        */}
       {/* ==================================================== */}
-      <div className="p-1.5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          onClick={() => setActiveSheet('daftar')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-            activeSheet === 'daftar'
-              ? 'bg-[#2298A7] text-white shadow-xs'
-              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
-          }`}
-        >
-          <FileSpreadsheet className="w-4 h-4" />
-          <span>Daftar Izin Karyawan</span>
-          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-            activeSheet === 'daftar' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
-          }`}>
-            {leaves.length}
-          </span>
-        </button>
+      {activeSheet !== 'landing' && (
+        <div className="p-1.5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setActiveSheet('landing')}
+            className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-teal-600"
+            title="Kembali ke Tampilan Menu 3D"
+          >
+            <Sparkles className="w-4 h-4 text-teal-600 dark:text-teal-400" />
+            <span>Pusat Menu (3D)</span>
+          </button>
 
-        <button
-          type="button"
-          onClick={() => setActiveSheet('diagram')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-            activeSheet === 'diagram'
-              ? 'bg-[#2298A7] text-white shadow-xs'
-              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
-          }`}
-        >
-          <BarChart3 className="w-4 h-4" />
-          <span>Diagram & Analitik Manpower</span>
-          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-            activeSheet === 'diagram' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
-          }`}>
-            Grafik
-          </span>
-        </button>
-      </div>
+          <button
+            type="button"
+            onClick={() => setActiveSheet('daftar')}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              activeSheet === 'daftar'
+                ? 'bg-[#2298A7] text-white shadow-xs'
+                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+            }`}
+          >
+            <FileSpreadsheet className="w-4 h-4" />
+            <span>Daftar Izin Karyawan</span>
+            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+              activeSheet === 'daftar' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+            }`}>
+              {leaves.length}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveSheet('diagram')}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              activeSheet === 'diagram'
+                ? 'bg-[#2298A7] text-white shadow-xs'
+                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+            }`}
+          >
+            <BarChart3 className="w-4 h-4" />
+            <span>Diagram & Analitik Manpower</span>
+            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+              activeSheet === 'diagram' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+            }`}>
+              Grafik
+            </span>
+          </button>
+        </div>
+      )}
 
       {/* ==================================================== */}
-      {/* SHEET 2: DIAGRAM & ANALITIK MANPOWER                */}
+      {/* KONTEN UTAMA: LANDING VIEW (3D) vs DIAGRAM vs DAFTAR */}
       {/* ==================================================== */}
-      {activeSheet === 'diagram' ? (
+      {activeSheet === 'landing' ? (
+        <div className="w-full py-4">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/90 dark:border-slate-800 p-6 sm:p-12 shadow-sm text-center space-y-8 animate-in fade-in duration-500 relative overflow-hidden">
+            <div className="max-w-2xl mx-auto space-y-3 relative z-10">
+              <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full text-[11px] font-extrabold uppercase tracking-wider bg-teal-50 dark:bg-teal-950/60 text-teal-800 dark:text-teal-300 border border-teal-200/80 dark:border-teal-800 shadow-2xs">
+                <span className="w-2 h-2 rounded-full bg-[#2298A7] animate-pulse" />
+                PORTAL OPERASIONAL PREPLAB • NAVIGASI MODUL
+              </div>
+              <h2 className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white tracking-tight">
+                Pusat Rekapan Izin &amp; Cuti Karyawan
+              </h2>
+              <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 leading-relaxed max-w-xl mx-auto">
+                Pilih lembar kerja interaktif di bawah untuk melihat tabel rekapitulasi perizinan, diagram analitik manpower, atau mengisi form permohonan izin karyawan.
+              </p>
+            </div>
+
+            {/* Ambient Soft Blur Behind Cards */}
+            <div className="relative pt-2 pb-6 flex justify-center overflow-x-auto z-10">
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[30rem] sm:w-[42rem] h-60 sm:h-72 bg-gradient-to-r from-teal-200/50 via-cyan-100/40 to-indigo-100/50 dark:from-teal-900/20 dark:via-cyan-900/20 dark:to-indigo-900/20 rounded-full blur-3xl pointer-events-none -z-10" />
+              <DisplayCards cards={leaveDisplayCards} />
+            </div>
+
+            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/60 border border-slate-200/70 dark:border-slate-700 shadow-2xs relative z-10">
+              <Sparkles className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
+              <span>Arahkan kursor &amp; klik salah satu kartu di atas untuk membuka lembar kerja secara instan</span>
+            </div>
+          </div>
+        </div>
+      ) : activeSheet === 'diagram' ? (
         <EmployeeLeavesAnalyticsChart leaves={leaves} defaultSection={filterSection} />
       ) : (
         <>
@@ -1987,13 +2211,13 @@ export function EmployeeLeavesScreen({
                     <span className="text-xs sm:text-sm font-black text-slate-900 dark:text-white">
                       Ringkasan & Keterangan Rekap Izin
                     </span>
-                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10.5px] font-semibold bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700">
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
                       {summary?.total || leaves.length} Total Izin
                     </span>
-                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10.5px] font-semibold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
                       {summary?.approvedCount || 0} Terverifikasi
                     </span>
-                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10.5px] font-semibold bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700">
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
                       {summary?.sakitCount || 0} Sakit
                     </span>
                   </div>
@@ -2293,8 +2517,8 @@ export function EmployeeLeavesScreen({
       {/* REKAPAN TABLE                                       */}
       {/* ==================================================== */}
       <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden">
-        {/* Table Action Bar: Count & Direct Download Buttons */}
-        <div className="px-5 py-3 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3 bg-slate-50/70 dark:bg-slate-800/40">
+        {/* Table Action Bar: Count & Resize Reset */}
+        <div className="px-5 py-3 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3 bg-slate-50/70 dark:bg-slate-800/40 flex-wrap">
           <div className="flex items-center gap-2">
             <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-md bg-[#2298A7]/15 text-[#2298A7] font-bold text-xs">
               {processedLeaves.length} Data
@@ -2309,91 +2533,96 @@ export function EmployeeLeavesScreen({
             </p>
           </div>
 
-          <div className="flex items-center gap-1.5">
-            {/* Quick PNG 4 Hari */}
-            <button
-              type="button"
-              disabled={isGeneratingPng}
-              onClick={() => handleExportPng('last_4_days')}
-              title="Unduh rekapan infografis gambar PNG daftar izin 4 hari ke belakang"
-              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-teal-300 dark:border-teal-700 bg-teal-50 hover:bg-teal-100 dark:bg-teal-950/50 dark:hover:bg-teal-900/60 text-teal-800 dark:text-teal-200 font-bold text-xs transition-colors cursor-pointer disabled:opacity-60"
-            >
-              <FileImage className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
-              <span>{isGeneratingPng ? 'PNG...' : 'PNG (4 Hari)'}</span>
-            </button>
-
-            {/* Quick Excel */}
-            <button
-              type="button"
-              disabled={isDownloading}
-              onClick={() => handleExportExcel('filtered')}
-              title="Unduh data tabel saat ini ke format Excel (.xlsx)"
-              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 font-bold text-xs transition-colors cursor-pointer disabled:opacity-60"
-            >
-              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
-              <span>Excel</span>
-            </button>
-
-            {/* Quick PDF */}
-            <button
-              type="button"
-              disabled={isGeneratingPdf}
-              onClick={() => handleExportPdf('filtered')}
-              title="Cetak & Unduh Laporan PDF Resmi dengan Kop Surat"
-              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-rose-200 dark:border-rose-800 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-900/60 text-rose-700 dark:text-rose-300 font-bold text-xs transition-colors cursor-pointer disabled:opacity-60"
-            >
-              <Printer className="w-3.5 h-3.5 text-rose-600" />
-              <span>{isGeneratingPdf ? 'PDF...' : 'PDF Resmi'}</span>
-            </button>
-
-            {/* Quick CSV */}
-            <button
-              type="button"
-              disabled={isDownloading}
-              onClick={() => handleExportCsv('filtered')}
-              title="Unduh data ke format CSV"
-              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-sky-200 dark:border-sky-800 bg-sky-50 hover:bg-sky-100 dark:bg-sky-950/40 dark:hover:bg-sky-900/60 text-sky-700 dark:text-sky-300 font-bold text-xs transition-colors cursor-pointer disabled:opacity-60"
-            >
-              <FileDown className="w-3.5 h-3.5 text-sky-600" />
-              <span>CSV</span>
-            </button>
-
-            {/* Buka Pusat Unduhan */}
-            <button
-              type="button"
-              onClick={() => setIsDownloadModalOpen(true)}
-              title="Buka Pusat Unduhan & Daftar Berkas Rekapan Izin"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#2298A7] hover:bg-[#1a8290] text-white font-bold text-xs transition-colors cursor-pointer shadow-xs"
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span>Daftar Unduh...</span>
-            </button>
+          <div className="flex items-center gap-2 text-xs">
+            <span className="text-[11px] text-slate-400 hidden sm:inline-flex items-center gap-1 select-none">
+              <span className="w-1.5 h-1.5 rounded-full bg-teal-500 inline-block animate-pulse"></span>
+              Geser garis tepi kolom untuk atur lebar
+            </span>
+            {isAnyColumnResized && (
+              <button
+                type="button"
+                onClick={handleResetAllColumns}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold text-slate-600 dark:text-slate-300 hover:text-teal-600 dark:hover:text-teal-400 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-teal-400 transition-all shadow-2xs cursor-pointer active:scale-95"
+                title="Kembalikan semua lebar kolom ke ukuran bawaan"
+              >
+                <RotateCcw className="w-3 h-3 text-teal-600 dark:text-teal-400" />
+                <span>Reset Ukuran Kolom</span>
+              </button>
+            )}
           </div>
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-xs">
+          <table 
+            className="text-left border-collapse text-xs"
+            style={{ 
+              tableLayout: 'fixed',
+              width: `${totalTableWidth}px`,
+              minWidth: '100%' 
+            }}
+          >
+            <colgroup>
+              {LEAVE_COLUMNS.map(col => (
+                <col 
+                  key={col.id} 
+                  style={{ width: `${getColWidth(col.id)}px` }} 
+                />
+              ))}
+            </colgroup>
             <thead>
               <tr className="bg-slate-100/70 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider text-[10.5px]">
-                <th className="py-3 px-3.5 text-center w-12">No</th>
-                <th className="py-3 px-3.5">Karyawan</th>
-                <th className="py-3 px-3.5">Tempat Tinggal</th>
-                <th className="py-3 px-3.5">Bagian & Shift</th>
-                <th className="py-3 px-3.5 whitespace-nowrap">Tanggal Izin</th>
-                <th className="py-3 px-3.5 text-center whitespace-nowrap">Jumlah Izin</th>
-                <th className="py-3 px-3.5 text-center whitespace-nowrap min-w-[130px]">Kategori Izin</th>
-                <th className="py-3 px-3.5">Alasan Izin</th>
-                <th className="py-3 px-3.5 whitespace-nowrap min-w-[200px]">Pengawas Mengetahui</th>
-                <th className="py-3 px-3.5 text-center">Bukti / Lampiran</th>
-                <th className="py-3 px-3.5 text-center">Keterangan</th>
-                <th className="py-3 px-3.5 text-center">Warning</th>
-                <th className="py-3 px-3.5 text-center">Aksi</th>
+                {LEAVE_COLUMNS.map((col, idx) => {
+                  const currentW = getColWidth(col.id);
+                  const isResizing = resizingCol === col.id;
+                  const isLast = idx === LEAVE_COLUMNS.length - 1;
+
+                  return (
+                    <th 
+                      key={col.id}
+                      style={{
+                        width: `${currentW}px`,
+                        minWidth: `${currentW}px`,
+                        maxWidth: `${currentW}px`,
+                      }}
+                      className={`py-3 px-3.5 relative select-none border-r border-slate-200/60 dark:border-slate-800/80 last:border-r-0 ${
+                        col.align === 'center' ? 'text-center' : 'text-left'
+                      } ${isResizing ? 'bg-teal-500/10 text-teal-700 dark:text-teal-300' : ''}`}
+                    >
+                      <div className={`flex items-center gap-1 ${col.align === 'center' ? 'justify-center' : 'justify-start'}`}>
+                        <span className="truncate">{col.label}</span>
+                      </div>
+
+                      {/* Resizer Handle */}
+                      <div
+                        onMouseDown={(e) => handleResizeStart(e, col.id, (e.currentTarget.parentElement?.offsetWidth || currentW))}
+                        onTouchStart={(e) => handleResizeStart(e, col.id, (e.currentTarget.parentElement?.offsetWidth || currentW))}
+                        onClick={(e) => e.stopPropagation()}
+                        onDoubleClick={(e) => {
+                          e.stopPropagation();
+                          handleResetColumn(col.id);
+                        }}
+                        title={`Geser untuk atur lebar kolom "${col.label}" (Klik ganda untuk reset ke ${col.defaultWidth}px)`}
+                        className={`absolute right-0 top-0 bottom-0 w-3.5 cursor-col-resize select-none flex items-center justify-center z-20 group/resizer hover:bg-teal-500/20 active:bg-teal-500/30 transition-colors ${
+                          isResizing ? 'bg-teal-500/30 w-3.5' : ''
+                        }`}
+                      >
+                        <div
+                          className={`w-[2px] h-3.5 rounded-full transition-all ${
+                            isResizing
+                              ? 'bg-teal-500 h-full'
+                              : 'bg-slate-300 dark:bg-slate-600 group-hover/resizer:bg-teal-500 group-hover/resizer:h-4'
+                          }`}
+                        />
+                      </div>
+                    </th>
+                  );
+                })}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-medium">
               {isLoading ? (
                 <tr>
-                  <td colSpan={13} className="py-12 text-center text-slate-400">
+                  <td colSpan={LEAVE_COLUMNS.length} className="py-12 text-center text-slate-400">
                     <div className="flex flex-col items-center justify-center gap-2">
                       <RefreshCw className="w-6 h-6 animate-spin text-indigo-500" />
                       <span className="text-xs font-semibold">Memuat rekapan izin karyawan dari Google Sheet...</span>
@@ -2402,7 +2631,7 @@ export function EmployeeLeavesScreen({
                 </tr>
               ) : paginatedLeaves.length === 0 ? (
                 <tr>
-                  <td colSpan={13} className="py-12 text-center text-slate-400">
+                  <td colSpan={LEAVE_COLUMNS.length} className="py-12 text-center text-slate-400">
                     <div className="flex flex-col items-center justify-center gap-2">
                       <FileSpreadsheet className="w-8 h-8 text-slate-300 dark:text-slate-700" />
                       <p className="text-sm font-bold text-slate-600 dark:text-slate-300">Tidak ada catatan izin yang cocok.</p>
@@ -2424,32 +2653,27 @@ export function EmployeeLeavesScreen({
                       onClick={() => setSelectedLeave(item)}
                     >
                       {/* No */}
-                      <td className="py-3 px-3.5 text-center text-slate-400 font-mono text-[11px]">
+                      <td className="py-3 px-3.5 text-center text-slate-400 font-mono text-[11px] overflow-hidden truncate">
                         {rowNumber}
                       </td>
 
-                      {/* Karyawan (Name & Jabatan) */}
-                      <td className="py-3 px-3.5">
-                        <div className="font-bold text-slate-900 dark:text-white leading-tight">
+                      {/* Karyawan (Name) */}
+                      <td className="py-3 px-3.5 overflow-hidden">
+                        <div className="font-bold text-slate-900 dark:text-white leading-tight truncate" title={item.name}>
                           {item.name}
-                        </div>
-                        <div className="flex items-center gap-1.5 mt-0.5">
-                          <span className="text-[10px] text-slate-400 truncate max-w-[180px]">
-                            {item.jabatan}
-                          </span>
                         </div>
                       </td>
 
-                      {/* Tempat Tinggal - Inline Editable */}
-                      <td className="py-2.5 px-3.5" onClick={(e) => e.stopPropagation()}>
+                      {/* Jabatan - Kolom Baru di samping Nama Karyawan (Inline Editable) */}
+                      <td className="py-3 px-3.5 overflow-hidden" onClick={(e) => e.stopPropagation()}>
                         <input
                           type="text"
-                          defaultValue={item.tempatTinggal || ''}
-                          key={`${item.id}-tt-${item.tempatTinggal}`}
+                          defaultValue={item.jabatan || ''}
+                          key={`${item.id}-jab-${item.jabatan}`}
                           onBlur={(e) => {
                             const val = e.target.value.trim();
-                            if (val !== (item.tempatTinggal || '')) {
-                              handleInlineUpdate(item.id, 'tempatTinggal', val);
+                            if (val !== (item.jabatan || '')) {
+                              handleInlineUpdate(item.id, 'jabatan', val);
                             }
                           }}
                           onKeyDown={(e) => {
@@ -2457,40 +2681,69 @@ export function EmployeeLeavesScreen({
                               (e.target as HTMLInputElement).blur();
                             }
                           }}
-                          placeholder="-"
-                          className="w-full max-w-[140px] px-1.5 py-1 text-xs text-slate-700 dark:text-slate-300 rounded bg-transparent hover:bg-slate-100/70 dark:hover:bg-slate-800/60 focus:bg-white dark:focus:bg-slate-800 border border-transparent focus:border-slate-300 dark:focus:border-slate-600 outline-none transition-all"
-                          title="Edit tempat tinggal"
+                          placeholder="Jabatan..."
+                          className="w-full min-w-0 px-2 py-1 text-xs font-semibold rounded bg-transparent hover:bg-slate-100 dark:hover:bg-slate-800 focus:bg-white dark:focus:bg-slate-800 border border-transparent hover:border-slate-300 dark:hover:border-slate-700 focus:border-indigo-500 text-slate-800 dark:text-slate-200 outline-none transition-all truncate"
+                          title={item.jabatan || 'Edit jabatan langsung di tabel'}
                         />
                       </td>
 
+                      {/* Tempat Tinggal - Inline Editable */}
+                      <td className="py-3 px-3.5 overflow-hidden" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center gap-1.5 w-full min-w-0">
+                          <Building2 className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                          <input
+                            type="text"
+                            defaultValue={item.tempatTinggal || ''}
+                            key={`${item.id}-tt-${item.tempatTinggal}`}
+                            onBlur={(e) => {
+                              const val = e.target.value.trim();
+                              if (val !== (item.tempatTinggal || '')) {
+                                handleInlineUpdate(item.id, 'tempatTinggal', val);
+                              }
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                (e.target as HTMLInputElement).blur();
+                              }
+                            }}
+                            placeholder="Isi tempat tinggal..."
+                            className="w-full min-w-0 px-2 py-1 text-xs font-semibold rounded bg-transparent hover:bg-slate-100 dark:hover:bg-slate-800 focus:bg-white dark:focus:bg-slate-800 border border-transparent hover:border-slate-300 dark:hover:border-slate-700 focus:border-indigo-500 text-slate-800 dark:text-slate-200 outline-none transition-all truncate"
+                            title={item.tempatTinggal || 'Edit tempat tinggal langsung di tabel'}
+                          />
+                        </div>
+                      </td>
+
                       {/* Bagian & Shift - Inline Editable */}
-                      <td className="py-2.5 px-3.5" onClick={(e) => e.stopPropagation()}>
-                        <div className="font-medium text-slate-800 dark:text-slate-200">
+                      <td className="py-3 px-3.5 overflow-hidden" onClick={(e) => e.stopPropagation()}>
+                        <div className="font-semibold text-slate-800 dark:text-slate-200 truncate" title={item.penempatan || item.section}>
                           {item.penempatan || item.section}
                         </div>
-                        <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 flex items-center gap-1.5 flex-wrap">
+                        <div className="text-[10.5px] text-slate-500 mt-1 flex items-center gap-1.5 flex-wrap">
                           <select
                             value={item.shift || 'Shift A'}
                             onChange={(e) => handleInlineUpdate(item.id, 'shift', e.target.value)}
-                            className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-medium text-[10.5px] border border-slate-200 dark:border-slate-700 cursor-pointer focus:ring-1 focus:ring-slate-400 outline-none"
-                            title="Ubah shift"
+                            className="px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 font-bold text-[10px] border border-indigo-200 dark:border-indigo-800 cursor-pointer focus:ring-1 focus:ring-indigo-500 outline-none max-w-full"
+                            title="Ubah shift langsung di tabel"
                           >
                             <option value="Shift A">Shift A</option>
                             <option value="Shift B">Shift B</option>
                             <option value="Nonshift">Nonshift</option>
                           </select>
                           {item.jamShift && (
-                            <span className="text-slate-400 text-[10px]">&bull; {item.jamShift}</span>
+                            <span className="text-slate-400 text-[10px] truncate">&bull; {item.jamShift}</span>
                           )}
                         </div>
                       </td>
 
                       {/* Tanggal Izin - Format [$-id-id] dd-mmm-yyyy & Inline Editable */}
-                      <td className="py-2.5 px-3.5 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                        <div className="relative inline-flex items-center group">
-                          <span className="text-xs font-mono font-medium text-slate-700 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-white cursor-pointer px-1.5 py-0.5 rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
-                            {formatLeaveDateIndo(item.awalAbsensi)}
-                          </span>
+                      <td className="py-3 px-3.5 whitespace-nowrap overflow-hidden" onClick={(e) => e.stopPropagation()}>
+                        <div className="relative inline-flex items-center group max-w-full">
+                          <div className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold font-mono bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/80 border border-slate-200 dark:border-slate-700 hover:border-teal-400 dark:hover:border-teal-500 text-slate-800 dark:text-slate-100 shadow-2xs transition-all cursor-pointer">
+                            <Calendar className="w-3.5 h-3.5 text-[#135e69] dark:text-teal-400 shrink-0 group-hover:scale-110 transition-transform" />
+                            <span className="tracking-wide">
+                              {formatLeaveDateIndo(item.awalAbsensi)}
+                            </span>
+                          </div>
                           <input
                             type="date"
                             value={toIsoDate(item.awalAbsensi)}
@@ -2502,60 +2755,63 @@ export function EmployeeLeavesScreen({
                               }
                             }}
                             className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-                            title="Klik untuk memilih / mengubah tanggal izin"
+                            title="Klik untuk memilih / mengubah tanggal izin (dd-mmm-yyyy)"
                           />
                         </div>
                       </td>
 
                       {/* Jumlah Izin - Kolom Terpisah & Inline Editable */}
-                      <td className="py-2.5 px-3.5 text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                        <input
-                          type="text"
-                          defaultValue={item.lamanyaIzin || `${item.jumlah || 1} Hari`}
-                          key={`${item.id}-dur-${item.lamanyaIzin}`}
-                          onBlur={(e) => {
-                            const val = e.target.value.trim();
-                            if (val && val !== item.lamanyaIzin) {
-                              handleInlineUpdate(item.id, 'lamanyaIzin', val);
-                            }
-                          }}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
-                          }}
-                          className="w-16 px-1.5 py-0.5 text-xs font-medium text-center text-slate-700 dark:text-slate-300 rounded bg-transparent hover:bg-slate-100 dark:hover:bg-slate-800 focus:bg-white dark:focus:bg-slate-800 border border-transparent focus:border-slate-300 dark:focus:border-slate-600 outline-none transition-all"
-                          title="Edit durasi izin"
-                        />
+                      <td className="py-3 px-3.5 text-center whitespace-nowrap overflow-hidden" onClick={(e) => e.stopPropagation()}>
+                        <div className="inline-flex items-center justify-center gap-1.5 px-2.5 py-1 rounded-lg bg-purple-50 dark:bg-purple-950/40 border border-purple-200/80 dark:border-purple-800/60 shadow-2xs">
+                          <Clock className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400 shrink-0" />
+                          <input
+                            type="text"
+                            defaultValue={item.lamanyaIzin || `${item.jumlah || 1} Hari`}
+                            key={`${item.id}-dur-${item.lamanyaIzin}`}
+                            onBlur={(e) => {
+                              const val = e.target.value.trim();
+                              if (val && val !== item.lamanyaIzin) {
+                                handleInlineUpdate(item.id, 'lamanyaIzin', val);
+                              }
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                            }}
+                            className="w-16 px-1 py-0.5 text-xs font-bold text-center text-purple-700 dark:text-purple-300 rounded bg-white dark:bg-slate-800/90 border border-purple-200 dark:border-purple-700 focus:border-purple-500 focus:ring-1 focus:ring-purple-400 outline-none transition-all"
+                            title="Edit jumlah / durasi izin (contoh: 1 Hari, 2 Hari)"
+                          />
+                        </div>
                       </td>
 
                       {/* Kategori Izin - Sinkronisasi Google Sheet Database Rooster Prep & Lab */}
-                      <td className="py-2.5 px-3 text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                        <div className="inline-flex items-center justify-center">
+                      <td className="py-3 px-3 text-center whitespace-nowrap overflow-hidden" onClick={(e) => e.stopPropagation()}>
+                        <div className="inline-flex items-center justify-center max-w-full">
                           <select
                             value={item.kategoriIzin || 'I'}
                             onChange={(e) => {
                               const val = e.target.value;
                               handleInlineUpdate(item.id, 'kategoriIzin', val);
                             }}
-                            className={`px-2 py-0.5 text-[11px] font-semibold rounded-md border cursor-pointer transition-all outline-none ${
-                              KATEGORI_IZIN_CONFIG[item.kategoriIzin || 'I']?.badgeClass || 'bg-slate-100 text-slate-700 border-slate-200'
+                            className={`px-2.5 py-1 text-xs font-black rounded-lg border shadow-2xs cursor-pointer transition-all max-w-full ${
+                              KATEGORI_IZIN_CONFIG[item.kategoriIzin || 'I']?.badgeClass || 'bg-slate-50 text-slate-700 border-slate-200'
                             }`}
                             title={
-                              item.kategoriIzin === 'IK' ? 'IK = Izin Khusus' :
-                              item.kategoriIzin === 'SS' ? 'SS = Sakit Site' :
-                              item.kategoriIzin === 'SL' ? 'SL = Sakit Luar Site' :
-                              'I = Izin Biasa'
+                              item.kategoriIzin === 'IK' ? 'IK = Izin Khusus (Sinkron Database Rooster)' :
+                              item.kategoriIzin === 'SS' ? 'SS = Sakit Site (Sinkron Database Rooster)' :
+                              item.kategoriIzin === 'SL' ? 'SL = Sakit Luar Site (Sinkron Database Rooster)' :
+                              'I = Izin Biasa (Sinkron Database Rooster)'
                             }
                           >
-                            <option value="I" className="text-slate-800 bg-white dark:bg-slate-800 dark:text-slate-200">I = Izin Biasa</option>
-                            <option value="IK" className="text-slate-800 bg-white dark:bg-slate-800 dark:text-slate-200">IK = Izin Khusus</option>
-                            <option value="SS" className="text-slate-800 bg-white dark:bg-slate-800 dark:text-slate-200">SS = Sakit Site</option>
-                            <option value="SL" className="text-slate-800 bg-white dark:bg-slate-800 dark:text-slate-200">SL = Sakit Luar Site</option>
+                            <option value="I" className="font-bold text-sky-700 bg-white dark:bg-slate-800 dark:text-sky-300">I = Izin Biasa</option>
+                            <option value="IK" className="font-bold text-purple-700 bg-white dark:bg-slate-800 dark:text-purple-300">IK = Izin Khusus</option>
+                            <option value="SS" className="font-bold text-rose-700 bg-white dark:bg-slate-800 dark:text-rose-300">SS = Sakit Site</option>
+                            <option value="SL" className="font-bold text-amber-700 bg-white dark:bg-slate-800 dark:text-amber-300">SL = Sakit Luar Site</option>
                           </select>
                         </div>
                       </td>
 
                       {/* Alasan Izin - Inline Editable */}
-                      <td className="py-2.5 px-3.5 max-w-xs" onClick={(e) => e.stopPropagation()}>
+                      <td className="py-3 px-3.5 overflow-hidden" onClick={(e) => e.stopPropagation()}>
                         <input
                           type="text"
                           defaultValue={item.alasanAbsensi || ''}
@@ -2571,74 +2827,70 @@ export function EmployeeLeavesScreen({
                               (e.target as HTMLInputElement).blur();
                             }
                           }}
-                          placeholder="-"
-                          className="w-full px-2 py-1 text-xs text-slate-700 dark:text-slate-300 rounded bg-transparent hover:bg-slate-100/70 dark:hover:bg-slate-800/60 focus:bg-white dark:focus:bg-slate-800 border border-transparent focus:border-slate-300 dark:focus:border-slate-600 outline-none transition-all"
-                          title="Edit alasan izin"
+                          placeholder="Ketik alasan izin..."
+                          className="w-full min-w-0 px-2.5 py-1 text-xs font-medium rounded bg-slate-50/60 dark:bg-slate-800/60 hover:bg-white dark:hover:bg-slate-800 focus:bg-white dark:focus:bg-slate-800 border border-slate-200/80 dark:border-slate-700 focus:border-indigo-500 text-slate-800 dark:text-slate-200 outline-none transition-all shadow-2xs truncate"
+                          title={item.alasanAbsensi || 'Edit alasan izin langsung di tabel (Excel-style)'}
                         />
                       </td>
 
                       {/* Pengawas Mengetahui - Kolom Otomatis Melebar & Inline Editable */}
-                      <td className="py-2.5 px-3.5 whitespace-nowrap min-w-[180px]" onClick={(e) => e.stopPropagation()}>
-                        <input
-                          type="text"
-                          defaultValue={item.pengawasMengetahui || ''}
-                          key={`${item.id}-pm-${item.pengawasMengetahui}`}
-                          onBlur={(e) => {
-                            const val = e.target.value.trim();
-                            if (val !== (item.pengawasMengetahui || '')) {
-                              handleInlineUpdate(item.id, 'pengawasMengetahui', val);
-                            }
-                          }}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              (e.target as HTMLInputElement).blur();
-                            }
-                          }}
-                          placeholder="Pengawas..."
-                          style={{ width: `${Math.max(14, (item.pengawasMengetahui || 'Pengawas...').length + 2)}ch` }}
-                          className="max-w-[300px] px-2 py-1 text-xs font-medium text-slate-800 dark:text-slate-200 rounded bg-transparent hover:bg-slate-100/70 dark:hover:bg-slate-800/60 focus:bg-white dark:focus:bg-slate-800 border border-transparent focus:border-slate-300 dark:focus:border-slate-600 outline-none transition-all"
-                          title="Edit pengawas mengetahui"
-                        />
-                        {isSheetSource && (
-                          <span className="text-[9.5px] text-slate-400 block px-2 whitespace-nowrap">
-                            Sheet Verified
-                          </span>
-                        )}
+                      <td className="py-3 px-3.5 overflow-hidden" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center gap-1.5 w-full min-w-0">
+                          <ShieldCheck className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400 shrink-0" />
+                          <input
+                            type="text"
+                            defaultValue={item.pengawasMengetahui || ''}
+                            key={`${item.id}-pm-${item.pengawasMengetahui}`}
+                            onBlur={(e) => {
+                              const val = e.target.value.trim();
+                              if (val !== (item.pengawasMengetahui || '')) {
+                                handleInlineUpdate(item.id, 'pengawasMengetahui', val);
+                              }
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                (e.target as HTMLInputElement).blur();
+                              }
+                            }}
+                            placeholder="Pengawas..."
+                            className="w-full min-w-0 px-2.5 py-1 text-xs font-semibold rounded bg-slate-50/70 dark:bg-slate-800/60 hover:bg-white dark:hover:bg-slate-800 focus:bg-white dark:focus:bg-slate-800 border border-slate-200/80 dark:border-slate-700 focus:border-teal-500 text-slate-800 dark:text-slate-200 outline-none transition-all shadow-2xs truncate"
+                            title={item.pengawasMengetahui || 'Edit pengawas mengetahui langsung di tabel (Excel-style)'}
+                          />
+                        </div>
                       </td>
 
                       {/* Bukti Lampiran */}
-                      <td className="py-2.5 px-3.5 text-center" onClick={(e) => e.stopPropagation()}>
+                      <td className="py-3 px-3.5 text-center overflow-hidden" onClick={(e) => e.stopPropagation()}>
                         {item.lampiran ? (
                           <a
                             href={item.lampiran}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200 hover:underline transition-colors"
-                            title="Buka lampiran bukti"
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/60 text-indigo-600 dark:text-indigo-400 text-[11px] font-bold transition-colors whitespace-nowrap"
                           >
-                            <Paperclip className="w-3 h-3 text-slate-400" />
-                            <span>Bukti</span>
+                            <Paperclip className="w-3 h-3" />
+                            <span>Lihat Bukti</span>
                           </a>
                         ) : (
-                          <span className="text-[11px] text-slate-300 dark:text-slate-600">-</span>
+                          <span className="text-[10px] text-slate-400">-</span>
                         )}
                       </td>
 
                       {/* Keterangan - Manual Dropdown Selector */}
-                      <td className="py-2.5 px-3.5 text-center" onClick={(e) => e.stopPropagation()}>
+                      <td className="py-3 px-3.5 text-center overflow-hidden" onClick={(e) => e.stopPropagation()}>
                         <select
                           value={item.acc || 'Pending'}
                           onChange={(e) => handleInlineUpdate(item.id, 'acc', e.target.value)}
-                          className={`px-2 py-0.5 rounded-md text-[10.5px] font-semibold border cursor-pointer outline-none transition-all ${
+                          className={`px-2 py-1 rounded-lg text-[10.5px] font-bold border cursor-pointer outline-none transition-all shadow-2xs max-w-full ${
                             item.acc === 'Izin Selesai'
-                              ? 'bg-slate-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800'
+                              ? 'bg-emerald-50 text-emerald-800 border-emerald-300 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-700'
                               : item.acc === 'Disetujui' || item.acc?.toLowerCase().includes('setuju')
-                              ? 'bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700'
+                              ? 'bg-sky-50 text-sky-800 border-sky-300 dark:bg-sky-950/60 dark:text-sky-300 dark:border-sky-700'
                               : item.acc === 'Ditolak'
-                              ? 'bg-rose-50/60 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800'
-                              : 'bg-amber-50/60 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800'
+                              ? 'bg-rose-50 text-rose-800 border-rose-300 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-700'
+                              : 'bg-amber-50 text-amber-800 border-amber-300 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-700'
                           }`}
-                          title="Ubah Keterangan"
+                          title="Ubah Keterangan izin secara manual"
                         >
                           <option value="Pending">Pending</option>
                           <option value="Disetujui">Disetujui</option>
@@ -2648,24 +2900,24 @@ export function EmployeeLeavesScreen({
                       </td>
 
                       {/* Kolom Warning: Muncul jika belum 'Izin Selesai' dalam 2 hari dari tanggal izin */}
-                      <td className="py-2.5 px-3.5 text-center" onClick={(e) => e.stopPropagation()}>
+                      <td className="py-3 px-3.5 text-center overflow-hidden" onClick={(e) => e.stopPropagation()}>
                         {isOverdue2Days && item.acc !== 'Izin Selesai' ? (
-                          <span className="inline-flex items-center gap-1 text-[11px] font-medium text-rose-600 dark:text-rose-400 whitespace-nowrap" title="Izin telah lewat 2 hari">
-                            <AlertTriangle className="w-3 h-3 shrink-0" />
-                            <span>&gt; 2 Hari</span>
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300 border border-rose-200 dark:border-rose-800 shadow-2xs whitespace-nowrap animate-pulse">
+                            <AlertTriangle className="w-3 h-3 text-rose-600 dark:text-rose-400 shrink-0" />
+                            <span>Izin telah lewat 2 Hari</span>
                           </span>
                         ) : item.acc === 'Izin Selesai' ? (
-                          <span className="inline-flex items-center gap-1 text-[11px] text-slate-400 dark:text-slate-500">
-                            <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                          <span className="inline-flex items-center gap-1 text-[10.5px] font-semibold text-emerald-600 dark:text-emerald-400 whitespace-nowrap">
+                            <CheckCircle2 className="w-3.5 h-3.5" />
                             <span>Selesai</span>
                           </span>
                         ) : (
-                          <span className="text-slate-300 dark:text-slate-600 text-xs">-</span>
+                          <span className="text-slate-400 text-xs">-</span>
                         )}
                       </td>
 
                       {/* Aksi - Tanpa tombol Edit (Langsung edit di sel tabel) */}
-                      <td className="py-3 px-3.5 text-center" onClick={(e) => e.stopPropagation()}>
+                      <td className="py-3 px-3.5 text-center overflow-hidden" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-center gap-1">
                           <button
                             type="button"

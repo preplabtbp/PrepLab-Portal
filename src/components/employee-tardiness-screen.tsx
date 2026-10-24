@@ -955,6 +955,7 @@ export function EmployeeTardinessScreen({
                       <th className="sticky top-0 bg-slate-100 dark:bg-slate-800 py-3.5 px-4 z-20">Tanggal</th>
                       <th className="sticky top-0 bg-slate-100 dark:bg-slate-800 py-3.5 px-3 text-center z-20">Waktu</th>
                       <th className="sticky top-0 bg-slate-100 dark:bg-slate-800 py-3.5 px-4 z-20">Nama Karyawan</th>
+                      <th className="sticky top-0 bg-slate-100 dark:bg-slate-800 py-3.5 px-4 z-20">Jabatan</th>
                       <th className="sticky top-0 bg-slate-100 dark:bg-slate-800 py-3.5 px-3 text-center z-20">Section</th>
                       <th className="sticky top-0 bg-slate-100 dark:bg-slate-800 py-3.5 px-3 text-center z-20">Shift</th>
                       <th className="sticky top-0 bg-slate-100 dark:bg-slate-800 py-3.5 px-3 text-center z-20">Kategori</th>
@@ -1069,11 +1070,35 @@ export function EmployeeTardinessScreen({
                                   <span>{r.name}</span>
                                   <Pencil className="w-3 h-3 text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity" />
                                 </div>
-                                {r.jabatan && (
-                                  <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate max-w-[200px]">
-                                    {r.jabatan}
-                                  </div>
-                                )}
+                              </div>
+                            )}
+                          </td>
+
+                          {/* 3b. Jabatan (Kolom Terpisah di Samping Nama Karyawan, Inline Editable) */}
+                          <td className="py-2.5 px-4">
+                            {editingCell?.id === r.id && editingCell?.field === 'jabatan' ? (
+                              <input
+                                type="text"
+                                autoFocus
+                                value={editValue}
+                                onChange={e => setEditValue(e.target.value)}
+                                onBlur={() => handleInlineCellUpdate(r.id, 'jabatan', editValue)}
+                                onKeyDown={e => {
+                                  if (e.key === 'Enter') handleInlineCellUpdate(r.id, 'jabatan', editValue);
+                                  if (e.key === 'Escape') setEditingCell(null);
+                                }}
+                                className="w-full text-xs font-semibold px-2 py-1 rounded bg-white dark:bg-slate-800 border border-teal-500 shadow-xs focus:outline-none"
+                              />
+                            ) : (
+                              <div
+                                onClick={() => startEditingCell(r.id, 'jabatan', r.jabatan || '')}
+                                className="cursor-pointer group p-1 -m-1 rounded hover:bg-teal-50/40 dark:hover:bg-teal-950/20 hover:ring-1 hover:ring-teal-400 flex items-center justify-between"
+                                title="Klik untuk mengedit jabatan"
+                              >
+                                <span className="text-xs font-medium text-slate-700 dark:text-slate-300 truncate max-w-[180px]">
+                                  {r.jabatan || '-'}
+                                </span>
+                                <Pencil className="w-3 h-3 text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity ml-1 shrink-0" />
                               </div>
                             )}
                           </td>

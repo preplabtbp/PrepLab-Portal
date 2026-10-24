@@ -14,7 +14,6 @@ import {
   RefreshCw,
   CheckSquare,
   Square,
-  Printer,
   ShieldCheck,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -646,11 +645,6 @@ export function TrainingRequestFormSheet({ employees = [], canManage = true }: T
     toast.success('Pengaturan dokumen berhasil disimpan');
   };
 
-  // Print PDF
-  const handlePrint = () => {
-    window.print();
-  };
-
   // =========================================================================
   // EXCEL EXPORT 1: ULTRA-PROFESSIONAL EXCEL (.xlsx) WITH MERGES & AUTO-WIDTHS
   // =========================================================================
@@ -749,8 +743,9 @@ export function TrainingRequestFormSheet({ employees = [], canManage = true }: T
     ];
 
     XLSX.utils.book_append_sheet(wb, ws, 'List Peserta Training');
-    const safeName = (sheetData.title || 'List_Peserta_Training').replace(/[^a-zA-Z0-9_-]/g, '_');
-    XLSX.writeFile(wb, `${safeName}_${Date.now()}.xlsx`);
+    const rawWeek = (sheetData.week || '').trim();
+    const cleanWeek = rawWeek ? rawWeek.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_-]/g, '') : 'Week';
+    XLSX.writeFile(wb, `List_Peserta_Training_${cleanWeek}.xlsx`);
     toast.success('Excel Standar (.xlsx) berhasil diunduh!');
   };
 
@@ -758,6 +753,10 @@ export function TrainingRequestFormSheet({ employees = [], canManage = true }: T
   // EXCEL EXPORT 2: EXECUTIVE FORMATTED EXCEL WITH EXACT ON-SCREEN STYLING
   // =========================================================================
   const handleExportStyledExcel = () => {
+    const rawWeek = (sheetData.week || '').trim();
+    const cleanWeek = rawWeek ? rawWeek.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_-]/g, '') : 'Week';
+    const fileName = `List_Peserta_Training_${cleanWeek}.xls`;
+
     let html = `
       <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
       <head>
@@ -782,7 +781,9 @@ export function TrainingRequestFormSheet({ employees = [], canManage = true }: T
         <![endif]-->
         <style>
           body { font-family: Calibri, 'Segoe UI', Arial, sans-serif; }
-          table { border-collapse: collapse; width: 100%; }
+          table { border-collapse: collapse; width: 100%; border: 1.5pt solid #475569; }
+          th { border: 1pt solid #475569; }
+          td { border: 1pt solid #94A3B8; }
           .doc-number {
             font-family: Consolas, 'Courier New', monospace;
             font-size: 9pt;
@@ -792,6 +793,7 @@ export function TrainingRequestFormSheet({ employees = [], canManage = true }: T
             height: 24px;
             vertical-align: middle;
             padding-right: 6px;
+            border: none !important;
           }
           .main-title {
             font-size: 16pt;
@@ -803,6 +805,7 @@ export function TrainingRequestFormSheet({ employees = [], canManage = true }: T
             letter-spacing: 1.5px;
             text-transform: uppercase;
             font-family: Arial, 'Segoe UI', sans-serif;
+            border: 1pt solid #94A3B8;
           }
           .dept-banner {
             background-color: #005FA3 !important;
@@ -812,7 +815,7 @@ export function TrainingRequestFormSheet({ employees = [], canManage = true }: T
             text-align: center !important;
             vertical-align: middle !important;
             height: 38px;
-            border: 1px solid #004578;
+            border: 1.5pt solid #004578 !important;
             letter-spacing: 1px;
             text-transform: uppercase;
           }
@@ -824,7 +827,7 @@ export function TrainingRequestFormSheet({ employees = [], canManage = true }: T
             text-align: center !important;
             vertical-align: middle !important;
             height: 38px;
-            border: 1px solid #94A3B8;
+            border: 1.5pt solid #94A3B8 !important;
             letter-spacing: 1px;
             text-transform: uppercase;
           }
@@ -834,8 +837,8 @@ export function TrainingRequestFormSheet({ employees = [], canManage = true }: T
             font-weight: 900;
             text-align: center !important;
             vertical-align: middle !important;
-            border: 1px solid #475569;
-            border-bottom: 2.5px solid #334155;
+            border: 1pt solid #475569 !important;
+            border-bottom: 2.5pt solid #334155 !important;
             height: 36px;
             font-size: 10pt;
             text-transform: uppercase;
@@ -843,57 +846,59 @@ export function TrainingRequestFormSheet({ employees = [], canManage = true }: T
           }
           .training-col {
             font-weight: 900;
-            vertical-align: middle;
-            text-align: center;
+            vertical-align: middle !important;
+            text-align: center !important;
+            mso-vertical-align-alt: middle;
             background-color: #FFFFFF;
-            border: 1px solid #CBD5E1;
-            padding: 10px 8px;
+            border: 1pt solid #94A3B8 !important;
+            padding: 8px 6px;
             font-size: 10pt;
             color: #0F172A;
           }
           .date-col {
             font-weight: 700;
-            vertical-align: middle;
-            text-align: center;
+            vertical-align: middle !important;
+            text-align: center !important;
+            mso-vertical-align-alt: middle;
             background-color: #FFFFFF;
-            border: 1px solid #CBD5E1;
-            padding: 10px 8px;
+            border: 1pt solid #94A3B8 !important;
+            padding: 8px 6px;
             font-size: 9.5pt;
             color: #1E293B;
           }
           .cell-center {
-            text-align: center;
-            vertical-align: middle;
-            border: 1px solid #CBD5E1;
+            text-align: center !important;
+            vertical-align: middle !important;
+            border: 1pt solid #94A3B8 !important;
             padding: 7px 4px;
             font-size: 9.5pt;
             color: #334155;
           }
           .cell-left {
-            text-align: left;
-            vertical-align: middle;
-            border: 1px solid #CBD5E1;
+            text-align: left !important;
+            vertical-align: middle !important;
+            border: 1pt solid #94A3B8 !important;
             padding: 7px 10px;
             font-size: 9.5pt;
             color: #0F172A;
           }
           .cell-mono {
             font-family: Consolas, monospace;
-            text-align: center;
-            vertical-align: middle;
-            border: 1px solid #CBD5E1;
+            text-align: center !important;
+            vertical-align: middle !important;
+            border: 1pt solid #94A3B8 !important;
             padding: 7px 4px;
             font-size: 9.5pt;
             color: #334155;
             mso-number-format: "\\@";
           }
           .session-border-bottom {
-            border-bottom: 2.5px solid #475569 !important;
+            border-bottom: 2.5pt solid #475569 !important;
           }
         </style>
       </head>
       <body>
-        <table>
+        <table border="1" bordercolor="#94A3B8" cellpadding="5" cellspacing="0" style="border-collapse: collapse; width: 100%; border: 1.5pt solid #475569;">
           <!-- ROW 0: DOCUMENT NUMBER -->
           <tr>
             <td colspan="7" style="border: none;"></td>
@@ -932,33 +937,34 @@ export function TrainingRequestFormSheet({ employees = [], canManage = true }: T
       if (session.participants.length === 0) {
         html += `
           <tr>
-            <td class="training-col session-border-bottom"><b>${session.trainingName}</b></td>
-            <td class="date-col session-border-bottom"><b>${formattedDate}</b></td>
-            <td class="cell-center session-border-bottom">-</td>
-            <td class="cell-left session-border-bottom" colspan="6" style="color: #64748B; font-style: italic;">Belum ada peserta terdaftar</td>
+            <td align="center" valign="middle" class="training-col session-border-bottom" style="text-align: center !important; vertical-align: middle !important; mso-vertical-align-alt: middle; border: 1pt solid #94A3B8; border-bottom: 2.5pt solid #475569; background-color: #FFFFFF;"><b>${session.trainingName}</b></td>
+            <td align="center" valign="middle" class="date-col session-border-bottom" style="text-align: center !important; vertical-align: middle !important; mso-vertical-align-alt: middle; border: 1pt solid #94A3B8; border-bottom: 2.5pt solid #475569; background-color: #FFFFFF;"><b>${formattedDate}</b></td>
+            <td align="center" valign="middle" class="cell-center session-border-bottom" style="text-align: center; vertical-align: middle; border: 1pt solid #94A3B8; border-bottom: 2.5pt solid #475569;">-</td>
+            <td align="left" valign="middle" class="cell-left session-border-bottom" colspan="6" style="text-align: left; vertical-align: middle; border: 1pt solid #94A3B8; border-bottom: 2.5pt solid #475569; color: #64748B; font-style: italic;">Belum ada peserta terdaftar</td>
           </tr>
         `;
       } else {
         session.participants.forEach((p, idx) => {
           const isLastInSession = idx === session.participants.length - 1;
           const borderClass = isLastInSession ? 'session-border-bottom' : '';
+          const bottomBorderInline = isLastInSession ? 'border-bottom: 2.5pt solid #475569 !important;' : '';
           html += `<tr>`;
 
           if (idx === 0) {
             html += `
-              <td rowspan="${rowCount}" class="training-col session-border-bottom"><b>${session.trainingName}</b></td>
-              <td rowspan="${rowCount}" class="date-col session-border-bottom"><b>${formattedDate}</b></td>
+              <td rowspan="${rowCount}" align="center" valign="middle" class="training-col session-border-bottom" style="text-align: center !important; vertical-align: middle !important; mso-vertical-align-alt: middle; border: 1pt solid #94A3B8; border-bottom: 2.5pt solid #475569 !important; background-color: #FFFFFF;"><b>${session.trainingName}</b></td>
+              <td rowspan="${rowCount}" align="center" valign="middle" class="date-col session-border-bottom" style="text-align: center !important; vertical-align: middle !important; mso-vertical-align-alt: middle; border: 1pt solid #94A3B8; border-bottom: 2.5pt solid #475569 !important; background-color: #FFFFFF;"><b>${formattedDate}</b></td>
             `;
           }
 
           html += `
-            <td class="cell-center ${borderClass}"><b>${idx + 1}</b></td>
-            <td class="cell-left ${borderClass}"><b>${p.nama}</b></td>
-            <td class="cell-mono ${borderClass}">${p.nik}</td>
-            <td class="cell-center ${borderClass}"><b>${p.pt}</b></td>
-            <td class="cell-left ${borderClass}">${p.dept}</td>
-            <td class="cell-left ${borderClass}">${p.jabatan}</td>
-            <td class="cell-center ${borderClass}"><b>${p.gol}</b></td>
+            <td align="center" valign="middle" class="cell-center ${borderClass}" style="text-align: center; vertical-align: middle; border: 1pt solid #94A3B8; ${bottomBorderInline}"><b>${idx + 1}</b></td>
+            <td align="left" valign="middle" class="cell-left ${borderClass}" style="text-align: left; vertical-align: middle; border: 1pt solid #94A3B8; ${bottomBorderInline}"><b>${p.nama}</b></td>
+            <td align="center" valign="middle" class="cell-mono ${borderClass}" style="text-align: center; vertical-align: middle; border: 1pt solid #94A3B8; ${bottomBorderInline}">${p.nik}</td>
+            <td align="center" valign="middle" class="cell-center ${borderClass}" style="text-align: center; vertical-align: middle; border: 1pt solid #94A3B8; ${bottomBorderInline}"><b>${p.pt}</b></td>
+            <td align="left" valign="middle" class="cell-left ${borderClass}" style="text-align: left; vertical-align: middle; border: 1pt solid #94A3B8; ${bottomBorderInline}">${p.dept}</td>
+            <td align="left" valign="middle" class="cell-left ${borderClass}" style="text-align: left; vertical-align: middle; border: 1pt solid #94A3B8; ${bottomBorderInline}">${p.jabatan}</td>
+            <td align="center" valign="middle" class="cell-center ${borderClass}" style="text-align: center; vertical-align: middle; border: 1pt solid #94A3B8; ${bottomBorderInline}"><b>${p.gol}</b></td>
           </tr>`;
         });
       }
@@ -974,8 +980,7 @@ export function TrainingRequestFormSheet({ employees = [], canManage = true }: T
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    const safeName = (sheetData.title || 'List_Peserta_Training').replace(/[^a-zA-Z0-9_-]/g, '_');
-    link.download = `${safeName}_${Date.now()}.xls`;
+    link.download = fileName;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -1055,16 +1060,6 @@ export function TrainingRequestFormSheet({ employees = [], canManage = true }: T
             className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl border border-slate-200 transition-all"
           >
             <RefreshCw className="w-4 h-4" />
-          </button>
-
-          <button
-            type="button"
-            onClick={handlePrint}
-            title="Cetak Formulir / Simpan PDF"
-            className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-900 text-white text-xs font-semibold rounded-xl transition-all shadow-sm"
-          >
-            <Printer className="w-3.5 h-3.5" />
-            <span>Print PDF</span>
           </button>
 
           {/* Single Unified Download Excel Button */}

@@ -115,7 +115,7 @@ export function FoodReportModal({ isOpen, onClose, userNik, userName, userDept }
               <div className="grid grid-cols-3 gap-2">
                 {['Siang', 'Malam', 'Longshift'].map(s => (
                   <button
-                    key={s}
+                    key={s === 'Longshift' ? 'Long Shift' : s}
                     type="button"
                     onClick={() => setShift(s as any)}
                     className={`flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-lg border text-sm font-medium transition-all ${

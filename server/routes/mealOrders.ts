@@ -1244,7 +1244,8 @@ export async function syncMealOrdersFromRoster(date: string, updatedBy = 'system
 
     // Jangan rubah ke Bungkusan Sore saat pindah tanggal jika tidak diganti!
     const isExplicitBungkusSore = finalCatatan === 'Bungkusan Sore' || finalCatatan === 'Bungkusan Pagi dan Bungkusan Sore' || empPref.sore === 'lapangan';
-    const isKawasiLS = (lockedTt || '').toLowerCase().includes('kawasi') && computed.shiftKerja === 'Longshift';
+    const isLS = computed.shiftKerja === 'Longshift';
+    const isKawasiLS = (lockedTt || '').toLowerCase().includes('kawasi') && isLS;
     const skCheck = String(computed.shiftKerja || computed.statusKerja || computed.status || '').trim().toUpperCase();
     const isWajibLaporActive = computed.keteranganLapor && /belum\s*lapor|wajib\s*lapor/i.test(String(computed.keteranganLapor));
     const isNoSoreMeal = isCutiRosterStatus(skCheck)
@@ -1257,7 +1258,7 @@ export async function syncMealOrdersFromRoster(date: string, updatedBy = 'system
       computed.soreLapangan = null;
       computed.soreKantin = null;
       computed.batchSore = null;
-    } else if (!isKawasiLS && !isExplicitBungkusSore) {
+    } else if (!isLS && !isExplicitBungkusSore) {
       computed.soreLapangan = null;
       const isNRNirwana = (lockedTt || '').toLowerCase().includes('nirwana') && (lockedStatusMess || '').toUpperCase() === 'NR';
       computed.soreKantin = isNRNirwana ? '1' : 'K';
@@ -1462,7 +1463,8 @@ export async function syncSingleEmployeeMealOrder(nik: string, dateStr: string, 
 
     // Jangan rubah ke Bungkusan Sore saat pindah tanggal jika tidak diganti!
     const isExplicitSoreSingle = finalCatatan === 'Bungkusan Sore' || finalCatatan === 'Bungkusan Pagi dan Bungkusan Sore' || empPref.sore === 'lapangan';
-    const isKawasiLSSingle = (lockedTt || '').toLowerCase().includes('kawasi') && computed.shiftKerja === 'Longshift';
+    const isLSSingle = computed.shiftKerja === 'Longshift';
+    const isKawasiLSSingle = (lockedTt || '').toLowerCase().includes('kawasi') && isLSSingle;
     const skCheckSingle = String(computed.shiftKerja || computed.statusKerja || computed.status || '').trim().toUpperCase();
     const isNoSoreMealSingle = isCutiRosterStatus(skCheckSingle)
       || (skCheckSingle.includes('IZIN') && isCutiRosterStatus(prevStatus))
@@ -1474,7 +1476,7 @@ export async function syncSingleEmployeeMealOrder(nik: string, dateStr: string, 
       computed.soreLapangan = null;
       computed.soreKantin = null;
       computed.batchSore = null;
-    } else if (!isKawasiLSSingle && !isExplicitSoreSingle) {
+    } else if (!isLSSingle && !isExplicitSoreSingle) {
       computed.soreLapangan = null;
       const isNRNirwana = (lockedTt || '').toLowerCase().includes('nirwana') && (lockedStatusMess || '').toUpperCase() === 'NR';
       computed.soreKantin = isNRNirwana ? '1' : 'K';
