@@ -475,15 +475,26 @@ export function BulletinBoard({
   const [saveToAgenda, setSaveToAgenda] = useState(true);
   const [saveToBulletin, setSaveToBulletin] = useState(true);
 
-  // Recents Post Tracking
+  // Recents Post Tracking (Strictly isolated per universe)
+  const currentActivePt = (selectedPtFilter === 'GTS' || pt === 'GTS') ? 'GTS' : (selectedPtFilter || pt || 'TBP');
   const [recentPostIds, setRecentPostIds] = useState<number[]>(() => {
     try {
-      const saved = localStorage.getItem("bulletin_recent_post_ids");
+      const saved = localStorage.getItem(`bulletin_recent_post_ids_${currentActivePt}`);
       return saved ? JSON.parse(saved) : [];
     } catch (e) {
       return [];
     }
   });
+
+  // Re-sync recent post IDs when active universe changes
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(`bulletin_recent_post_ids_${currentActivePt}`);
+      setRecentPostIds(saved ? JSON.parse(saved) : []);
+    } catch (e) {
+      setRecentPostIds([]);
+    }
+  }, [currentActivePt]);
 
   // New Post State
   const [isEditing, setIsEditing] = useState(false);
@@ -501,11 +512,15 @@ export function BulletinBoard({
     fetchPosts();
     fetchAgenda();
     fetchNotifications();
-  }, [pt, inspectorNik]);
+  }, [pt, inspectorNik, selectedPtFilter]);
 
   const fetchAgenda = async () => {
     try {
-      const res = await fetch("/api/agenda");
+      const activeUniverse = (selectedPtFilter === 'GTS' || pt === 'GTS') ? 'GTS' : 'TBP';
+      const params = new URLSearchParams();
+      params.set('pt', activeUniverse);
+      if (inspectorNik) params.set('nik', inspectorNik);
+      const res = await fetch(`/api/agenda?${params.toString()}`);
       if (res.ok) {
         const d = await res.json();
         if (d.status === "success" && Array.isArray(d.data)) {
@@ -551,11 +566,11 @@ export function BulletinBoard({
     setRecentPostIds((prev) => {
       const updated = [postId, ...prev.filter((id) => id !== postId)].slice(0, 12);
       try {
-        localStorage.setItem("bulletin_recent_post_ids", JSON.stringify(updated));
+        localStorage.setItem(`bulletin_recent_post_ids_${currentActivePt}`, JSON.stringify(updated));
       } catch (e) {}
       return updated;
     });
-  }, []);
+  }, [currentActivePt]);
 
   const fetchPosts = async () => {
     // Only show full blocking spinner if no cached posts are currently displayed
@@ -563,7 +578,7 @@ export function BulletinBoard({
       setLoading(true);
     }
     try {
-      const targetPt = isDev ? "ALL" : userUniverse;
+      const targetPt = selectedPtFilter !== 'ALL' ? selectedPtFilter : (isDev ? "ALL" : userUniverse);
 
       // Load cached posts from localStorage on initial run if state is empty
       if (!posts || posts.length === 0) {
@@ -571,7 +586,6 @@ export function BulletinBoard({
           const cached = 
             localStorage.getItem(`preplab_cached_bulletin_posts_${targetPt}`) ||
             localStorage.getItem(`preplab_cached_bulletin_posts_ALL`) ||
-            localStorage.getItem(`preplab_cached_bulletin_posts_TBP`) ||
             sessionStorage.getItem("preplab_cached_bulletin_posts");
           if (cached) {
             const parsed = JSON.parse(cached);
@@ -582,8 +596,6 @@ export function BulletinBoard({
           }
         } catch {}
       }
-
-      // If user is Developer / SuperAdmin, load ALL bulletin posts across all PTs!
       const fetchUrl =
         `/api/bulletin?pt=${targetPt}&nik=${encodeURIComponent(inspectorNik || "")}&_t=${Date.now()}`;
       const res = await fetch(fetchUrl);
@@ -969,8 +981,9 @@ export function BulletinBoard({
 
     const defaultContent = `# ${logbookTitle}\n\n*Logbook Terpadu Seksi ${cleanSection}: Menampilkan seluruh kegiatan Routine & Non-Routine yang sedang aktif.*\n\n| Number | Jenis Kegiatan | Keterangan | Created time | Tanggal Selesai | Status | PIC | Priority | Aktivitas | Period | Asal Halaman |\n| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n`;
 
-    const cacheKey = `preplab_logbook_content_${logbookId}`;
-    let savedContent = logbookCacheRef.current[logbookId];
+    const cacheKey = `preplab_logbook_content_${targetUniverse.toLowerCase()}_${logbookId}`;
+    const memKey = `${targetUniverse.toLowerCase()}_${logbookId}`;
+    let savedContent = logbookCacheRef.current[memKey] || logbookCacheRef.current[logbookId];
     if (!savedContent) {
       try {
         savedContent = localStorage.getItem(cacheKey) || '';
@@ -1644,7 +1657,7 @@ export function BulletinBoard({
             category: editCategory,
             title: editTitle,
             content: finalContent,
-            pt: pt || "TBP",
+            pt: (selectedPtFilter === 'GTS' || pt === 'GTS') ? 'GTS' : (selectedPtFilter || pt || 'TBP'),
             authorNik: inspectorNik,
             authorName: inspectorName,
           }),
@@ -2150,6 +2163,7 @@ ${aiMeetingNotes
     try {
       // 1. Save to Agenda if checked
       if (saveToAgenda) {
+        const activeUniverse = (selectedPtFilter === 'GTS' || pt === 'GTS') ? 'GTS' : 'TBP_GPS';
         await fetch("/api/agenda", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -2162,6 +2176,8 @@ ${aiMeetingNotes
             deskripsi: finalContent,
             creatorNik: inspectorNik,
             department: "Prep & Lab",
+            universe: activeUniverse,
+            pt: (selectedPtFilter === 'GTS' || pt === 'GTS') ? 'GTS' : 'TBP',
           }),
         });
         fetchAgenda();
@@ -2169,6 +2185,7 @@ ${aiMeetingNotes
 
       // 2. Save to Bulletin if checked
       if (saveToBulletin) {
+        const activePt = (selectedPtFilter === 'GTS' || pt === 'GTS') ? 'GTS' : (selectedPtFilter || pt || 'TBP');
         const res = await fetch("/api/bulletin", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -2177,7 +2194,7 @@ ${aiMeetingNotes
             category: "MEETING",
             title: `[MEETING] ${aiMeetingTitle}`,
             content: finalContent,
-            pt: pt || "TBP",
+            pt: activePt,
             authorNik: inspectorNik,
             authorName: inspectorName,
           }),
@@ -3597,9 +3614,12 @@ ${aiMeetingNotes
                 onPostContentUpdate={(newContent: string) => {
                   if (selectedPost && String(selectedPost.id).startsWith('logbook-')) {
                     const logbookId = String(selectedPost.id);
+                    const activeUni = (selectedPtFilter === 'GTS' || pt === 'GTS') ? 'gts' : 'tbp';
+                    const memKey = `${activeUni}_${logbookId}`;
+                    logbookCacheRef.current[memKey] = newContent;
                     logbookCacheRef.current[logbookId] = newContent;
                     try {
-                      localStorage.setItem(`preplab_logbook_content_${logbookId}`, newContent);
+                      localStorage.setItem(`preplab_logbook_content_${activeUni}_${logbookId}`, newContent);
                     } catch {}
                   }
                   setSelectedPost((prev: any) => (prev ? { ...prev, content: newContent } : null));

@@ -253,24 +253,7 @@ function getWorkstationIcon(name?: string) {
   }
 }
 
-function loadWorkstationSections(): WorkstationSectionItem[] {
-  try {
-    const raw = localStorage.getItem('preplab_workstation_sections');
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-    }
-  } catch {}
-  return DEFAULT_WORKSTATION_ITEMS;
-}
-
-function saveWorkstationSections(items: WorkstationSectionItem[]): void {
-  try {
-    localStorage.setItem('preplab_workstation_sections', JSON.stringify(items));
-  } catch {}
-}
-
-const DEFAULT_MEDIA: DashboardMediaSettings = {
+const DEFAULT_MEDIA_TBP: DashboardMediaSettings = {
   banner: '/images/dashboard/prep_lab_banner.jpg',
   gallery_1: '/images/dashboard/gallery_1.jpg',
   gallery_2: '/images/dashboard/gallery_2.jpg',
@@ -283,6 +266,74 @@ const DEFAULT_MEDIA: DashboardMediaSettings = {
   gallery_4_label: '📋 QA/QC Center',
   hide_gallery_labels: false
 };
+
+const DEFAULT_MEDIA_GTS: DashboardMediaSettings = {
+  banner: 'https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?auto=format&fit=crop&w=1600&q=80',
+  gallery_1: 'https://images.unsplash.com/photo-1532187863486-abf9dbad1b69?auto=format&fit=crop&w=800&q=80',
+  gallery_2: 'https://images.unsplash.com/photo-1578328819058-b69f3a3b0f6b?auto=format&fit=crop&w=800&q=80',
+  gallery_3: 'https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=800&q=80',
+  gallery_4: 'https://images.unsplash.com/photo-1579154204601-01588f351e67?auto=format&fit=crop&w=800&q=80',
+  lofi: '/images/dashboard/lofi_girl.jpg',
+  gallery_1_label: '🔬 GTS Fluk Analytical',
+  gallery_2_label: '⛏ Mining & Pit Fluk',
+  gallery_3_label: '⚙ Processing & Plant',
+  gallery_4_label: '📋 GTS QA/QC Center',
+  hide_gallery_labels: false
+};
+
+// Aliased for backwards compatibility
+const DEFAULT_MEDIA = DEFAULT_MEDIA_TBP;
+
+function getDefaultMedia(isGts: boolean): DashboardMediaSettings {
+  return isGts ? DEFAULT_MEDIA_GTS : DEFAULT_MEDIA_TBP;
+}
+
+function getMediaStorageKey(isGts: boolean): string {
+  return isGts ? 'preplab_bulletin_media_gts' : 'preplab_bulletin_media';
+}
+
+function getServerSettingKey(isGts: boolean): string {
+  return isGts ? 'bulletin_dashboard_media_gts' : 'bulletin_dashboard_media';
+}
+
+function getWorkstationStorageKey(isGts: boolean): string {
+  return isGts ? 'preplab_workstation_sections_gts' : 'preplab_workstation_sections';
+}
+
+function getWorkstationSettingKey(isGts: boolean): string {
+  return isGts ? 'workstation_sections_gts' : 'workstation_sections_tbp';
+}
+
+function loadWorkstationSections(isGts: boolean = false): WorkstationSectionItem[] {
+  try {
+    const key = getWorkstationStorageKey(isGts);
+    const raw = localStorage.getItem(key);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch {}
+  return DEFAULT_WORKSTATION_ITEMS;
+}
+
+function saveWorkstationSections(items: WorkstationSectionItem[], isGts: boolean = false): void {
+  try {
+    const key = getWorkstationStorageKey(isGts);
+    localStorage.setItem(key, JSON.stringify(items));
+  } catch {}
+  // Asynchronously persist to server settings for cross-device sync
+  try {
+    fetch('/api/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        settingKey: getWorkstationSettingKey(isGts),
+        settingValue: JSON.stringify(items),
+        description: `Workstation Sections (${isGts ? 'GTS' : 'TBP'})`
+      })
+    }).catch(() => {});
+  } catch {}
+}
 
 const PRESET_WALLPAPERS = [
   {
@@ -419,6 +470,7 @@ export function TbpDashboard({
   const [time, setTime] = useState(new Date());
 
   const isGts = activeUniverse === 'GTS';
+  const activeDefaultMedia = useMemo(() => getDefaultMedia(isGts), [isGts]);
   const companyTitle = isGts ? 'PT. Gane Tambang Sentosa' : (activeUniverse === 'ALL' ? 'PT. TBP, GPS & GTS' : 'PT. TBP & GPS');
   const companySubtitle = isGts 
     ? 'Preparation & Analytical Laboratory Information Center • Site Fluk, Pulau Obi' 
@@ -639,12 +691,17 @@ export function TbpDashboard({
   };
   const [mediaSettings, setMediaSettings] = useState<DashboardMediaSettings>(() => {
     try {
-      const cached = localStorage.getItem('preplab_bulletin_media');
-      return cached ? { ...DEFAULT_MEDIA, ...JSON.parse(cached) } : DEFAULT_MEDIA;
+      const storageKey = getMediaStorageKey(isGts);
+      const cached = localStorage.getItem(storageKey);
+      const fallback = getDefaultMedia(isGts);
+      return cached ? { ...fallback, ...JSON.parse(cached) } : fallback;
     } catch {
-      return DEFAULT_MEDIA;
+      return getDefaultMedia(isGts);
     }
   });
+
+  // Workstation Sections Interactive State (scoped to universe)
+  const [sectionsList, setSectionsList] = useState<WorkstationSectionItem[]>(() => loadWorkstationSections(isGts));
 
   // Modal State for customizer
   const [activeSlot, setActiveSlot] = useState<{ key: keyof DashboardMediaSettings; label: string } | null>(null);
@@ -658,21 +715,40 @@ export function TbpDashboard({
     setActiveSlot(slot);
     const labelKey = `${slot.key}_label` as keyof DashboardMediaSettings;
     const currentLbl = mediaSettings[labelKey];
-    setTempLabel(currentLbl !== undefined ? String(currentLbl) : (DEFAULT_MEDIA[labelKey] ? String(DEFAULT_MEDIA[labelKey]) : ''));
+    setTempLabel(currentLbl !== undefined ? String(currentLbl) : (activeDefaultMedia[labelKey] ? String(activeDefaultMedia[labelKey]) : ''));
   };
 
-  // Sync with /api/settings on mount
+  // Sync with /api/settings on mount & when activeUniverse changes
   useEffect(() => {
+    // 1. Immediately apply cached media for this universe
+    try {
+      const storageKey = getMediaStorageKey(isGts);
+      const cached = localStorage.getItem(storageKey);
+      const fallback = getDefaultMedia(isGts);
+      if (cached) {
+        setMediaSettings({ ...fallback, ...JSON.parse(cached) });
+      } else {
+        setMediaSettings(fallback);
+      }
+    } catch {
+      setMediaSettings(getDefaultMedia(isGts));
+    }
+
+    // 1b. Immediately apply cached workstation sections for this universe
+    setSectionsList(loadWorkstationSections(isGts));
+
+    // 2. Fetch fresh universe-specific settings from backend
     const fetchSettings = async () => {
       try {
         const res = await fetch('/api/settings');
         if (res.ok) {
           const all = await res.json();
-          const found = all.find((s: any) => s.settingKey === 'bulletin_dashboard_media');
+          const targetSettingKey = getServerSettingKey(isGts);
+          const found = all.find((s: any) => s.settingKey === targetSettingKey);
           if (found && found.settingValue) {
             const parsed = JSON.parse(found.settingValue);
             setMediaSettings(prev => {
-              const merged = { ...prev, ...parsed };
+              const merged = { ...getDefaultMedia(isGts), ...parsed };
               try {
                 // Strip large base64 strings before caching to localStorage to prevent QuotaExceededError
                 const lean: any = {};
@@ -680,12 +756,25 @@ export function TbpDashboard({
                   if (typeof v === 'string' && (v.startsWith('data:') || v.length > 2048)) continue;
                   lean[k] = v;
                 }
-                localStorage.setItem('preplab_bulletin_media', JSON.stringify(lean));
+                localStorage.setItem(getMediaStorageKey(isGts), JSON.stringify(lean));
               } catch (storageErr) {
                 console.warn('[TbpDashboard] localStorage quota exceeded, skipping local cache for media');
               }
               return merged;
             });
+          }
+
+          // Check if sections are also saved in server settings for this universe
+          const targetSecKey = getWorkstationSettingKey(isGts);
+          const foundSec = all.find((s: any) => s.settingKey === targetSecKey);
+          if (foundSec && foundSec.settingValue) {
+            try {
+              const parsedSec = JSON.parse(foundSec.settingValue);
+              if (Array.isArray(parsedSec) && parsedSec.length > 0) {
+                setSectionsList(parsedSec);
+                localStorage.setItem(getWorkstationStorageKey(isGts), JSON.stringify(parsedSec));
+              }
+            } catch {}
           }
         }
       } catch (e) {
@@ -693,7 +782,7 @@ export function TbpDashboard({
       }
     };
     fetchSettings();
-  }, []);
+  }, [activeUniverse, isGts]);
   
   useEffect(() => {
     const timer = setInterval(() => setTime(new Date()), 1000);
@@ -888,19 +977,19 @@ export function TbpDashboard({
           if (typeof v === 'string' && (v.startsWith('data:') || v.length > 2048)) continue;
           lean[k] = v;
         }
-        localStorage.setItem('preplab_bulletin_media', JSON.stringify(lean));
+        localStorage.setItem(getMediaStorageKey(isGts), JSON.stringify(lean));
       } catch (storageErr) {
         console.warn('[TbpDashboard] localStorage quota exceeded, skipping local cache for media');
       }
 
-      // Save to backend settings
+      // Save to backend settings with universe-scoped settingKey
       await fetch('/api/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          settingKey: 'bulletin_dashboard_media',
+          settingKey: getServerSettingKey(isGts),
           settingValue: JSON.stringify(updated),
-          description: 'Custom Bulletin Homepage Canvases & Wallpapers'
+          description: `Custom Bulletin Homepage Canvases & Wallpapers (${isGts ? 'GTS' : 'TBP'})`
         })
       });
 
@@ -920,7 +1009,7 @@ export function TbpDashboard({
 
   // Reset slot to default
   const handleResetMedia = async (slotKey: keyof DashboardMediaSettings) => {
-    const defaultUrl = DEFAULT_MEDIA[slotKey];
+    const defaultUrl = activeDefaultMedia[slotKey];
     if (typeof defaultUrl === 'string') {
       await handleSaveMedia(slotKey, defaultUrl);
     }
@@ -1083,8 +1172,7 @@ export function TbpDashboard({
     }
   };
 
-  // Workstation Sections Interactive State
-  const [sectionsList, setSectionsList] = useState<WorkstationSectionItem[]>(() => loadWorkstationSections());
+  // Workstation Sections Interactive Controls
   const [isReorderingSections, setIsReorderingSections] = useState(false);
   const [draggedSectionIdx, setDraggedSectionIdx] = useState<number | null>(null);
   const [dragOverSectionIdx, setDragOverSectionIdx] = useState<number | null>(null);
@@ -1131,7 +1219,7 @@ export function TbpDashboard({
     const [moved] = updated.splice(draggedSectionIdx, 1);
     updated.splice(dropIdx, 0, moved);
     setSectionsList(updated);
-    saveWorkstationSections(updated);
+    saveWorkstationSections(updated, isGts);
     setDraggedSectionIdx(null);
     setDragOverSectionIdx(null);
     toast.success('Urutan Workstation Section berhasil diubah');
@@ -1150,7 +1238,7 @@ export function TbpDashboard({
     updated[idx] = updated[targetIdx];
     updated[targetIdx] = temp;
     setSectionsList(updated);
-    saveWorkstationSections(updated);
+    saveWorkstationSections(updated, isGts);
   };
 
   const openAddSectionModal = () => {
@@ -1207,7 +1295,7 @@ export function TbpDashboard({
     }
 
     setSectionsList(updated);
-    saveWorkstationSections(updated);
+    saveWorkstationSections(updated, isGts);
     setEditingSectionModal(prev => ({ ...prev, isOpen: false }));
   };
 
@@ -1217,7 +1305,7 @@ export function TbpDashboard({
     if (confirm(`Yakin ingin menghapus seksi "${item.title}"?`)) {
       const updated = sectionsList.filter((_, i) => i !== idx);
       setSectionsList(updated);
-      saveWorkstationSections(updated);
+      saveWorkstationSections(updated, isGts);
       toast.success(`Seksi "${item.title}" telah dihapus`);
     }
   };
@@ -1225,7 +1313,16 @@ export function TbpDashboard({
   const resetWorkstationSections = () => {
     setSectionsList(DEFAULT_WORKSTATION_ITEMS);
     try {
-      localStorage.removeItem('preplab_workstation_sections');
+      localStorage.removeItem(getWorkstationStorageKey(isGts));
+      fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          settingKey: getWorkstationSettingKey(isGts),
+          settingValue: JSON.stringify(DEFAULT_WORKSTATION_ITEMS),
+          description: `Workstation Sections (${isGts ? 'GTS' : 'TBP'})`
+        })
+      }).catch(() => {});
     } catch {}
     toast.success('Workstation Sections dikembalikan ke setelan awal');
   };
@@ -1294,7 +1391,7 @@ export function TbpDashboard({
       {/* 1. Header Banner Canvas */}
       <div className="w-full h-48 md:h-64 lg:h-80 relative overflow-hidden group">
         <img 
-          src={mediaSettings.banner || DEFAULT_MEDIA.banner} 
+          src={mediaSettings.banner || activeDefaultMedia.banner} 
           alt="Banner" 
           className="w-full h-full object-cover object-center brightness-90 group-hover:scale-102 transition-all duration-700" 
         />
@@ -1320,7 +1417,7 @@ export function TbpDashboard({
         <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-2 z-20">
           <button
             onClick={() => setPreviewImage({ 
-              url: mediaSettings.banner || DEFAULT_MEDIA.banner, 
+              url: mediaSettings.banner || activeDefaultMedia.banner, 
               title: `Header Banner Utama • Prep & Analytical Lab Portal (${siteLocation})` 
             })}
             className="px-3.5 py-1.5 rounded-xl bg-black/70 hover:bg-black/90 backdrop-blur-md text-white text-xs font-semibold border border-white/30 shadow-lg flex items-center gap-1.5 transition-all hover:scale-105 active:scale-95 cursor-pointer"
@@ -1415,10 +1512,10 @@ export function TbpDashboard({
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {([1, 2, 3, 4] as const).map((num) => {
             const slotKey = `gallery_${num}` as keyof DashboardMediaSettings;
-            const imgSrc = String(mediaSettings[slotKey] || DEFAULT_MEDIA[slotKey] || '');
+            const imgSrc = String(mediaSettings[slotKey] || activeDefaultMedia[slotKey] || '');
             const labelKey = `gallery_${num}_label` as keyof DashboardMediaSettings;
             const customLabel = mediaSettings[labelKey];
-            const currentLabel = customLabel !== undefined ? String(customLabel) : String(DEFAULT_MEDIA[labelKey] || '');
+            const currentLabel = customLabel !== undefined ? String(customLabel) : String(activeDefaultMedia[labelKey] || '');
             const showLabel = !mediaSettings.hide_gallery_labels && currentLabel.trim().length > 0;
 
             return (
@@ -2304,7 +2401,7 @@ export function TbpDashboard({
                 >
                   <div className="relative w-14 h-14 rounded-xl overflow-hidden shadow-md flex-shrink-0 group">
                     <img 
-                      src={mediaSettings.lofi || currentStation.coverUrl || DEFAULT_MEDIA.lofi} 
+                      src={mediaSettings.lofi || currentStation.coverUrl || activeDefaultMedia.lofi} 
                       alt="Station Cover" 
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" 
                     />
@@ -2451,15 +2548,28 @@ export function TbpDashboard({
             {/* Modal Header */}
             <div className="p-4 bg-[#252525] border-b border-slate-800 flex items-center justify-between">
               <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-teal-600/30 border border-teal-500/50 text-teal-300 flex items-center justify-center">
+                <div className={`w-8 h-8 rounded-xl border flex items-center justify-center ${
+                  isGts 
+                    ? 'bg-amber-600/30 border-amber-500/50 text-amber-300' 
+                    : 'bg-teal-600/30 border-teal-500/50 text-teal-300'
+                }`}>
                   <ImageIcon className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-slate-100 text-sm md:text-base">
-                    Ganti Foto {activeSlot.label}
-                  </h3>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-bold text-slate-100 text-sm md:text-base">
+                      Ganti Foto {activeSlot.label}
+                    </h3>
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase border ${
+                      isGts 
+                        ? 'bg-amber-500/20 text-amber-300 border-amber-500/40' 
+                        : 'bg-teal-500/20 text-teal-300 border-teal-500/40'
+                    }`}>
+                      {isGts ? 'Universe: GTS' : 'Universe: TBP & GPS'}
+                    </span>
+                  </div>
                   <p className="text-[11px] text-slate-400">
-                    Pilih wallpaper preset atau upload foto Anda sendiri
+                    Kustomisasi khusus Labnote {isGts ? 'PT. GTS' : 'PT. TBP & GPS'} (terpisah, tidak mengubah universe lain)
                   </p>
                 </div>
               </div>
@@ -2610,7 +2720,7 @@ export function TbpDashboard({
                 className="text-xs text-slate-400 hover:text-rose-300 flex items-center gap-1.5 transition-colors cursor-pointer"
               >
                 <ResetIcon className="w-3.5 h-3.5" />
-                <span>Reset ke Default</span>
+                <span>Reset ke Default ({isGts ? 'GTS' : 'TBP'})</span>
               </button>
               
               <button

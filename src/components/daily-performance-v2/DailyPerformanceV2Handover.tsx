@@ -155,7 +155,7 @@ ${handoverData.samplePriorities}
 *CATATAN SPV:*
 ${handoverData.notes}
 
-_Dilaporkan via Portal Daily Performance Lab 2.0 Harita Nickel_`;
+_Dilaporkan via Portal Daily Performance Laboratory Harita Nickel_`;
   };
 
   const handleCopyWhatsApp = () => {

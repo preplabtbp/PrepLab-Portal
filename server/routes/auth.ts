@@ -308,8 +308,8 @@ authRouter.post("/check-nik", async (req, res) => {
 
     let employee: any = null;
     try {
-      // Fast DB query with tight 1200ms timeout and zero retries for instant speed
-      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('DB_TIMEOUT')), 1200));
+      // DB query with safe 3800ms timeout tolerance for remote Cloud SQL connections (per SOP 1c)
+      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('DB_TIMEOUT')), 3800));
       const dbPromise = queryWithRetry(() =>
         db.select().from(employees)
           .where(
@@ -411,7 +411,8 @@ authRouter.post("/login", async (req, res) => {
       isDevFallback = true;
     } else {
       try {
-        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('DB_TIMEOUT')), 1500));
+        // Safe 3800ms timeout tolerance for remote Cloud SQL connection to prevent false fallback to CSV
+        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('DB_TIMEOUT')), 3800));
         const dbPromise = queryWithRetry(() =>
           db.select().from(employees)
             .where(

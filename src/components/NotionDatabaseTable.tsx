@@ -3958,7 +3958,8 @@ export function NotionDatabaseTable({
         const postIdStr = String(postId || '');
         if (postIdStr.startsWith('logbook-')) {
           try {
-            localStorage.setItem(`preplab_logbook_content_${postIdStr}`, updatedMarkdown);
+            const activeUniverse = String(pt || 'TBP').toUpperCase().includes('GTS') ? 'gts' : 'tbp';
+            localStorage.setItem(`preplab_logbook_content_${activeUniverse}_${postIdStr}`, updatedMarkdown);
           } catch {}
         }
         onPostContentUpdate?.(updatedMarkdown);
@@ -6088,9 +6089,10 @@ export function NotionDatabaseTable({
   const handleOpenRecycleBin = async (filterMode: 'all' | 'current' = 'current') => {
     setRecycleBinModalState(prev => ({ ...prev, isOpen: true, isLoading: true, filter: filterMode }));
     try {
+      const activePt = pt || 'TBP';
       const url = filterMode === 'current' && postId
-        ? `/api/bulletin/recycle-bin?postId=${postId}`
-        : '/api/bulletin/recycle-bin';
+        ? `/api/bulletin/recycle-bin?postId=${postId}&pt=${activePt}`
+        : `/api/bulletin/recycle-bin?pt=${activePt}`;
       const res = await fetch(url);
       const json = await res.json();
       if (json.status === 'success' && Array.isArray(json.data)) {

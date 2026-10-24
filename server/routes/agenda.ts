@@ -30,7 +30,22 @@ router.get("/api/agenda", async (req, res) => {
         } catch(e) {}
       }
 
-      const allAgenda: any[] = await db.select().from(agendaEvents);
+      const ptQuery = String(req.query.pt || req.query.universe || '').trim().toUpperCase();
+      let targetUniverse: 'GTS' | 'TBP_GPS' = ptQuery.includes('GTS') ? 'GTS' : (ptQuery ? 'TBP_GPS' : 'TBP_GPS');
+      if (!ptQuery && requesterNik) {
+        const empRows = await db.select({ pt: employees.pt }).from(employees).where(eq(employees.nik, requesterNik)).limit(1);
+        if (empRows.length > 0 && String(empRows[0].pt || '').toUpperCase().includes('GTS')) {
+          targetUniverse = 'GTS';
+        }
+      }
+
+      const allAgenda: any[] = targetUniverse === 'GTS'
+        ? await db.select().from(agendaEvents).where(eq(agendaEvents.universe, 'GTS'))
+        : await db.select().from(agendaEvents).where(or(
+            eq(agendaEvents.universe, 'TBP_GPS'),
+            eq(agendaEvents.universe, 'TBP'),
+            isNull(agendaEvents.universe)
+          ));
       
       // Filter agenda pribadi: pastikan setiap user HANYA mendapatkan agenda pribadinya masing-masing
       const data: any[] = allAgenda.filter(evt => {
@@ -48,8 +63,12 @@ router.get("/api/agenda", async (req, res) => {
       
       const allEmps = await db.select().from(employees);
       const currentYear = new Date().getFullYear();
+      const targetEmps = allEmps.filter(emp => {
+        const empPt = String(emp.pt || 'TBP').toUpperCase();
+        return targetUniverse === 'GTS' ? empPt.includes('GTS') : !empPt.includes('GTS');
+      });
       
-      allEmps.forEach(emp => {
+      targetEmps.forEach(emp => {
         if (emp.tanggalLahir && emp.tanggalLahir !== '-') {
           const parts = emp.tanggalLahir.replace(/-/g, ' ').split(' ');
           let birthDate = null;
@@ -112,6 +131,9 @@ router.post("/api/agenda", async (req, res) => {
       const isRoutine = Boolean(body.isRoutine);
       const routineId = isRoutine ? (body.routineId || `routine-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`) : null;
       
+      const rawUniverse = String(body.universe || body.pt || '').toUpperCase();
+      const payloadUniverse = rawUniverse.includes('GTS') ? 'GTS' : 'TBP_GPS';
+
       const payload: any = {
         id: eventId,
         title: body.title || "Agenda Baru",
@@ -126,6 +148,7 @@ router.post("/api/agenda", async (req, res) => {
         frekuensi: body.frekuensi || null,
         department: body.department || "ALL",
         bulletinPostId: body.bulletinPostId ? Number(body.bulletinPostId) : null,
+        universe: payloadUniverse,
       };
 
       const result = await db.insert(agendaEvents).values(payload).returning();
@@ -171,9 +194,9 @@ router.post("/api/agenda", async (req, res) => {
           title: 'Agenda Baru',
           message: `Event: ${payload.title}`,
           type: 'info',
-          link: '/agenda'
+          link: payloadUniverse === 'GTS' ? '/bulletin/GTS' : '/agenda'
         }).returning();
-        sendWebPush(_n);
+        sendWebPush(_n, { universe: payloadUniverse });
       } catch(e) {}
       res.json({ status: "success", data: result[0] });
     } catch (error: any) {
