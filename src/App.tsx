@@ -836,7 +836,35 @@ export default function App() {
     else navigate('/' + cleanTab);
   };
 
+  const handleBackWithReturnTo = (fallbackTab: string = 'home') => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const returnTo = params.get('returnTo');
+      if (returnTo) {
+        const decoded = decodeURIComponent(returnTo);
+        const currentFullPath = window.location.pathname + window.location.search;
+        if (decoded !== window.location.pathname && decoded !== currentFullPath) {
+          window.location.href = decoded;
+          return;
+        }
+      }
+    } catch {}
+    handleNav(fallbackTab);
+  };
+
   const handleBack = () => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const returnTo = params.get('returnTo');
+      if (returnTo) {
+        const decoded = decodeURIComponent(returnTo);
+        const currentFullPath = window.location.pathname + window.location.search;
+        if (decoded !== window.location.pathname && decoded !== currentFullPath) {
+          window.location.href = decoded;
+          return;
+        }
+      }
+    } catch {}
     if (window.history.length > 1) {
       window.history.back();
     } else {
@@ -2080,27 +2108,19 @@ export default function App() {
   <Route path="/preplab-cloud" element={<PreplabCloudScreen onBack={() => handleNav('home')} userProfile={userProfile} inspectorNik={inspectorNik!} inspectorName={inspectorName!} isDeveloper={isDeveloper} isManager={isManager} />} />
   <Route path="/manual" element={<UserManualScreen onBack={() => handleNav('home')} onNav={handleNav} />} />
   <Route path="/employee-database" element={<EmployeeDatabaseScreen inspectorNik={inspectorNik!} onBack={() => handleNav('home')} />} />
-  <Route path="/employee-leaves" element={<EmployeeLeavesScreen userProfile={userProfile} inspectorName={inspectorName!} inspectorNik={inspectorNik!} userPt={effectiveUniverse || 'TBP'} onNav={handleNav} onBack={() => handleNav('home')} />} />
+  <Route path="/employee-leaves" element={<EmployeeLeavesScreen userProfile={userProfile} inspectorName={inspectorName!} inspectorNik={inspectorNik!} userPt={effectiveUniverse || 'TBP'} onNav={handleNav} onBack={() => handleBackWithReturnTo('home')} />} />
   <Route path="/rekapan-izin" element={<Navigate to="/employee-leaves" replace />} />
   <Route path="/izin-karyawan" element={<Navigate to="/employee-leaves" replace />} />
-  <Route path="/pelaporan-izin" element={<EmployeeLeaveFormScreen inspectorName={inspectorName!} inspectorNik={inspectorNik!} userProfile={userProfile} onNav={handleNav} onBack={() => handleNav('home')} />} />
+  <Route path="/pelaporan-izin" element={<EmployeeLeaveFormScreen inspectorName={inspectorName!} inspectorNik={inspectorNik!} userProfile={userProfile} onNav={handleNav} onBack={() => handleBackWithReturnTo('home')} />} />
   <Route path="/form-izin" element={<Navigate to="/pelaporan-izin" replace />} />
-  <Route path="/keterlambatan" element={<EmployeeTardinessScreen userProfile={userProfile} inspectorName={inspectorName!} inspectorNik={inspectorNik!} onNav={handleNav} onBack={() => handleNav('home')} />} />
+  <Route path="/keterlambatan" element={<EmployeeTardinessScreen userProfile={userProfile} inspectorName={inspectorName!} inspectorNik={inspectorNik!} onNav={handleNav} onBack={() => handleBackWithReturnTo('home')} />} />
   <Route path="/rekapan-keterlambatan" element={<Navigate to="/keterlambatan" replace />} />
   <Route path="/form-keterlambatan" element={<EmployeeTardinessFormScreen inspectorName={inspectorName!} inspectorNik={inspectorNik!} userProfile={userProfile} onNav={handleNav} onBack={() => handleNav('keterlambatan')} />} />
   <Route path="/pelaporan-keterlambatan" element={<Navigate to="/form-keterlambatan" replace />} />
   <Route path="/roster-admin" element={<RosterAdminScreen />} />
-  <Route path="/training-database" element={<TrainingDatabaseScreen key="internal" scope="internal" inspectorNik={inspectorNik!} inspectorName={inspectorName!} onBack={() => handleNav('home')} />} />
-  <Route path="/safety-rekap" element={<SafetyRekapScreen inspectorNik={inspectorNik!} inspectorName={inspectorName!} inspectorRole={userProfile?.jabatan} inspectorSection={userProfile?.section} onBack={() => handleNav('home')} />} />
-  <Route path="/inspection-schedule" element={<InspectionScheduleScreen inspectorNik={inspectorNik!} inspectorName={inspectorName!} onBack={() => {
-    const params = new URLSearchParams(window.location.search);
-    const returnTo = params.get('returnTo');
-    if (returnTo) {
-      window.location.href = returnTo;
-    } else {
-      handleNav('home');
-    }
-  }} />} />
+  <Route path="/training-database" element={<TrainingDatabaseScreen key="internal" scope="internal" inspectorNik={inspectorNik!} inspectorName={inspectorName!} onBack={() => handleBackWithReturnTo('home')} />} />
+  <Route path="/safety-rekap" element={<SafetyRekapScreen inspectorNik={inspectorNik!} inspectorName={inspectorName!} inspectorRole={userProfile?.jabatan} inspectorSection={userProfile?.section} onBack={() => handleBackWithReturnTo('home')} />} />
+  <Route path="/inspection-schedule" element={<InspectionScheduleScreen inspectorNik={inspectorNik!} inspectorName={inspectorName!} onBack={() => handleBackWithReturnTo('home')} />} />
   <Route path="/training-external" element={<TrainingDatabaseScreen key="external" scope="external" inspectorNik={inspectorNik!} inspectorName={inspectorName!} onBack={() => handleNav('home')} />} />
   <Route path="/meal-orders" element={<MealOrdersScreen inspectorNik={inspectorNik!} inspectorName={inspectorName!} onBack={() => handleNav('home')} />} />
   <Route path="/settings" element={<SettingsScreen inspectorName={inspectorName} inspectorNik={inspectorNik} onLogoutKaryawan={handleLogoutKaryawan} onOpenThemeModal={() => setShowGlobalThemeModal(true)} onNav={handleNav} />} />
