@@ -183,6 +183,77 @@ export function BulletinBoard({
     return null;
   });
   const [navHistory, setNavHistory] = useState<any[]>([]);
+  const [forwardHistory, setForwardHistory] = useState<any[]>([]);
+
+  // Helper to extract or derive a suitable emoji icon for a post
+  const getPostEmoji = useCallback((post: any): string => {
+    if (!post) return '📄';
+    const title = (getPostTitle(post) || '').trim();
+    // Check if title already starts with an emoji
+    const emojiMatch = title.match(/^(\p{Extended_Pictographic}|\p{Emoji_Presentation})/u);
+    if (emojiMatch) return emojiMatch[0];
+
+    const category = ((post.category || post.section || '') + ' ' + title).toUpperCase();
+    if (category.includes('NON ROUTINE') || category.includes('INVENTORY') || category.includes('WAREHOUSE')) return '🛒';
+    if (category.includes('LABORATORIUM') || category.includes('LAB') || category.includes('XRF')) return '🥼';
+    if (category.includes('PREPARASI') || category.includes('PREP')) return '⚗️';
+    if (category.includes('MAINTENANCE') || category.includes('PERAWATAN')) return '🔧';
+    if (category.includes('PROSEDUR') || category.includes('SOP') || category.includes('IK')) return '📖';
+    if (category.includes('CUTI') || category.includes('LEAVE')) return '✈️';
+    if (category.includes('KARYAWAN') || category.includes('CREW')) return '👷';
+    if (category.includes('MUTU') || category.includes('QA') || category.includes('QC')) return '🛡️';
+    if (category.includes('ADMIN')) return '📁';
+    if (category.includes('AGENDA') || category.includes('JADWAL')) return '📅';
+    if (category.includes('LOGBOOK') || category.includes('CATATAN')) return '📝';
+    return '📄';
+  }, []);
+
+  // Notion-Style Multi-Tab Navigation State
+  const [openTabs, setOpenTabs] = useState<Array<{ id: string; title: string; icon?: string; post?: any }>>(() => {
+    try {
+      const saved = sessionStorage.getItem("preplab_labnote_open_tabs");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return [{ id: 'dashboard', title: 'Dashboard', icon: '🏠' }];
+  });
+
+  // Save lightweight tab references to sessionStorage
+  useEffect(() => {
+    try {
+      const lightweight = openTabs.map(t => ({
+        id: String(t.id),
+        title: t.title,
+        icon: t.icon
+      }));
+      sessionStorage.setItem("preplab_labnote_open_tabs", JSON.stringify(lightweight));
+    } catch {}
+  }, [openTabs]);
+
+  // Synchronize tabs automatically whenever selectedPost changes
+  useEffect(() => {
+    if (!selectedPost) return;
+    const postIdStr = String(selectedPost.id);
+    const postTitle = getPostTitle(selectedPost);
+    const postIcon = getPostEmoji(selectedPost);
+
+    setOpenTabs(prev => {
+      const existingIdx = prev.findIndex(t => String(t.id) === postIdStr);
+      if (existingIdx !== -1) {
+        const updated = [...prev];
+        updated[existingIdx] = { ...updated[existingIdx], title: postTitle, icon: postIcon, post: selectedPost };
+        return updated;
+      }
+      // Cap at maximum 10 active tabs (keep index 0 Dashboard, remove oldest tab if full)
+      let list = [...prev];
+      if (list.length >= 10) {
+        list.splice(1, 1);
+      }
+      return [...list, { id: postIdStr, title: postTitle, icon: postIcon, post: selectedPost }];
+    });
+  }, [selectedPost, getPostEmoji]);
 
   // Keep sessionStorage in sync with selectedPost
   useEffect(() => {
@@ -718,6 +789,7 @@ export function BulletinBoard({
       }
     }
 
+    setForwardHistory([]);
     setNavHistory((prev) => {
       const idx = prev.findIndex((h) => h?.id === freshPost.id);
       if (idx !== -1) {
@@ -1024,6 +1096,80 @@ export function BulletinBoard({
   }, [posts, navigateToPost]);
 
   // Go back to previous history or parent
+  // Forward history navigation
+  const goForward = () => {
+    if (forwardHistory.length === 0) return;
+    const nextPost = forwardHistory[0];
+    setForwardHistory(f => f.slice(1));
+    navigateToPost(nextPost);
+  };
+
+  // Tab click handler
+  const handleSelectTab = (tab: { id: string; title: string; icon?: string; post?: any }) => {
+    if (tab.id === 'dashboard') {
+      navigateToPost(null);
+      return;
+    }
+    if (selectedPost && String(selectedPost.id) === String(tab.id) && !isEditing) return;
+
+    if (tab.post) {
+      navigateToPost(tab.post);
+      return;
+    }
+
+    const found = posts.find(p => String(p.id) === String(tab.id));
+    if (found) {
+      navigateToPost(found);
+      return;
+    }
+
+    // Fallback load
+    fetch(`/api/bulletin/${tab.id}`)
+      .then(res => res.json())
+      .then(json => {
+        if (json.status === 'success' && json.data) {
+          navigateToPost(json.data);
+        } else {
+          toast.error('Halaman tidak ditemukan');
+          handleCloseTab(tab.id);
+        }
+      })
+      .catch(() => {
+        handleCloseTab(tab.id);
+      });
+  };
+
+  // Tab close handler
+  const handleCloseTab = (tabIdToClose: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    if (tabIdToClose === 'dashboard') return;
+
+    setOpenTabs(prev => {
+      const targetIdx = prev.findIndex(t => String(t.id) === String(tabIdToClose));
+      if (targetIdx === -1) return prev;
+
+      const remaining = prev.filter(t => String(t.id) !== String(tabIdToClose));
+
+      // If closing currently active tab, switch to adjacent tab
+      if (selectedPost && String(selectedPost.id) === String(tabIdToClose)) {
+        const nextActive = remaining[Math.max(0, targetIdx - 1)] || remaining[0];
+        setTimeout(() => {
+          if (nextActive && nextActive.id !== 'dashboard') {
+            handleSelectTab(nextActive);
+          } else {
+            navigateToPost(null);
+          }
+        }, 0);
+      }
+
+      return remaining;
+    });
+  };
+
+  const handleNewTab = () => {
+    navigateToPost(null);
+  };
+
   const goBack = () => {
     if (isEditing) {
       setIsEditing(false);
@@ -1036,6 +1182,9 @@ export function BulletinBoard({
     if (navHistory.length > 1) {
       const newHistory = navHistory.slice(0, -1);
       const previousPost = newHistory[newHistory.length - 1];
+      if (selectedPost) {
+        setForwardHistory(f => [selectedPost, ...f.slice(0, 9)]);
+      }
       setNavHistory(newHistory);
       setSelectedPost(previousPost);
       setIsEditing(false);
@@ -2188,9 +2337,88 @@ ${aiMeetingNotes
           color: 'var(--text-main, #1e293b)'
         }}
       >
-        {/* Topbar with Hierarchical Navigation */}
+        {/* Notion-Style Tabs Header */}
+        <div
+          className="h-10 border-b flex items-center px-2 sticky top-0 backdrop-blur-md z-40 transition-colors gap-1 select-none overflow-x-auto no-scrollbar"
+          style={{
+            backgroundColor: 'var(--input-bg, #f1f5f9)',
+            borderColor: 'var(--border-main, #e2e8f0)',
+            color: 'var(--text-main, #1e293b)'
+          }}
+        >
+          {/* Sidebar Toggle & Navigation Arrows (< and >) */}
+          <div className="flex items-center gap-0.5 shrink-0 pr-1.5 border-r border-[var(--border-main,rgba(148,163,184,0.3))]">
+            <button
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              className="p-1.5 rounded-md hover:bg-black/5 dark:hover:bg-white/10 transition-colors text-[var(--text-muted,#64748b)] hover:text-[var(--text-main,#1e293b)] cursor-pointer"
+              title={sidebarOpen ? "Tutup Sidebar" : "Buka Sidebar"}
+            >
+              <Menu className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={goBack}
+              disabled={navHistory.length <= 1}
+              className="p-1.5 rounded-md hover:bg-black/5 dark:hover:bg-white/10 transition-colors disabled:opacity-25 disabled:pointer-events-none text-[var(--text-muted,#64748b)] hover:text-[var(--text-main,#1e293b)] cursor-pointer"
+              title="Kembali ke halaman sebelumnya (<)"
+            >
+              <ChevronLeft className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={goForward}
+              disabled={forwardHistory.length === 0}
+              className="p-1.5 rounded-md hover:bg-black/5 dark:hover:bg-white/10 transition-colors disabled:opacity-25 disabled:pointer-events-none text-[var(--text-muted,#64748b)] hover:text-[var(--text-main,#1e293b)] cursor-pointer"
+              title="Maju ke halaman berikutnya (>)"
+            >
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          {/* Horizontal Scrollable Tabs Strip */}
+          <div className="flex items-center gap-1 overflow-x-auto no-scrollbar flex-1 h-full pt-1">
+            {openTabs.map((tab) => {
+              const isActive = selectedPost ? String(tab.id) === String(selectedPost.id) : tab.id === 'dashboard';
+              return (
+                <div
+                  key={tab.id}
+                  onClick={() => handleSelectTab(tab)}
+                  className={`group relative h-8 px-3 rounded-t-lg flex items-center gap-1.5 text-xs transition-all cursor-pointer border-t border-x shrink-0 max-w-[210px] ${
+                    isActive
+                      ? 'bg-[var(--card-bg,#ffffff)] text-[var(--text-main,#1e293b)] font-semibold border-[var(--border-main,#e2e8f0)] shadow-2xs z-10'
+                      : 'bg-transparent text-[var(--text-muted,#64748b)] hover:text-[var(--text-main,#1e293b)] hover:bg-black/5 dark:hover:bg-white/5 border-transparent'
+                  }`}
+                  title={tab.title}
+                >
+                  <span className="text-xs shrink-0">{tab.icon || '📄'}</span>
+                  <span className="truncate flex-1 text-[11.5px]">{tab.title}</span>
+                  {tab.id !== 'dashboard' && (
+                    <button
+                      onClick={(e) => handleCloseTab(tab.id, e)}
+                      className={`p-0.5 rounded-md hover:bg-black/10 dark:hover:bg-white/20 text-[var(--text-muted,#64748b)] hover:text-[var(--text-main,#1e293b)] transition-opacity ${
+                        isActive ? 'opacity-70 hover:opacity-100' : 'opacity-0 group-hover:opacity-70 hover:opacity-100'
+                      }`}
+                      title="Tutup Tab"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+
+            {/* New Tab Button (+) */}
+            <button
+              onClick={handleNewTab}
+              className="p-1.5 rounded-md hover:bg-black/5 dark:hover:bg-white/10 text-[var(--text-muted,#64748b)] hover:text-[var(--text-main,#1e293b)] transition-colors cursor-pointer shrink-0 ml-0.5"
+              title="Buka Tab Baru (Dashboard)"
+            >
+              <Plus className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+
+        {/* Subbar: Breadcrumbs Hierarchy & Page Actions */}
         <div 
-          className="h-12 border-b flex items-center px-4 justify-between sticky top-0 backdrop-blur-md z-40 transition-colors shadow-2xs"
+          className="h-10 border-b flex items-center px-4 justify-between sticky top-10 backdrop-blur-md z-30 transition-colors shadow-2xs"
           style={{
             backgroundColor: 'var(--card-bg, #ffffff)',
             borderColor: 'var(--border-main, #e2e8f0)',
@@ -2198,36 +2426,6 @@ ${aiMeetingNotes
           }}
         >
           <div className="flex items-center gap-2 overflow-hidden flex-1 mr-2">
-            {/* Toggle Sidebar Button (Tombol Garis 3) */}
-            <button
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="p-1.5 rounded-lg hover:bg-white/10 transition-all cursor-pointer flex items-center justify-center shrink-0"
-              style={{ 
-                color: sidebarOpen ? 'var(--primary, #2A9D8F)' : 'var(--text-muted, #94a3b8)',
-                backgroundColor: sidebarOpen ? 'rgba(42, 157, 143, 0.15)' : 'transparent'
-              }}
-              title={sidebarOpen ? "Sembunyikan Sidebar" : "Buka Sidebar (Garis 3)"}
-            >
-              <Menu className="w-4 h-4" />
-            </button>
-
-            {/* Back Button (Only when inside a document or editing) */}
-            {(selectedPost || isEditing) && (
-              <button
-                onClick={goBack}
-                className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border transition-all shadow-xs group cursor-pointer"
-                style={{
-                  backgroundColor: 'var(--input-bg, #282828)',
-                  borderColor: 'var(--border-main, #334155)',
-                  color: 'var(--text-main, #cbd5e1)'
-                }}
-                title={`Kembali ke ${immediateParentTitle} (Esc / Alt+←)`}
-              >
-                <ArrowLeft className="w-3.5 h-3.5 text-teal-400 group-hover:-translate-x-0.5 transition-transform" />
-                <span className="hidden sm:inline font-semibold">Kembali</span>
-              </button>
-            )}
-
             {/* Interactive Breadcrumb Hierarchy */}
             <nav
               aria-label="Breadcrumb"
