@@ -648,6 +648,11 @@ export const getCellValue = (row: TableRowData, colName: string): string => {
       if (val !== undefined && val !== '') return val;
       if (fallbackVal === undefined) fallbackVal = val;
     }
+    if ((targetLower === 'files & media' || targetLower === 'files' || targetLower === 'media' || targetLower === 'lampiran' || targetLower === 'attachments') &&
+        (keyLower.includes('file') || keyLower.includes('media') || keyLower.includes('lampiran') || keyLower.includes('attachment') || keyLower.includes('berkas'))) {
+      if (val !== undefined && val !== '') return val;
+      if (fallbackVal === undefined) fallbackVal = val;
+    }
   }
   return fallbackVal ?? row[colName] ?? '';
 };
@@ -2212,6 +2217,22 @@ export function NotionDatabaseTable({
     images?: Array<{ url: string; title?: string; driveViewUrl?: string; driveDownloadUrl?: string }>;
     currentIndex?: number;
   } | null>(null);
+
+  // Document / non-image file interactive preview modal state
+  const [previewDoc, setPreviewDoc] = useState<{
+    url: string;
+    name: string;
+    driveViewUrl?: string;
+    driveDownloadUrl?: string;
+    size?: number;
+    mimeType?: string;
+    isPdf?: boolean;
+  } | null>(null);
+
+  // Cell file upload state & ref
+  const cellFileInputRef = useRef<HTMLInputElement>(null);
+  const [cellUploadTarget, setCellUploadTarget] = useState<{ rowIndex: number; colName: string } | null>(null);
+  const [isUploadingCellFile, setIsUploadingCellFile] = useState(false);
   const [showAllReplies, setShowAllReplies] = useState(false);
   const [showModalKeterangan, setShowModalKeterangan] = useState(false);
   const [showModalMedia, setShowModalMedia] = useState(false);
@@ -2269,6 +2290,7 @@ export function NotionDatabaseTable({
     { name: 'Departemen', icon: '🏢', defaultValue: 'Laboratorium', desc: 'Seksi atau departemen pelaksana' },
     { name: 'Catatan Tambahan', icon: '📝', defaultValue: '-', desc: 'Rincian atau catatan ekstra' },
     { name: 'Estimasi Biaya', icon: '💰', defaultValue: '-', desc: 'Anggaran atau estimasi biaya (opsional)' },
+    { name: 'Files & media', icon: '📎', defaultValue: '', desc: 'Lampiran berkas foto, PDF, dokumen, atau media tugas' },
   ];
 
   // Canonical order weight for explicitly resetting column order via 'Rapikan Urutan Kolom'
@@ -2283,6 +2305,7 @@ export function NotionDatabaseTable({
     if (l.includes('status')) return 6;
     if (l === 'pic' || l.includes('assignee') || l.includes('pj') || l === 'personil') return 7;
     if (l.includes('priority') || l.includes('prioritas')) return 8;
+    if (l.includes('file') || l.includes('media') || l.includes('lampiran') || l.includes('attachment') || l.includes('berkas')) return 15;
     if (!l.includes('name') && (l.includes('activity') || l.includes('aktivitas'))) return 9;
     if (l.includes('period') || l.includes('periode')) return 10;
     if (l.includes('group') || l.includes('kategori') || l.includes('category') || l.includes('dept')) return 11;
@@ -3712,9 +3735,158 @@ export function NotionDatabaseTable({
         images: activeGallery.length > 0 ? activeGallery : [fallbackItem],
         currentIndex: currentIndex
       });
-    } else if (att.driveViewUrl) {
-      window.open(att.driveViewUrl, '_blank');
+    } else {
+      const targetUrl = att.previewUrl || att.directUrl || att.url || '';
+      const driveId = att.id || extractDriveId(targetUrl) || (att.driveViewUrl ? extractDriveId(att.driveViewUrl) : null);
+      const isPdf = att.name.toLowerCase().endsWith('.pdf') || (att.mimeType && att.mimeType.includes('pdf')) || targetUrl.toLowerCase().includes('.pdf');
+      
+      setPreviewDoc({
+        url: targetUrl,
+        name: att.name || 'Lampiran Dokumen',
+        driveViewUrl: att.driveViewUrl || (driveId ? `https://drive.google.com/file/d/${driveId}/view?usp=sharing` : undefined),
+        driveDownloadUrl: att.driveDownloadUrl || (driveId ? `https://drive.google.com/uc?id=${driveId}&export=download` : (targetUrl || undefined)),
+        size: att.size,
+        mimeType: att.mimeType,
+        isPdf: Boolean(isPdf)
+      });
     }
+  };
+
+  // Handler for opening file dialog for a specific cell
+  const triggerCellUpload = (rowIndex: number, colName: string) => {
+    setCellUploadTarget({ rowIndex, colName });
+    if (cellFileInputRef.current) {
+      cellFileInputRef.current.value = '';
+      cellFileInputRef.current.click();
+    }
+  };
+
+  // Handler for cell file upload change
+  const handleCellFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0 || !cellUploadTarget) return;
+
+    const { rowIndex, colName } = cellUploadTarget;
+    setIsUploadingCellFile(true);
+    const toastId = toast.loading(`Mengunggah ${files.length} file...`);
+
+    try {
+      const uploadedAttachments: CommentAttachmentItem[] = [];
+
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const isImg = file.type.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp|svg|bmp)$/i.test(file.name);
+
+        // Convert file to base64
+        const base64Data = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = (err) => reject(err);
+          reader.readAsDataURL(file);
+        });
+
+        let finalBase64 = base64Data;
+        // If image, compress via canvas if large
+        if (isImg && file.size > 800 * 1024) {
+          try {
+            const img = new Image();
+            img.src = base64Data;
+            await new Promise((res) => { img.onload = res; img.onerror = res; });
+            const maxDim = 1920;
+            let w = img.width || 1200;
+            let h = img.height || 800;
+            if (w > maxDim || h > maxDim) {
+              if (w > h) {
+                h = Math.round((h * maxDim) / w);
+                w = maxDim;
+              } else {
+                w = Math.round((w * maxDim) / h);
+                h = maxDim;
+              }
+            }
+            const canvas = document.createElement('canvas');
+            canvas.width = w;
+            canvas.height = h;
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+              ctx.drawImage(img, 0, 0, w, h);
+              finalBase64 = canvas.toDataURL('image/jpeg', 0.85);
+            }
+          } catch (e) {
+            // fallback to original base64
+          }
+        }
+
+        // Upload to /api/upload
+        let uploadedUrl = finalBase64;
+        let driveId: string | null = null;
+        try {
+          const upRes = await fetch('/api/upload', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              base64Data: finalBase64,
+              mimeType: file.type || (isImg ? 'image/jpeg' : 'application/octet-stream'),
+              filename: file.name.replace(/\|/g, '-'),
+              folderName: 'Bulletin Attachments'
+            })
+          });
+          const upJson = await upRes.json();
+          if (upJson.url) {
+            uploadedUrl = upJson.url;
+            driveId = upJson.fileId || extractDriveId(uploadedUrl);
+          }
+        } catch (uErr) {
+          console.warn('Upload API fallback to local data url:', uErr);
+        }
+
+        const directUrl = driveId ? `/api/drive/view/${driveId}` : uploadedUrl;
+        const driveViewUrl = driveId ? `https://drive.google.com/file/d/${driveId}/view?usp=sharing` : undefined;
+        const driveDownloadUrl = driveId ? `/api/drive/download/${driveId}` : undefined;
+
+        uploadedAttachments.push({
+          id: driveId || undefined,
+          name: file.name.replace(/\|/g, '-'),
+          url: directUrl,
+          directUrl: directUrl,
+          driveViewUrl: driveViewUrl,
+          driveDownloadUrl: driveDownloadUrl,
+          isImage: isImg,
+          mimeType: file.type,
+          size: file.size
+        });
+      }
+
+      // Existing cell attachments
+      const targetRow = localRows[rowIndex];
+      const existingVal = getRowVal(targetRow, colName);
+      const existingAttachments = parseCommentAttachments(existingVal);
+      const combined = [...existingAttachments, ...uploadedAttachments];
+
+      const serialized = JSON.stringify(combined);
+      handleUpdateCellDirect(rowIndex, colName, serialized);
+
+      toast.success(`${uploadedAttachments.length} file berhasil dilampirkan!`, { id: toastId });
+    } catch (err: any) {
+      console.error('Gagal upload file ke cell:', err);
+      toast.error('Gagal mengunggah file. Silakan coba lagi.', { id: toastId });
+    } finally {
+      setIsUploadingCellFile(false);
+      setCellUploadTarget(null);
+      if (cellFileInputRef.current) cellFileInputRef.current.value = '';
+    }
+  };
+
+  // Handler for removing a single attachment from a cell
+  const handleRemoveCellAttachment = (rowIndex: number, colName: string, attIndex: number) => {
+    const targetRow = localRows[rowIndex];
+    if (!targetRow) return;
+    const existingVal = getRowVal(targetRow, colName);
+    const existingAttachments = parseCommentAttachments(existingVal);
+    const filtered = existingAttachments.filter((_, idx) => idx !== attIndex);
+    const serialized = filtered.length > 0 ? JSON.stringify(filtered) : '';
+    handleUpdateCellDirect(rowIndex, colName, serialized);
+    toast.info('File lampiran dihapus');
   };
 
   // Save changes to database
@@ -7096,6 +7268,9 @@ export function NotionDatabaseTable({
     if (colLower.includes('pic') || colLower.includes('assignee')) return <span className="text-slate-400 mr-1 text-xs">≡</span>;
     if (colLower.includes('priority') || colLower.includes('prioritas')) return <span className="text-slate-400 mr-1 text-xs">↓</span>;
     if (colLower.includes('activity') || colLower.includes('aktivitas')) return <span className="text-slate-400 mr-1 text-xs">≡</span>;
+    if (colLower.includes('file') || colLower.includes('media') || colLower.includes('lampiran') || colLower.includes('attachment') || colLower.includes('berkas')) {
+      return <Paperclip className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400 mr-1 inline shrink-0" />;
+    }
     return <span className="text-slate-400 mr-1 text-xs">≡</span>;
   };
 
@@ -10637,6 +10812,128 @@ export function NotionDatabaseTable({
                                   );
                                 }
 
+                                // 13. Files & media Column (Interactive Attachments with ImageModal preview & Document preview)
+                                const isFilesCol = cleanCol.includes('file') || cleanCol.includes('media') || cleanCol.includes('lampiran') || cleanCol.includes('attachment') || cleanCol.includes('berkas');
+                                if (isFilesCol) {
+                                  const cellAttachments = parseCommentAttachments(val);
+                                  const isUploadingThisCell = isUploadingCellFile && cellUploadTarget?.rowIndex === actualRowIndex && cellUploadTarget?.colName === colName;
+
+                                  return (
+                                    <td
+                                      key={colName}
+                                      style={{ ...getColStyle(colName) }}
+                                      className={`border-r transition-colors ${
+                                        isNotionLight ? 'border-[#cbd5e1]' : 'border-[#2d2d2d]'
+                                      } ${fitPageMode ? 'px-2 py-1.5 text-xs' : 'px-3 py-2 text-[13px]'}`}
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      <div className="flex items-center flex-wrap gap-1.5 min-w-0">
+                                        {cellAttachments.map((att, attIdx) => {
+                                          const isImg = att.isImage;
+                                          const ext = (att.name || '').split('.').pop()?.toLowerCase() || '';
+                                          const isPdf = ext === 'pdf' || (att.mimeType && att.mimeType.includes('pdf'));
+                                          const isExcel = ext === 'xls' || ext === 'xlsx' || ext === 'csv';
+
+                                          return (
+                                            <div
+                                              key={att.id || att.url || attIdx}
+                                              className={`group/chip relative inline-flex items-center gap-1.5 pl-1.5 pr-2 py-1 rounded-md text-xs font-medium border transition-all cursor-pointer shadow-2xs ${
+                                                isNotionLight
+                                                  ? 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-800'
+                                                  : 'bg-[#272727] hover:bg-[#323232] border-[#3f3f46] text-slate-200'
+                                              }`}
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                handlePreviewAttachment(att, cellAttachments);
+                                              }}
+                                              title={`Klik untuk preview: ${att.name}`}
+                                            >
+                                              {/* Thumbnail / Icon */}
+                                              {isImg ? (
+                                                <img
+                                                  src={att.previewUrl || att.directUrl || att.url}
+                                                  alt={att.name}
+                                                  className="w-5 h-5 rounded object-cover border border-slate-300 dark:border-slate-600 shrink-0"
+                                                  onError={(e) => {
+                                                    (e.target as HTMLElement).style.display = 'none';
+                                                  }}
+                                                />
+                                              ) : isPdf ? (
+                                                <span className="p-0.5 rounded bg-red-100 dark:bg-red-950/60 text-red-600 dark:text-red-400 shrink-0">
+                                                  <FileText className="w-3.5 h-3.5" />
+                                                </span>
+                                              ) : isExcel ? (
+                                                <span className="p-0.5 rounded bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 shrink-0">
+                                                  <FileSpreadsheet className="w-3.5 h-3.5" />
+                                                </span>
+                                              ) : (
+                                                <span className="p-0.5 rounded bg-teal-100 dark:bg-teal-950/60 text-teal-600 dark:text-teal-400 shrink-0">
+                                                  <Paperclip className="w-3.5 h-3.5" />
+                                                </span>
+                                              )}
+
+                                              {/* Name */}
+                                              <span className="truncate max-w-[110px] select-none hover:underline" title={att.name}>
+                                                {att.name}
+                                              </span>
+
+                                              {/* Preview hint badge */}
+                                              <span className="text-[10px] text-teal-600 dark:text-teal-400 opacity-60 group-hover/chip:opacity-100">
+                                                <Eye className="w-3 h-3" />
+                                              </span>
+
+                                              {/* Remove button */}
+                                              <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  handleRemoveCellAttachment(actualRowIndex, colName, attIdx);
+                                                }}
+                                                className="opacity-0 group-hover/chip:opacity-100 p-0.5 rounded hover:bg-red-100 dark:hover:bg-red-900/50 hover:text-red-600 transition-opacity ml-0.5 cursor-pointer"
+                                                title="Hapus file ini"
+                                              >
+                                                <X className="w-3 h-3" />
+                                              </button>
+                                            </div>
+                                          );
+                                        })}
+
+                                        {/* Add file button */}
+                                        <button
+                                          type="button"
+                                          disabled={isUploadingThisCell}
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            triggerCellUpload(actualRowIndex, colName);
+                                          }}
+                                          className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors cursor-pointer ${
+                                            cellAttachments.length === 0
+                                              ? isNotionLight
+                                                ? 'text-slate-400 hover:text-teal-700 hover:bg-teal-50 border border-dashed border-slate-300 hover:border-teal-400'
+                                                : 'text-slate-500 hover:text-teal-400 hover:bg-teal-950/30 border border-dashed border-slate-700 hover:border-teal-600'
+                                              : isNotionLight
+                                                ? 'text-slate-400 hover:text-teal-700 hover:bg-slate-100'
+                                                : 'text-slate-500 hover:text-teal-400 hover:bg-slate-800'
+                                          }`}
+                                          title="Tambah / unggah file lampiran"
+                                        >
+                                          {isUploadingThisCell ? (
+                                            <>
+                                              <Loader2 className="w-3 h-3 animate-spin text-teal-500 shrink-0" />
+                                              <span>Mengunggah...</span>
+                                            </>
+                                          ) : (
+                                            <>
+                                              <Plus className="w-3 h-3 shrink-0" />
+                                              <span>{cellAttachments.length === 0 ? 'Tambah file' : ''}</span>
+                                            </>
+                                          )}
+                                        </button>
+                                      </div>
+                                    </td>
+                                  );
+                                }
+
                                 // Default custom column (e.g. Group, etc.)
                                 const cleanCustomVal = (val || '')
                                   .replace(/<!--[\s\S]*?-->/g, '')
@@ -13708,6 +14005,161 @@ export function NotionDatabaseTable({
           images={previewImage.images}
           currentIndex={previewImage.currentIndex}
         />
+      )}
+
+      {/* Hidden File Input for Direct Cell File Uploads */}
+      <input
+        type="file"
+        ref={cellFileInputRef}
+        onChange={handleCellFileChange}
+        multiple
+        className="hidden"
+        style={{ display: 'none' }}
+      />
+
+      {/* Non-image Document / Media Interactive Preview Modal */}
+      {previewDoc && (
+        <div
+          className="fixed inset-0 z-[110] bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 md:p-6"
+          onClick={() => setPreviewDoc(null)}
+        >
+          <div
+            className="bg-white dark:bg-[#1e1e1e] rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 w-full max-w-5xl h-[88vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-200 dark:border-slate-800 bg-slate-50/90 dark:bg-[#252525]/90 shrink-0">
+              <div className="flex items-center gap-3 min-w-0 mr-4">
+                <div className="w-9 h-9 rounded-xl bg-teal-500/10 border border-teal-500/20 flex items-center justify-center text-teal-600 dark:text-teal-400 shrink-0">
+                  {previewDoc.isPdf ? (
+                    <FileText className="w-5 h-5 text-red-500" />
+                  ) : previewDoc.name.match(/\.(xls|xlsx|csv)$/i) ? (
+                    <FileSpreadsheet className="w-5 h-5 text-emerald-500" />
+                  ) : (
+                    <Paperclip className="w-5 h-5 text-teal-500" />
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100 truncate" title={previewDoc.name}>
+                    {previewDoc.name}
+                  </h3>
+                  <p className="text-[11px] text-slate-400 flex items-center gap-2">
+                    <span>Preview Dokumen / Lampiran</span>
+                    {previewDoc.size ? (
+                      <>
+                        <span>•</span>
+                        <span>{(previewDoc.size / 1024).toFixed(1)} KB</span>
+                      </>
+                    ) : null}
+                  </p>
+                </div>
+              </div>
+
+              {/* Action Toolbar */}
+              <div className="flex items-center gap-2 shrink-0">
+                {previewDoc.driveViewUrl && (
+                  <a
+                    href={previewDoc.driveViewUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition-colors"
+                    title="Buka langsung di Google Drive / Dokumen"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Buka di Drive</span>
+                  </a>
+                )}
+
+                {(previewDoc.driveDownloadUrl || previewDoc.url) && (
+                  <a
+                    href={previewDoc.driveDownloadUrl || previewDoc.url}
+                    download={previewDoc.name}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-teal-600 hover:bg-teal-500 text-white transition-colors shadow-xs"
+                    title="Unduh file ke perangkat"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Download</span>
+                  </a>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => setPreviewDoc(null)}
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200/60 dark:hover:bg-slate-800 transition-colors cursor-pointer ml-1"
+                  title="Tutup (Esc)"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Body / Viewer */}
+            <div className="flex-1 bg-slate-100 dark:bg-[#141414] overflow-hidden relative">
+              {(() => {
+                const driveId = extractDriveId(previewDoc.url) || (previewDoc.driveViewUrl ? extractDriveId(previewDoc.driveViewUrl) : null);
+                const iframeSrc = driveId 
+                  ? `https://drive.google.com/file/d/${driveId}/preview` 
+                  : (previewDoc.url || '');
+
+                if (driveId || previewDoc.isPdf || previewDoc.url.endsWith('.pdf')) {
+                  return (
+                    <iframe
+                      src={iframeSrc}
+                      className="w-full h-full border-0 bg-white"
+                      title={previewDoc.name}
+                      allow="autoplay"
+                    />
+                  );
+                }
+
+                return (
+                  <div className="flex flex-col items-center justify-center h-full p-8 text-center">
+                    <div className="w-20 h-20 rounded-2xl bg-slate-200 dark:bg-slate-800 flex items-center justify-center text-slate-400 mb-4 shadow-inner">
+                      {previewDoc.name.match(/\.(xls|xlsx|csv)$/i) ? (
+                        <FileSpreadsheet className="w-10 h-10 text-emerald-500" />
+                      ) : (
+                        <Paperclip className="w-10 h-10 text-teal-500" />
+                      )}
+                    </div>
+                    <h4 className="text-base font-bold text-slate-800 dark:text-slate-200 max-w-md truncate mb-2">
+                      {previewDoc.name}
+                    </h4>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm mb-6 leading-relaxed">
+                      Format berkas ini paling optimal dilihat dengan mengunduh langsung atau membuka pada aplikasi terkait.
+                    </p>
+                    <div className="flex items-center gap-3">
+                      {(previewDoc.driveDownloadUrl || previewDoc.url) && (
+                        <a
+                          href={previewDoc.driveDownloadUrl || previewDoc.url}
+                          download={previewDoc.name}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs shadow-md transition-all cursor-pointer"
+                        >
+                          <Download className="w-4 h-4" />
+                          <span>Unduh Berkas</span>
+                        </a>
+                      )}
+                      {previewDoc.driveViewUrl && (
+                        <a
+                          href={previewDoc.driveViewUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-semibold text-xs hover:bg-slate-50 transition-all"
+                        >
+                          <ExternalLink className="w-4 h-4" />
+                          <span>Buka di Google Drive</span>
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Logbook Task Recommendation Modal */}

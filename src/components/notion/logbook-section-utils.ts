@@ -565,7 +565,7 @@ export function parseTableFromMarkdown(content: string): { headers: string[]; ro
 }
 
 function parseRowLine(line: string, headers: string[]): TableRowData | null {
-  const parts = line.split('|').map(p => p.trim());
+  const parts = line.split(/(?<!\\)\|/).map(p => p.replace(/\\\|/g, '|').trim());
   const cellValues = parts.slice(1, parts.length - 1);
   if (cellValues.length === 0) return null;
 

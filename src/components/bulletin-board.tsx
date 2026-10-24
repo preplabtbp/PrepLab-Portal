@@ -155,7 +155,21 @@ export function BulletinBoard({
 
   const userUniverse = userPt === 'GTS' ? 'GTS' : 'TBP';
 
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem("preplab_labnote_sidebar_open");
+      if (saved !== null) return saved === "true";
+      return typeof window !== "undefined" ? window.innerWidth >= 1024 : true;
+    } catch {
+      return true;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("preplab_labnote_sidebar_open", String(sidebarOpen));
+    } catch {}
+  }, [sidebarOpen]);
   // Restore selected post immediately on initial render from sessionStorage ONLY if URL explicitly specifies a post ID (prevents flash on refresh while keeping root URL on dashboard)
   const [selectedPost, setSelectedPost] = useState<any | null>(() => {
     try {
@@ -2331,303 +2345,337 @@ ${aiMeetingNotes
 
       {/* Main Content Area */}
       <div 
-        className="flex-1 flex flex-col h-full relative overflow-y-auto transition-colors"
+        className="flex-1 flex flex-col h-full overflow-hidden transition-colors"
         style={{
           backgroundColor: 'var(--bg-main, #ffffff)',
           color: 'var(--text-main, #1e293b)'
         }}
       >
-        {/* Notion-Style Tabs Header */}
-        <div
-          className="h-10 border-b flex items-center px-2 sticky top-0 backdrop-blur-md z-40 transition-colors gap-1 select-none overflow-x-auto no-scrollbar"
-          style={{
-            backgroundColor: 'var(--input-bg, #f1f5f9)',
-            borderColor: 'var(--border-main, #e2e8f0)',
-            color: 'var(--text-main, #1e293b)'
-          }}
-        >
-          {/* Sidebar Toggle & Navigation Arrows (< and >) */}
-          <div className="flex items-center gap-0.5 shrink-0 pr-1.5 border-r border-[var(--border-main,rgba(148,163,184,0.3))]">
-            <button
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="p-1.5 rounded-md hover:bg-black/5 dark:hover:bg-white/10 transition-colors text-[var(--text-muted,#64748b)] hover:text-[var(--text-main,#1e293b)] cursor-pointer"
-              title={sidebarOpen ? "Tutup Sidebar" : "Buka Sidebar"}
-            >
-              <Menu className="w-3.5 h-3.5" />
-            </button>
-            <button
-              onClick={goBack}
-              disabled={navHistory.length <= 1}
-              className="p-1.5 rounded-md hover:bg-black/5 dark:hover:bg-white/10 transition-colors disabled:opacity-25 disabled:pointer-events-none text-[var(--text-muted,#64748b)] hover:text-[var(--text-main,#1e293b)] cursor-pointer"
-              title="Kembali ke halaman sebelumnya (<)"
-            >
-              <ChevronLeft className="w-3.5 h-3.5" />
-            </button>
-            <button
-              onClick={goForward}
-              disabled={forwardHistory.length === 0}
-              className="p-1.5 rounded-md hover:bg-black/5 dark:hover:bg-white/10 transition-colors disabled:opacity-25 disabled:pointer-events-none text-[var(--text-muted,#64748b)] hover:text-[var(--text-main,#1e293b)] cursor-pointer"
-              title="Maju ke halaman berikutnya (>)"
-            >
-              <ChevronRight className="w-3.5 h-3.5" />
-            </button>
-          </div>
-
-          {/* Horizontal Scrollable Tabs Strip */}
-          <div className="flex items-center gap-1 overflow-x-auto no-scrollbar flex-1 h-full pt-1">
-            {openTabs.map((tab) => {
-              const isActive = selectedPost ? String(tab.id) === String(selectedPost.id) : tab.id === 'dashboard';
-              return (
-                <div
-                  key={tab.id}
-                  onClick={() => handleSelectTab(tab)}
-                  className={`group relative h-8 px-3 rounded-t-lg flex items-center gap-1.5 text-xs transition-all cursor-pointer border-t border-x shrink-0 max-w-[210px] ${
-                    isActive
-                      ? 'bg-[var(--card-bg,#ffffff)] text-[var(--text-main,#1e293b)] font-semibold border-[var(--border-main,#e2e8f0)] shadow-2xs z-10'
-                      : 'bg-transparent text-[var(--text-muted,#64748b)] hover:text-[var(--text-main,#1e293b)] hover:bg-black/5 dark:hover:bg-white/5 border-transparent'
-                  }`}
-                  title={tab.title}
-                >
-                  <span className="text-xs shrink-0">{tab.icon || '📄'}</span>
-                  <span className="truncate flex-1 text-[11.5px]">{tab.title}</span>
-                  {tab.id !== 'dashboard' && (
-                    <button
-                      onClick={(e) => handleCloseTab(tab.id, e)}
-                      className={`p-0.5 rounded-md hover:bg-black/10 dark:hover:bg-white/20 text-[var(--text-muted,#64748b)] hover:text-[var(--text-main,#1e293b)] transition-opacity ${
-                        isActive ? 'opacity-70 hover:opacity-100' : 'opacity-0 group-hover:opacity-70 hover:opacity-100'
-                      }`}
-                      title="Tutup Tab"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  )}
-                </div>
-              );
-            })}
-
-            {/* New Tab Button (+) */}
-            <button
-              onClick={handleNewTab}
-              className="p-1.5 rounded-md hover:bg-black/5 dark:hover:bg-white/10 text-[var(--text-muted,#64748b)] hover:text-[var(--text-main,#1e293b)] transition-colors cursor-pointer shrink-0 ml-0.5"
-              title="Buka Tab Baru (Dashboard)"
-            >
-              <Plus className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        </div>
-
-        {/* Subbar: Breadcrumbs Hierarchy & Page Actions */}
+        {/* Top Header: Navigation, Notion Tabs & Breadcrumb Subbar (Fixed at top, never scrolls away) */}
         <div 
-          className="h-10 border-b flex items-center px-4 justify-between sticky top-10 backdrop-blur-md z-30 transition-colors shadow-2xs"
+          className="flex-shrink-0 z-30 border-b select-none flex flex-col transition-colors shadow-2xs"
           style={{
             backgroundColor: 'var(--card-bg, #ffffff)',
             borderColor: 'var(--border-main, #e2e8f0)',
             color: 'var(--text-main, #1e293b)'
           }}
         >
-          <div className="flex items-center gap-2 overflow-hidden flex-1 mr-2">
-            {/* Interactive Breadcrumb Hierarchy */}
-            <nav
-              aria-label="Breadcrumb"
-              className="flex items-center text-xs gap-1 overflow-x-auto no-scrollbar py-1"
-              style={{ color: 'var(--text-muted, #94a3b8)' }}
-            >
-              {/* Root Dashboard Link */}
+          {/* Row 1: Notion-Style Tabs Header */}
+          <div
+            className="h-10 border-b flex items-center px-2 transition-colors gap-1.5 overflow-x-auto no-scrollbar"
+            style={{
+              backgroundColor: 'var(--input-bg, #f1f5f9)',
+              borderColor: 'var(--border-main, #e2e8f0)',
+              color: 'var(--text-main, #1e293b)'
+            }}
+          >
+            {/* Sidebar Toggle & Navigation Arrows (< and >) */}
+            <div className="flex items-center gap-1 shrink-0 pr-2 border-r border-[var(--border-main,rgba(148,163,184,0.3))]">
               <button
-                onClick={() => {
-                  setIsLibraryActive(false);
-                  navigateToPost(null);
-                }}
-                className="flex items-center gap-1 px-1.5 py-1 rounded-md transition-colors flex-shrink-0 cursor-pointer hover:opacity-80"
-                style={{
-                  color: (!selectedPost && !isEditing && !isLibraryActive) ? 'var(--primary, #2A9D8F)' : 'var(--text-muted, #94a3b8)',
-                  fontWeight: (!selectedPost && !isEditing && !isLibraryActive) ? 'bold' : 'normal'
-                }}
+                onClick={() => setSidebarOpen(!sidebarOpen)}
+                className={`p-1 px-2.5 rounded-md transition-all flex items-center gap-1.5 font-medium text-xs cursor-pointer ${
+                  sidebarOpen
+                    ? 'hover:bg-black/5 dark:hover:bg-white/10 text-[var(--text-muted,#64748b)] hover:text-[var(--text-main,#1e293b)]'
+                    : 'bg-teal-600 text-white hover:bg-teal-700 shadow-xs'
+                }`}
+                title={sidebarOpen ? "Tutup Sidebar Menu" : "Buka Sidebar Menu (Garis 3)"}
               >
-                <Home className="w-3.5 h-3.5" />
-                <span>Dashboard</span>
+                <Menu className="w-3.5 h-3.5 shrink-0" />
+                <span className="text-[11px] font-semibold">{sidebarOpen ? "Menu" : "Buka Menu"}</span>
               </button>
+              <button
+                onClick={goBack}
+                disabled={navHistory.length <= 1}
+                className="p-1.5 rounded-md hover:bg-black/5 dark:hover:bg-white/10 transition-colors disabled:opacity-25 disabled:pointer-events-none text-[var(--text-muted,#64748b)] hover:text-[var(--text-main,#1e293b)] cursor-pointer"
+                title="Kembali ke halaman sebelumnya (<)"
+              >
+                <ChevronLeft className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={goForward}
+                disabled={forwardHistory.length === 0}
+                className="p-1.5 rounded-md hover:bg-black/5 dark:hover:bg-white/10 transition-colors disabled:opacity-25 disabled:pointer-events-none text-[var(--text-muted,#64748b)] hover:text-[var(--text-main,#1e293b)] cursor-pointer"
+                title="Maju ke halaman berikutnya (>)"
+              >
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
 
-              {isLibraryActive && (
-                <>
-                  <ChevronRight className="w-3 h-3 opacity-40 flex-shrink-0" />
-                  <span className="px-1.5 py-0.5 rounded-md text-amber-400 font-bold bg-amber-500/10 border border-amber-500/30 flex items-center gap-1">
-                    <BookOpen className="w-3 h-3" />
-                    <span>Company Library</span>
-                  </span>
-                </>
-              )}
-
-              {/* Breadcrumb Steps */}
-              {breadcrumbTrail.map((crumb, idx) => {
-                const isLast = idx === breadcrumbTrail.length - 1 && !isEditing;
-                const crumbTitle = getPostTitle(crumb);
-
+            {/* Horizontal Scrollable Tabs Strip */}
+            <div className="flex items-center gap-1 overflow-x-auto no-scrollbar flex-1 h-full pt-1">
+              {openTabs.map((tab) => {
+                const isActive = selectedPost ? String(tab.id) === String(selectedPost.id) : tab.id === 'dashboard';
                 return (
-                  <React.Fragment key={crumb.id || idx}>
-                    <ChevronRight className="w-3 h-3 opacity-40 flex-shrink-0" />
-                    <button
-                      onClick={() => navigateToPost(crumb)}
-                      disabled={isLast}
-                      className="px-1.5 py-1 rounded-md truncate max-w-[160px] transition-colors"
-                      style={{
-                        color: isLast ? 'var(--primary, #2dd4bf)' : 'var(--text-muted, #94a3b8)',
-                        fontWeight: isLast ? '600' : 'normal',
-                        backgroundColor: isLast ? 'var(--input-bg, rgba(30, 60, 47, 0.4))' : 'transparent',
-                        border: isLast ? '1px solid var(--border-main, rgba(20, 184, 166, 0.3))' : 'none',
-                        cursor: isLast ? 'default' : 'pointer'
-                      }}
-                      title={translateDisplayText(crumbTitle)}
-                    >
-                      {translateDisplayText(crumbTitle)}
-                    </button>
-                  </React.Fragment>
+                  <div
+                    key={tab.id}
+                    onClick={() => handleSelectTab(tab)}
+                    className={`group relative h-8 px-3 rounded-t-lg flex items-center gap-1.5 text-xs transition-all cursor-pointer border-t border-x shrink-0 max-w-[210px] ${
+                      isActive
+                        ? 'bg-[var(--card-bg,#ffffff)] text-[var(--text-main,#1e293b)] font-semibold border-[var(--border-main,#e2e8f0)] shadow-2xs z-10'
+                        : 'bg-transparent text-[var(--text-muted,#64748b)] hover:text-[var(--text-main,#1e293b)] hover:bg-black/5 dark:hover:bg-white/5 border-transparent'
+                    }`}
+                    title={tab.title}
+                  >
+                    <span className="text-xs shrink-0">{tab.icon || '📄'}</span>
+                    <span className="truncate flex-1 text-[11.5px]">{tab.title}</span>
+                    {tab.id !== 'dashboard' && (
+                      <button
+                        onClick={(e) => handleCloseTab(tab.id, e)}
+                        className={`p-0.5 rounded-md hover:bg-black/10 dark:hover:bg-white/20 text-[var(--text-muted,#64748b)] hover:text-[var(--text-main,#1e293b)] transition-opacity ${
+                          isActive ? 'opacity-70 hover:opacity-100' : 'opacity-0 group-hover:opacity-70 hover:opacity-100'
+                        }`}
+                        title="Tutup Tab"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    )}
+                  </div>
                 );
               })}
 
-              {isEditing && (
-                <>
-                  <ChevronRight className="w-3 h-3 opacity-40 flex-shrink-0" />
-                  <span className="text-amber-300 font-medium px-1.5 py-0.5 bg-amber-950/40 rounded border border-amber-600/30">
-                    {selectedPost ? "Edit Mode" : "New Page"}
-                  </span>
-                </>
-              )}
-            </nav>
+              {/* New Tab Button (+) */}
+              <button
+                onClick={handleNewTab}
+                className="p-1.5 rounded-md hover:bg-black/5 dark:hover:bg-white/10 text-[var(--text-muted,#64748b)] hover:text-[var(--text-main,#1e293b)] transition-colors cursor-pointer shrink-0 ml-0.5"
+                title="Buka Tab Baru (Dashboard)"
+              >
+                <Plus className="w-3.5 h-3.5" />
+              </button>
+            </div>
           </div>
 
-          {/* Action Buttons */}
-          <div className="flex items-center gap-2 flex-shrink-0">
-            {/* Direct Jump to Log Book Section */}
-            <div className="relative">
-              <button
-                onClick={() => {
-                  if (selectedPost && !isLogbookPost(selectedPost)) {
-                    const sec = getSectionFromPost(selectedPost);
-                    openSectionLogbook(sec);
-                  } else {
-                    setShowLogbookDropdown(prev => !prev);
-                  }
-                }}
-                className={`px-2.5 py-1 rounded-lg border text-xs flex items-center gap-1.5 transition-all shadow-xs cursor-pointer ${
-                  isLogbookPost(selectedPost)
-                    ? 'bg-teal-600 border-teal-500 text-white font-bold shadow-teal-900/30'
-                    : 'bg-slate-800/60 border-slate-700 text-slate-300 hover:text-white hover:border-teal-500/50'
-                }`}
-                title="Buka Log Book Seksi Terpadu (Routine & Non-Routine Aktif)"
-              >
-                <ClipboardList className="w-3.5 h-3.5 text-teal-400" />
-                <span className="hidden md:inline">
-                  {isLogbookPost(selectedPost) ? `Logbook ${getSectionFromPost(selectedPost)}` : 'Log Book'}
-                </span>
-                <ChevronDown className="w-3 h-3 text-slate-400" />
-              </button>
+          {/* Row 2: Subbar (Breadcrumbs Hierarchy & Page Actions) */}
+          <div 
+            className="h-10 flex items-center px-4 justify-between transition-colors shadow-2xs"
+            style={{
+              backgroundColor: 'var(--card-bg, #ffffff)',
+              borderColor: 'var(--border-main, #e2e8f0)',
+              color: 'var(--text-main, #1e293b)'
+            }}
+          >
+            <div className="flex items-center gap-2 overflow-hidden flex-1 mr-2">
+              {/* Quick Sidebar Toggle in Breadcrumb row if closed */}
+              {!sidebarOpen && (
+                <button
+                  onClick={() => setSidebarOpen(true)}
+                  className="mr-1 p-1 rounded-md text-teal-600 hover:bg-teal-50 dark:hover:bg-white/10 transition-colors flex items-center gap-1 cursor-pointer shrink-0"
+                  title="Buka Sidebar Menu (Garis 3)"
+                >
+                  <Menu className="w-4 h-4" />
+                </button>
+              )}
 
-              {/* Logbook Section Quick Dropdown */}
-              {showLogbookDropdown && (
-                <div 
-                  className="absolute right-0 mt-1 w-56 rounded-xl border shadow-xl py-1 z-50 animate-in fade-in zoom-in-95 duration-100"
+              {/* Interactive Breadcrumb Hierarchy */}
+              <nav
+                aria-label="Breadcrumb"
+                className="flex items-center text-xs gap-1 overflow-x-auto no-scrollbar py-1"
+                style={{ color: 'var(--text-muted, #94a3b8)' }}
+              >
+                {/* Root Dashboard Link */}
+                <button
+                  onClick={() => {
+                    setIsLibraryActive(false);
+                    navigateToPost(null);
+                  }}
+                  className="flex items-center gap-1 px-1.5 py-1 rounded-md transition-colors flex-shrink-0 cursor-pointer hover:opacity-80"
                   style={{
-                    backgroundColor: 'var(--card-bg, #1e293b)',
-                    borderColor: 'var(--border-main, #334155)'
+                    color: (!selectedPost && !isEditing && !isLibraryActive) ? 'var(--primary, #2A9D8F)' : 'var(--text-muted, #94a3b8)',
+                    fontWeight: (!selectedPost && !isEditing && !isLibraryActive) ? 'bold' : 'normal'
                   }}
                 >
-                  <div className="px-3 py-1.5 border-b text-[11px] font-bold uppercase tracking-wider text-teal-400 flex items-center justify-between" style={{ borderColor: 'var(--border-main, #334155)' }}>
-                    <span>Pilih Logbook Seksi</span>
-                    <button onClick={() => setShowLogbookDropdown(false)} className="text-slate-400 hover:text-white">
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                  <div className="py-1 max-h-64 overflow-y-auto">
-                    {dropdownSections.map((sec) => (
+                  <Home className="w-3.5 h-3.5" />
+                  <span>Dashboard</span>
+                </button>
+
+                {isLibraryActive && (
+                  <>
+                    <ChevronRight className="w-3 h-3 opacity-40 flex-shrink-0" />
+                    <span className="px-1.5 py-0.5 rounded-md text-amber-400 font-bold bg-amber-500/10 border border-amber-500/30 flex items-center gap-1">
+                      <BookOpen className="w-3 h-3" />
+                      <span>Company Library</span>
+                    </span>
+                  </>
+                )}
+
+                {/* Breadcrumb Steps */}
+                {breadcrumbTrail.map((crumb, idx) => {
+                  const isLast = idx === breadcrumbTrail.length - 1 && !isEditing;
+                  const crumbTitle = getPostTitle(crumb);
+
+                  return (
+                    <React.Fragment key={crumb.id || idx}>
+                      <ChevronRight className="w-3 h-3 opacity-40 flex-shrink-0" />
                       <button
-                        key={sec}
-                        onClick={() => openSectionLogbook(sec)}
-                        className="w-full text-left px-3 py-2 text-xs hover:bg-teal-500/10 hover:text-teal-300 transition-colors flex items-center gap-2 text-slate-200 cursor-pointer"
+                        onClick={() => navigateToPost(crumb)}
+                        disabled={isLast}
+                        className="px-1.5 py-1 rounded-md truncate max-w-[160px] transition-colors"
+                        style={{
+                          color: isLast ? 'var(--primary, #2dd4bf)' : 'var(--text-muted, #94a3b8)',
+                          fontWeight: isLast ? '600' : 'normal',
+                          backgroundColor: isLast ? 'var(--input-bg, rgba(30, 60, 47, 0.4))' : 'transparent',
+                          border: isLast ? '1px solid var(--border-main, rgba(20, 184, 166, 0.3))' : 'none',
+                          cursor: isLast ? 'default' : 'pointer'
+                        }}
+                        title={translateDisplayText(crumbTitle)}
                       >
-                        <span className="text-sm">📔</span>
-                        <span className="font-medium">Logbook {sec}</span>
+                        {translateDisplayText(crumbTitle)}
                       </button>
-                    ))}
-                  </div>
-                  <div className="border-t pt-1 px-1" style={{ borderColor: 'var(--border-main, #334155)' }}>
-                    <button
-                      onClick={() => {
-                        setShowLogbookDropdown(false);
-                        navigate('/logbook');
-                      }}
-                      className="w-full text-left px-3 py-1.5 text-[11px] text-slate-400 hover:text-white hover:bg-slate-700/50 rounded-lg flex items-center gap-1.5"
-                    >
-                      <span>📊 Buka Halaman Logbook Penuh</span>
-                    </button>
-                  </div>
-                </div>
-              )}
+                    </React.Fragment>
+                  );
+                })}
+
+                {isEditing && (
+                  <>
+                    <ChevronRight className="w-3 h-3 opacity-40 flex-shrink-0" />
+                    <span className="text-amber-300 font-medium px-1.5 py-0.5 bg-amber-950/40 rounded border border-amber-600/30">
+                      {selectedPost ? "Edit Mode" : "New Page"}
+                    </span>
+                  </>
+                )}
+              </nav>
             </div>
 
-            {selectedPost && !isEditing && (
-              <>
+            {/* Action Buttons */}
+            <div className="flex items-center gap-2 flex-shrink-0">
+              {/* Direct Jump to Log Book Section */}
+              <div className="relative">
                 <button
                   onClick={() => {
-                    const rawContent = cleanLegacyMenuInfo(getRenderableContent(selectedPost));
-                    setEditTitle(selectedPost.title || "");
-                    setEditCategory(selectedPost.category || "");
-                    setEditContent(rawContent);
-
-                    const tbl = extractMarkdownTable(rawContent);
-                    if (tbl) {
-                      setEditBeforeTable(cleanLegacyMenuInfo(tbl.beforeText).trim());
-                      setEditAfterTable(cleanLegacyMenuInfo(tbl.afterText).trim());
-                      setEditTableRaw(tbl.rawTable);
-                      setEditTableHeaders(tbl.headers);
-                      setEditTableRowCount(tbl.rows.length);
+                    if (selectedPost && !isLogbookPost(selectedPost)) {
+                      const sec = getSectionFromPost(selectedPost);
+                      openSectionLogbook(sec);
                     } else {
-                      setEditBeforeTable(cleanLegacyMenuInfo(rawContent).trim());
-                      setEditAfterTable("");
-                      setEditTableRaw(null);
-                      setEditTableHeaders([]);
-                      setEditTableRowCount(0);
+                      setShowLogbookDropdown(prev => !prev);
                     }
-                    setEditorMode('wysiwyg');
-                    setIsEditing(true);
                   }}
-                  className="p-1.5 text-slate-400 hover:text-blue-400 rounded-md hover:bg-slate-800 transition-colors"
-                  title="Edit Halaman"
+                  className={`px-2.5 py-1 rounded-lg border text-xs flex items-center gap-1.5 transition-all shadow-xs cursor-pointer ${
+                    isLogbookPost(selectedPost)
+                      ? 'bg-teal-600 border-teal-500 text-white font-bold shadow-teal-900/30'
+                      : 'bg-slate-800/60 border-slate-700 text-slate-300 hover:text-white hover:border-teal-500/50'
+                  }`}
+                  title="Buka Log Book Seksi Terpadu (Routine & Non-Routine Aktif)"
                 >
-                  <Edit2 className="w-4 h-4" />
+                  <ClipboardList className="w-3.5 h-3.5 text-teal-400" />
+                  <span className="hidden md:inline">
+                    {isLogbookPost(selectedPost) ? `Logbook ${getSectionFromPost(selectedPost)}` : 'Log Book'}
+                  </span>
+                  <ChevronDown className="w-3 h-3 text-slate-400" />
                 </button>
-                <button
-                  onClick={() => deletePost(selectedPost.id)}
-                  className="p-1.5 text-slate-400 hover:text-red-400 rounded-md hover:bg-slate-800 transition-colors"
-                  title="Hapus Halaman"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </>
-            )}
-            {isEditing && (
-              <>
-                <Button
-                  onClick={() => {
-                    setIsEditing(false);
-                    if (!selectedPost) setEditTitle("");
-                  }}
-                  variant="secondary"
-                  className="h-7 text-xs px-2.5 shadow-sm border border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700"
-                >
-                  <X className="w-3 h-3 mr-1" /> Batal
-                </Button>
-                <Button
-                  onClick={handleSavePost}
-                  className="h-7 text-xs px-3 shadow-sm bg-teal-600 hover:bg-teal-700 text-white font-medium"
-                >
-                  <Check className="w-3 h-3 mr-1" /> Simpan
-                </Button>
-              </>
-            )}
+
+                {/* Logbook Section Quick Dropdown */}
+                {showLogbookDropdown && (
+                  <div 
+                    className="absolute right-0 mt-1 w-56 rounded-xl border shadow-xl py-1 z-50 animate-in fade-in zoom-in-95 duration-100"
+                    style={{
+                      backgroundColor: 'var(--card-bg, #1e293b)',
+                      borderColor: 'var(--border-main, #334155)'
+                    }}
+                  >
+                    <div className="px-3 py-1.5 border-b text-[11px] font-bold uppercase tracking-wider text-teal-400 flex items-center justify-between" style={{ borderColor: 'var(--border-main, #334155)' }}>
+                      <span>Pilih Logbook Seksi</span>
+                      <button onClick={() => setShowLogbookDropdown(false)} className="text-slate-400 hover:text-white">
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+
+                    <div className="max-h-60 overflow-y-auto py-1">
+                      {KNOWN_SECTIONS.map((sec) => (
+                        <button
+                          key={sec}
+                          onClick={() => {
+                            setShowLogbookDropdown(false);
+                            openSectionLogbook(sec);
+                          }}
+                          className={`w-full text-left px-3 py-2 text-xs flex items-center gap-2 hover:bg-slate-700/50 transition-colors ${
+                            selectedPost && getSectionFromPost(selectedPost) === sec ? 'text-teal-400 font-bold bg-teal-500/10' : 'text-slate-200'
+                          }`}
+                        >
+                          <span className="text-sm">📔</span>
+                          <span>Logbook {sec}</span>
+                        </button>
+                      ))}
+                    </div>
+                    <div className="border-t pt-1 px-1" style={{ borderColor: 'var(--border-main, #334155)' }}>
+                      <button
+                        onClick={() => {
+                          setShowLogbookDropdown(false);
+                          navigate('/logbook');
+                        }}
+                        className="w-full text-left px-3 py-1.5 text-[11px] text-slate-400 hover:text-white hover:bg-slate-700/50 rounded-lg flex items-center gap-1.5"
+                      >
+                        <span>📊 Buka Halaman Logbook Penuh</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {selectedPost && !isEditing && (
+                <>
+                  <button
+                    onClick={() => {
+                      const rawContent = cleanLegacyMenuInfo(getRenderableContent(selectedPost));
+                      setEditTitle(selectedPost.title || "");
+                      setEditCategory(selectedPost.category || "");
+                      setEditContent(rawContent);
+
+                      const tbl = extractMarkdownTable(rawContent);
+                      if (tbl) {
+                        setEditBeforeTable(cleanLegacyMenuInfo(tbl.beforeText).trim());
+                        setEditAfterTable(cleanLegacyMenuInfo(tbl.afterText).trim());
+                        setEditTableRaw(tbl.rawTable);
+                        setEditTableHeaders(tbl.headers);
+                        setEditTableRowCount(tbl.rows.length);
+                      } else {
+                        setEditBeforeTable(cleanLegacyMenuInfo(rawContent).trim());
+                        setEditAfterTable("");
+                        setEditTableRaw(null);
+                        setEditTableHeaders([]);
+                        setEditTableRowCount(0);
+                      }
+                      setEditorMode('wysiwyg');
+                      setIsEditing(true);
+                    }}
+                    className="p-1.5 text-slate-400 hover:text-blue-400 rounded-md hover:bg-slate-800 transition-colors"
+                    title="Edit Halaman"
+                  >
+                    <Edit2 className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => deletePost(selectedPost.id)}
+                    className="p-1.5 text-slate-400 hover:text-red-400 rounded-md hover:bg-slate-800 transition-colors"
+                    title="Hapus Halaman"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </>
+              )}
+              {isEditing && (
+                <>
+                  <Button
+                    onClick={() => {
+                      setIsEditing(false);
+                      if (!selectedPost) setEditTitle("");
+                    }}
+                    variant="secondary"
+                    className="h-7 text-xs px-2.5 shadow-sm border border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700"
+                  >
+                    <X className="w-3 h-3 mr-1" /> Batal
+                  </Button>
+                  <Button
+                    onClick={handleSavePost}
+                    className="h-7 text-xs px-3 shadow-sm bg-teal-600 hover:bg-teal-700 text-white font-medium"
+                  >
+                    <Check className="w-3 h-3 mr-1" /> Simpan
+                  </Button>
+                </>
+              )}
+            </div>
           </div>
         </div>
 
+        {/* Scrollable Content Body (Content scrolls underneath fixed topbar) */}
+        <div className="flex-1 overflow-y-auto relative">
         {/* Content Body */}
         <div className={`flex-1 w-full ${isSectionHubPost(selectedPost) ? 'p-2 sm:p-4 md:p-6 pb-32' : parsedTableData ? 'p-0 sm:px-2 md:px-3 pt-0 pb-0' : 'p-4 md:p-6 lg:p-8 pb-32'}`}>
           {!selectedPost && !isEditing ? (
@@ -3591,6 +3639,7 @@ ${aiMeetingNotes
               </div>
             </div>
           )}
+        </div>
         </div>
       </div>
 
