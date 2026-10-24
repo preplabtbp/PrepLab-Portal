@@ -1,4 +1,4 @@
-import { translateDisplayText, getDisplayColumnHeader } from './notion/logbook-section-utils';
+import { translateDisplayText, getDisplayColumnHeader, isSameBaseSection } from './notion/logbook-section-utils';
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { 
   Search, 
@@ -3154,7 +3154,9 @@ export function NotionDatabaseTable({
     if (!targetPostId) return;
     try {
       setCommentsLoading(true);
-      const res = await fetch(`/api/bulletin/${targetPostId}/comments`);
+      const targetPt = pt === 'GTS' ? 'GTS' : 'TBP';
+      const secParam = section ? `&section=${encodeURIComponent(section)}` : '';
+      const res = await fetch(`/api/bulletin/${targetPostId}/comments?pt=${targetPt}${secParam}`);
       const json = await res.json();
       if (json.status === 'success' && Array.isArray(json.data)) {
         setAllComments(json.data);
@@ -3164,7 +3166,7 @@ export function NotionDatabaseTable({
     } finally {
       setCommentsLoading(false);
     }
-  }, [getEffectivePostId]);
+  }, [getEffectivePostId, pt, section]);
 
   useEffect(() => {
     fetchComments();
@@ -3244,7 +3246,18 @@ export function NotionDatabaseTable({
   // Comment counts per topic title, task ID, and clean title (aggregates sub-periods to base topic as well)
   const topicCommentCounts = useMemo(() => {
     const map: Record<string, number> = {};
+    const currentTablePt = pt === 'GTS' ? 'GTS' : 'TBP';
+
     allComments.forEach((c) => {
+      // 0. Universe / PT & Section Isolation
+      if (c.universe) {
+        const cUniverse = c.universe.toUpperCase().includes('GTS') ? 'GTS' : 'TBP';
+        if (cUniverse !== currentTablePt) return;
+      }
+      if (c.section && section) {
+        if (!isSameBaseSection(c.section, section)) return;
+      }
+
       if (c.topicTitle) {
         const fullKey = c.topicTitle.toLowerCase().trim();
         map[fullKey] = (map[fullKey] || 0) + 1;
@@ -3287,7 +3300,7 @@ export function NotionDatabaseTable({
       }
     });
     return map;
-  }, [allComments]);
+  }, [allComments, pt, section]);
 
   // Base topic title from row
   const baseTopicTitle = useMemo(() => {
@@ -3598,22 +3611,33 @@ export function NotionDatabaseTable({
     const rowId = (selectedRow?.id || '').toLowerCase().trim();
     const cleanRowTitle = getDisplayTitle(baseTopicTitle).toLowerCase().trim();
     const cleanSelTitle = getDisplayTitle(selectedTopicTitle).toLowerCase().trim();
+    const currentTablePt = pt === 'GTS' ? 'GTS' : 'TBP';
 
     return allComments.filter((c) => {
+      // 0. Universe / PT & Section Isolation (Crucial!)
+      // Never mix GTS comments into TBP, and vice-versa
+      if (c.universe) {
+        const cUniverse = c.universe.toUpperCase().includes('GTS') ? 'GTS' : 'TBP';
+        if (cUniverse !== currentTablePt) return false;
+      }
+      // Never mix other sections' comments if section is specified
+      if (c.section && section) {
+        if (!isSameBaseSection(c.section, section)) return false;
+      }
+
       const cTopic = (c.topicTitle || '').toLowerCase().trim();
       const cTopicId = (c.topicId || '').toLowerCase().trim();
       const cCleanTitle = getDisplayTitle(c.topicTitle || '').toLowerCase().trim();
 
-      // 1. Direct Task ID match (both from explicit topicId and extracted from HTML comment <!--task-id:...-->)
+      // 1. Direct Task ID match (only exact match or explicit task-id HTML comment match, NO single-digit substring includes!)
       if (rowId) {
         if (cTopicId === rowId) return true;
-        if (cTopicId.includes(rowId)) return true;
         const taskMatch = (c.topicTitle || '').match(/<!--task-id:([^>]+)-->/);
         if (taskMatch && taskMatch[1].toLowerCase().trim() === rowId) return true;
       }
-      const taskCode = (selectedRow?.taskCode || selectedRow?.['Task ID'] || selectedRow?.['ID Task'] || selectedRow?.number || '').toLowerCase().trim();
-      if (taskCode && taskCode !== '-') {
-        if (cTopicId === taskCode || cTopicId.includes(taskCode)) return true;
+      const taskCode = (selectedRow?.taskCode || selectedRow?.['Task ID'] || selectedRow?.['ID Task'] || '').toLowerCase().trim();
+      if (taskCode && taskCode !== '-' && taskCode.length >= 3) {
+        if (cTopicId === taskCode) return true;
         const taskMatch = (c.topicTitle || '').match(/<!--task-id:([^>]+)-->/);
         if (taskMatch && taskMatch[1].toLowerCase().trim() === taskCode) return true;
       }
@@ -3627,9 +3651,9 @@ export function NotionDatabaseTable({
       const baseOfCClean = cCleanTitle.split(' - ')[0].trim();
       if (cleanRowTitle && baseOfCClean === cleanRowTitle) return true;
 
-      // 3. Fallback raw string match
-      if (selQ && cTopic === selQ) return true;
-      if (baseQ && cTopic === baseQ) return true;
+      // 3. Fallback raw string match (only if clean title is not empty)
+      if (cleanRowTitle && selQ && cTopic === selQ) return true;
+      if (cleanRowTitle && baseQ && cTopic === baseQ) return true;
 
       // 4. If selected row is a parent item, also include comments belonging to its child subtasks
       if (rowId && !selectedRow?.parentId) {
@@ -3639,7 +3663,7 @@ export function NotionDatabaseTable({
 
       return false;
     });
-  }, [allComments, selectedTopicTitle, baseTopicTitle, selectedRow]);
+  }, [allComments, selectedTopicTitle, baseTopicTitle, selectedRow, pt, section]);
 
   // Notion-style sorted comment stream (chronological oldest to newest)
   const sortedTopicComments = useMemo(() => {
