@@ -47,6 +47,7 @@ interface LeaveRecord {
   isCutiSelesai: boolean;
   isCustomEdited?: boolean;
   days?: Array<{ date: Date; dateStr: string; code: string }>;
+  allScheduleEntries?: Array<{ date: Date; dateStr: string; code: string }>;
 }
 
 const MONTH_NAMES_ID = [
@@ -278,13 +279,20 @@ export function isTbpOrGpsEmployee(emp: any): boolean {
 }
 
 /**
- * Menghitung rincian durasi cuti (Travel, Tahunan/Istimewa, Extra, Izin Khusus, Izin, Tambahan Travel)
- * baik secara keseluruhan blok cuti maupun secara spesifik untuk BULAN yang sedang berjalan/dipilih.
+ * Menghitung rincian durasi cuti berdasarkan kemunculan kode di roster kerja
+ * antara Tanggal Cuti dan Tanggal On Site (atau Perubahan Jadwal Onsite):
+ * - Tahunan / Istimewa: HANYA kode CT (CT1-CT12) atau CI (CI1-CI30)
+ *   (BUKAN keseluruhan cuti; jangan hitung kode 'C' biasa!)
+ * - Travel: TRV (atau TV)
+ * - Izin: I (atau SL)
+ * - Extra: CE
+ * - Izin Khusus: IK
+ * - Tambahan Travel: TT
  */
-export function calculateLeaveDurations(
-  days: Array<{ date: Date; dateStr: string; code: string }> = [],
-  targetYear?: number,
-  targetMonthIndex?: number // 0-indexed (0: Jan, 9: Okt, dst)
+export function calculateDurationsFromRosterRange(
+  scheduleEntries: Array<{ date: Date; dateStr: string; code: string }> = [],
+  startDate?: Date | null,
+  endDate?: Date | null
 ) {
   let travel = 0;
   let tahunanIstimewa = 0;
@@ -293,37 +301,71 @@ export function calculateLeaveDurations(
   let izin = 0;
   let tambahanTravel = 0;
 
-  const targetDays = (targetYear !== undefined && targetMonthIndex !== undefined)
-    ? days.filter(d => d.date && d.date.getFullYear() === targetYear && d.date.getMonth() === targetMonthIndex)
-    : days;
+  if (!startDate || !endDate || isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+    return {
+      travel: 0,
+      tahunanIstimewa: 0,
+      extra: 0,
+      izinKhusus: 0,
+      izin: 0,
+      tambahanTravel: 0,
+      totalHari: 0,
+      daysCount: 0
+    };
+  }
 
-  targetDays.forEach(b => {
-    const c = String(b.code || '').toUpperCase().trim();
-    // 1. TAMBAHAN TRAVEL (TT): Jumlah "TT" yang Muncul
-    if (c === 'TT' || c.startsWith('TT')) {
+  const startZero = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate(), 0, 0, 0, 0).getTime();
+  const endZero = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate(), 23, 59, 59, 999).getTime();
+
+  const daysInRange = scheduleEntries.filter(item => {
+    if (!item.date) return false;
+    const dTime = item.date.getTime();
+    return dTime >= startZero && dTime <= endZero;
+  });
+
+  daysInRange.forEach(item => {
+    const c = String(item.code || '').toUpperCase().trim();
+    if (!c || c === 'OFF' || c === '-' || c === 'KERJA' || c === 'ON' || c === 'D' || c === 'N' || c === 'LS') return;
+
+    // 1. Tambahan Travel = TT (termasuk TT1, TT2, dsb)
+    if (c === 'TT' || c.startsWith('TT') || c.includes('TAMBAHAN TRAVEL') || /^TT\s*[-/.(]?\s*\d*\)?$/i.test(c)) {
       tambahanTravel++;
     }
-    // 2. Travel: Jumlah "TRV" yang muncul pada Cuti berjalan
-    else if (c === 'TRV' || c.startsWith('TRV') || c === 'TV') {
+    // 2. Travel = TRV / TV (termasuk TRV1, TRV2, TV1, TV2, dsb)
+    else if (c === 'TRV' || c.startsWith('TRV') || c === 'TV' || c.startsWith('TV') || c === 'TRAVEL') {
       travel++;
     }
-    // 3. Izin Khusus: Jumlah "IK" yang muncul pada Cuti berjalan
-    else if (c === 'IK' || c.startsWith('IK')) {
+    // 3. Izin Khusus = IK (termasuk IK1, IK2, dsb)
+    else if (c === 'IK' || c.startsWith('IK') || c.includes('IZIN KHUSUS') || /^IK\s*[-/.(]?\s*\d*\)?$/i.test(c)) {
       izinKhusus++;
     }
-    // 4. Extra: Jumlah "CE" yang muncul pada Cuti berjalan
-    else if (c === 'CE' || c.startsWith('CE')) {
+    // 4. Extra = CE (termasuk CE1, CE2, dsb)
+    else if (c === 'CE' || c.startsWith('CE') || c.includes('EXTRA') || c.startsWith('CR') || /^CE\s*[-/.(]?\s*\d*\)?$/i.test(c)) {
       extra++;
     }
-    // 5. Tahunan/Istimewa: Jumlah "CT" atau "CI" yang muncul pada Cuti berjalan
-    else if (c === 'CT' || c.startsWith('CT') || c === 'CI' || c.startsWith('CI') || c === 'C') {
+    // 5. Tahunan / Istimewa = HANYA CT (Termasuk CT1-CT12) atau CI (Termasuk CI1-CI30)
+    // Sesuai sheet "Database Rooster Prep & Lab", HANYA cell bertuliskan CT/CT1-CT12 atau CI/CI1-CI30 yang dihitung.
+    // JANGAN PERNAH menghitung kode 'C' biasa karena 'C' adalah cuti reguler/keseluruhan cuti!
+    else if (
+      c === 'CT' || c.startsWith('CT') ||
+      c === 'CI' || c.startsWith('CI') ||
+      /^CT\s*[-/.(]?\s*(\d+)?\)?$/i.test(c) ||
+      /^CI\s*[-/.(]?\s*(\d+)?\)?$/i.test(c) ||
+      c === 'CUTI TAHUNAN' || c === 'CUTI ISTIMEWA'
+    ) {
       tahunanIstimewa++;
     }
-    // 6. Izin: Jumlah "I" atau "SL" yang muncul pada Cuti berjalan
-    else if (c === 'I' || c === 'SL' || c.startsWith('SL') || c === 'IZIN' || (c.startsWith('I') && !c.startsWith('IK'))) {
+    // 6. Izin = I (juga cover SL, Sakit, dsb)
+    else if (
+      c === 'I' || c === 'SL' || c.startsWith('SL') || c === 'IZIN' ||
+      (c.startsWith('I') && !c.startsWith('IK')) ||
+      /^I\s*[-/.(]?\s*\d*\)?$/i.test(c)
+    ) {
       izin++;
     }
   });
+
+  const totalHari = travel + tahunanIstimewa + extra + izinKhusus + izin + tambahanTravel;
 
   return {
     travel,
@@ -332,7 +374,39 @@ export function calculateLeaveDurations(
     izinKhusus,
     izin,
     tambahanTravel,
-    totalHari: travel + tahunanIstimewa + extra + izinKhusus + izin + tambahanTravel,
+    totalHari,
+    daysCount: daysInRange.length
+  };
+}
+
+export function calculateLeaveDurations(
+  days: Array<{ date: Date; dateStr: string; code: string }> = [],
+  targetYear?: number,
+  targetMonthIndex?: number // 0-indexed (0: Jan, 9: Okt, dst)
+) {
+  const targetDays = (targetYear !== undefined && targetMonthIndex !== undefined)
+    ? days.filter(d => d.date && d.date.getFullYear() === targetYear && d.date.getMonth() === targetMonthIndex)
+    : days;
+
+  if (targetDays.length === 0) {
+    return {
+      travel: 0,
+      tahunanIstimewa: 0,
+      extra: 0,
+      izinKhusus: 0,
+      izin: 0,
+      tambahanTravel: 0,
+      totalHari: 0,
+      activeDaysCount: 0
+    };
+  }
+
+  const startDate = targetDays[0]?.date || new Date();
+  const endDate = targetDays[targetDays.length - 1]?.date || startDate;
+  const res = calculateDurationsFromRosterRange(targetDays, startDate, endDate);
+
+  return {
+    ...res,
     activeDaysCount: targetDays.length
   };
 }
@@ -342,7 +416,13 @@ export function extractLeaveRecordsFromRoster(roster: any[]): LeaveRecord[] {
 
   const isLeaveOrTravel = (c: string) => {
     return ['TRV', 'TV', 'C', 'CT', 'CI', 'CE', 'CR', 'CS', 'IK', 'I', 'SL', 'TT', 'XP'].includes(c) ||
-           c.startsWith('TRV') || c.startsWith('CT') || c.startsWith('CE') || c.startsWith('CI') || c.startsWith('IK') || c.startsWith('CR') || c.startsWith('TT') || c.startsWith('SL');
+           c.startsWith('TRV') || c.startsWith('CT') || c.startsWith('CE') || c.startsWith('CI') || c.startsWith('IK') || c.startsWith('CR') || c.startsWith('TT') || c.startsWith('SL') ||
+           /^CT\s*[-/.(]?\s*\d*\)?$/i.test(c) || /^CI\s*[-/.(]?\s*\d*\)?$/i.test(c) || /^CE\s*[-/.(]?\s*\d*\)?$/i.test(c) || /^TRV\s*[-/.(]?\s*\d*\)?$/i.test(c);
+  };
+
+  const isWorkDuty = (c: string) => {
+    const u = c.toUpperCase().trim();
+    return ['D', 'N', 'LS', 'DS', 'NS', 'KERJA', 'ON'].includes(u) || (u.startsWith('D') && !u.startsWith('DL')) || u.startsWith('N');
   };
 
   for (const emp of roster) {
@@ -371,14 +451,26 @@ export function extractLeaveRecordsFromRoster(roster: any[]): LeaveRecord[] {
       const item = entries[i];
       if (isLeaveOrTravel(item.code)) {
         currentBlock.push(item);
-      } else if (
-        item.code === 'OFF' && 
-        currentBlock.length > 0 && 
-        i + 1 < entries.length && 
-        isLeaveOrTravel(entries[i + 1].code)
-      ) {
-        // Tolerates intermediate OFF day inside leave block
-        currentBlock.push(item);
+      } else if ((item.code === 'OFF' || item.code === '-') && currentBlock.length > 0) {
+        // Toleransi hari libur rutin (OFF) di sela-sela rangkaian cuti sebelum masuk kerja
+        let hasFutureLeave = false;
+        for (let j = i + 1; j < Math.min(entries.length, i + 15); j++) {
+          const nextCode = entries[j].code;
+          if (isWorkDuty(nextCode)) {
+            break;
+          }
+          if (isLeaveOrTravel(nextCode)) {
+            hasFutureLeave = true;
+            break;
+          }
+        }
+        if (hasFutureLeave) {
+          // Tetap masukkan ke dalam block cuti yang sama
+          currentBlock.push(item);
+        } else {
+          blocks.push(currentBlock);
+          currentBlock = [];
+        }
       } else {
         if (currentBlock.length > 0) {
           blocks.push(currentBlock);
@@ -399,32 +491,33 @@ export function extractLeaveRecordsFromRoster(roster: any[]): LeaveRecord[] {
     let blockIdx = 0;
     for (const block of blocks) {
       blockIdx++;
+      const isCutiSite = block.some(b => 
+        b.code === 'CS' || b.code.startsWith('CS') || b.code.includes('CUTI SITE') || /^CS\s*[-/.(]?\s*\d*\)?$/i.test(b.code)
+      );
+
       const hasCoreLeave = block.some(b => 
-        ['TRV', 'TV', 'C', 'CT', 'CI', 'CE', 'CR'].includes(b.code) || 
-        b.code.startsWith('TRV') || b.code.startsWith('CT') || b.code.startsWith('CE') || b.code.startsWith('CI')
+        ['TRV', 'TV', 'C', 'CT', 'CI', 'CE', 'CR', 'CS'].includes(b.code) || 
+        b.code.startsWith('TRV') || b.code.startsWith('CT') || b.code.startsWith('CE') || b.code.startsWith('CI') || b.code.startsWith('CS') ||
+        b.code.includes('CUTI')
       );
       if (!hasCoreLeave) continue;
 
-      // 1. Tanggal Cuti: first TRV/TV or C/CT/CE
+      // 1. Tanggal Cuti: first TRV/TV or C/CT/CE/CS
       const firstCutiItem = block.find(b => 
-        ['TRV', 'TV', 'C', 'CT', 'CI', 'CE', 'CR'].includes(b.code) || 
-        b.code.startsWith('TRV') || b.code.startsWith('CT') || b.code.startsWith('CE') || b.code.startsWith('CI')
+        ['TRV', 'TV', 'C', 'CT', 'CI', 'CE', 'CR', 'CS'].includes(b.code) || 
+        b.code.startsWith('TRV') || b.code.startsWith('CT') || b.code.startsWith('CE') || b.code.startsWith('CI') || b.code.startsWith('CS') ||
+        b.code.includes('CUTI')
       ) || block[0];
-
-      // Counters persis sesuai ketentuan kalkulasi cuti berjalan
-      const defaultDurations = calculateLeaveDurations(block);
-      const travel = defaultDurations.travel;
-      const tahunanIstimewa = defaultDurations.tahunanIstimewa;
-      const extra = defaultDurations.extra;
-      const izinKhusus = defaultDurations.izinKhusus;
-      const izin = defaultDurations.izin;
-      const tambahanTravel = defaultDurations.tambahanTravel;
 
       // Find index of last core cuti day
       let lastCoreCutiIdx = -1;
       for (let k = 0; k < block.length; k++) {
         const c = block[k].code;
-        if (['C', 'CT', 'CI', 'CE', 'CR'].includes(c) || c.startsWith('CT') || c.startsWith('CE') || c.startsWith('CI')) {
+        if (
+          ['C', 'CT', 'CI', 'CE', 'CR', 'CS'].includes(c) || 
+          c.startsWith('CT') || c.startsWith('CE') || c.startsWith('CI') || c.startsWith('CS') ||
+          c.includes('CUTI')
+        ) {
           lastCoreCutiIdx = k;
         }
       }
@@ -449,7 +542,7 @@ export function extractLeaveRecordsFromRoster(roster: any[]): LeaveRecord[] {
       const tanggalCutiRaw = firstCutiItem.date;
       let tanggalOnsiteRaw: Date;
       let perubahanJadwalOnsiteRaw: Date | null = null;
-      let ket = 'Sesuai Roster';
+      let ket = isCutiSite ? 'Cuti Site' : 'Sesuai Roster';
 
       if (hasExtension) {
         // Planned return date was before extension
@@ -466,7 +559,7 @@ export function extractLeaveRecordsFromRoster(roster: any[]): LeaveRecord[] {
       } else {
         tanggalOnsiteRaw = block[block.length - 1].date;
         perubahanJadwalOnsiteRaw = null;
-        ket = 'Sesuai Roster';
+        ket = isCutiSite ? 'Cuti Site' : 'Sesuai Roster';
       }
 
       // Cek apakah tanggal onsite atau perubahan jadwal onsite sudah melewati hari ini
@@ -479,8 +572,21 @@ export function extractLeaveRecordsFromRoster(roster: any[]): LeaveRecord[] {
 
       const isCutiSelesai = effectiveOnsiteZero.getTime() < today.getTime();
       if (isCutiSelesai) {
-        ket = 'Cuti Selesai';
+        ket = isCutiSite ? 'Cuti Site Selesai' : 'Cuti Selesai';
       }
+
+      // Hitung rincian durasi dari roster kerja antara Tanggal Cuti dan Tanggal On Site (atau Perubahan Jadwal Onsite)
+      const rosterDurations = calculateDurationsFromRosterRange(
+        entries,
+        tanggalCutiRaw,
+        effectiveOnsiteRaw
+      );
+      const travel = rosterDurations.travel;
+      const tahunanIstimewa = rosterDurations.tahunanIstimewa;
+      const extra = rosterDurations.extra;
+      const izinKhusus = rosterDurations.izinKhusus;
+      const izin = rosterDurations.izin;
+      const tambahanTravel = rosterDurations.tambahanTravel;
 
       records.push({
         id: `${emp.nik}-${blockIdx}-${tanggalCutiRaw.getTime()}`,
@@ -512,7 +618,8 @@ export function extractLeaveRecordsFromRoster(roster: any[]): LeaveRecord[] {
         totalHari: travel + tahunanIstimewa + extra + izinKhusus + izin + tambahanTravel,
         hasChange: hasExtension,
         isCutiSelesai,
-        days: block
+        days: block,
+        allScheduleEntries: entries
       });
     }
   }
@@ -524,9 +631,9 @@ export function extractLeaveRecordsFromRoster(roster: any[]): LeaveRecord[] {
 const DEFAULT_VISIBLE_COLUMNS: Record<string, boolean> = {
   no: true,
   nama: true,
+  jabatan: true,
   section: true,
   poh: true,
-  jabatan: true,
   tanggalCuti: true,
   tanggalOnsite: true,
   ket: true,
@@ -543,9 +650,9 @@ const DEFAULT_VISIBLE_COLUMNS: Record<string, boolean> = {
 const COLUMN_DEFS = [
   { id: 'no', label: 'NO' },
   { id: 'nama', label: 'NAMA KARYAWAN' },
+  { id: 'jabatan', label: 'JABATAN' },
   { id: 'section', label: 'SECTION' },
   { id: 'poh', label: 'POH' },
-  { id: 'jabatan', label: 'JABATAN' },
   { id: 'tanggalCuti', label: 'TANGGAL CUTI' },
   { id: 'tanggalOnsite', label: 'TANGGAL ON SITE' },
   { id: 'ket', label: 'KETERANGAN' },
@@ -705,6 +812,10 @@ export function RosterLeaveScheduleSheet({
       const current = prev[rec.id] || {};
       const updated: any = { ...current };
 
+      let needRecount = false;
+      let newStartDate = updated.tanggalCutiRaw || rec.tanggalCutiRaw;
+      let newEndDate = updated.perubahanJadwalOnsiteRaw || (updated.perubahanJadwalOnsite && updated.perubahanJadwalOnsite !== '-' ? parseKeyDate(updated.perubahanJadwalOnsite) : null) || updated.tanggalOnsiteRaw || rec.perubahanJadwalOnsiteRaw || rec.tanggalOnsiteRaw;
+
       if (field === 'section') updated.section = String(value || '').trim();
       else if (field === 'jabatan') updated.jabatan = String(value || '').trim();
       else if (field === 'poh') updated.poh = String(value || '').trim();
@@ -714,11 +825,15 @@ export function RosterLeaveScheduleSheet({
         if (!valStr || valStr === '-') {
           updated.perubahanJadwalOnsite = '-';
           updated.perubahanJadwalOnsiteRaw = null;
+          newEndDate = updated.tanggalOnsiteRaw || rec.tanggalOnsiteRaw;
+          needRecount = true;
         } else {
           const d = parseKeyDate(valStr);
           if (d) {
             updated.perubahanJadwalOnsite = formatIndonesianDate(d, { shortMonth: true });
             updated.perubahanJadwalOnsiteRaw = d;
+            newEndDate = d;
+            needRecount = true;
           } else {
             updated.perubahanJadwalOnsite = valStr;
           }
@@ -728,6 +843,8 @@ export function RosterLeaveScheduleSheet({
         if (d) {
           updated.tanggalCuti = formatIndonesianDate(d, { shortMonth: true });
           updated.tanggalCutiRaw = d;
+          newStartDate = d;
+          needRecount = true;
         } else {
           updated.tanggalCuti = String(value || '').trim();
         }
@@ -736,15 +853,21 @@ export function RosterLeaveScheduleSheet({
         if (d) {
           updated.tanggalOnsite = formatIndonesianDate(d, { shortMonth: true });
           updated.tanggalOnsiteRaw = d;
+          if (!updated.perubahanJadwalOnsiteRaw && (!rec.perubahanJadwalOnsite || rec.perubahanJadwalOnsite === '-')) {
+            newEndDate = d;
+            needRecount = true;
+          }
         } else {
           updated.tanggalOnsite = String(value || '').trim();
         }
       } else if (field === 'totalHari') {
         const numVal = Math.max(0, parseInt(value, 10) || 0);
         updated.totalHari = numVal;
+        updated.isManualDurationEdit = true;
       } else if (['travel', 'tahunanIstimewa', 'extra', 'izinKhusus', 'izin', 'tambahanTravel'].includes(field)) {
         const numVal = Math.max(0, parseInt(value, 10) || 0);
         updated[field] = numVal;
+        updated.isManualDurationEdit = true;
 
         const travel = updated.travel !== undefined ? updated.travel : rec.travel;
         const tahunanIstimewa = updated.tahunanIstimewa !== undefined ? updated.tahunanIstimewa : rec.tahunanIstimewa;
@@ -755,11 +878,23 @@ export function RosterLeaveScheduleSheet({
         updated.totalHari = travel + tahunanIstimewa + extra + izinKhusus + izin + tambahanTravel;
       }
 
-      const overrideKey = (selectedMonth !== 'ALL' && ['travel', 'tahunanIstimewa', 'extra', 'izinKhusus', 'izin', 'tambahanTravel', 'totalHari'].includes(field))
-        ? `${rec.id}_${selectedMonth}`
-        : rec.id;
+      // Jika Tanggal Cuti atau Onsite diubah, otomatis hitung ulang durasi berdasarkan roster kerja
+      if (needRecount && (rec.allScheduleEntries || rec.days)) {
+        const recount = calculateDurationsFromRosterRange(
+          rec.allScheduleEntries || rec.days,
+          newStartDate,
+          newEndDate
+        );
+        updated.travel = recount.travel;
+        updated.tahunanIstimewa = recount.tahunanIstimewa;
+        updated.extra = recount.extra;
+        updated.izinKhusus = recount.izinKhusus;
+        updated.izin = recount.izin;
+        updated.tambahanTravel = recount.tambahanTravel;
+        updated.totalHari = recount.totalHari;
+      }
 
-      const next = { ...prev, [overrideKey]: updated, [rec.id]: updated };
+      const next = { ...prev, [rec.id]: updated };
       try {
         localStorage.setItem('preplab_leave_custom_overrides', JSON.stringify(next));
       } catch (e) {}
@@ -804,22 +939,51 @@ export function RosterLeaveScheduleSheet({
     return allLeaveRecords.map(rec => {
       const ov = customOverrides[rec.id];
       if (!ov) return rec;
-      const travel = ov.travel !== undefined ? ov.travel : rec.travel;
-      const tahunanIstimewa = ov.tahunanIstimewa !== undefined ? ov.tahunanIstimewa : rec.tahunanIstimewa;
-      const extra = ov.extra !== undefined ? ov.extra : rec.extra;
-      const izinKhusus = ov.izinKhusus !== undefined ? ov.izinKhusus : rec.izinKhusus;
-      const izin = ov.izin !== undefined ? ov.izin : rec.izin;
-      const tambahanTravel = ov.tambahanTravel !== undefined ? ov.tambahanTravel : rec.tambahanTravel;
-      const calculatedTotal = travel + tahunanIstimewa + extra + izinKhusus + izin + tambahanTravel;
-      const totalHari = ov.totalHari !== undefined ? ov.totalHari : calculatedTotal;
-      const perubahanJadwalOnsite = ov.perubahanJadwalOnsite !== undefined ? ov.perubahanJadwalOnsite : rec.perubahanJadwalOnsite;
-      const hasChange = (perubahanJadwalOnsite && perubahanJadwalOnsite !== '-') || rec.hasChange;
 
       const finalTanggalCutiRaw = ov.tanggalCutiRaw || (ov.tanggalCuti ? parseKeyDate(ov.tanggalCuti) : null) || rec.tanggalCutiRaw;
       const finalTanggalOnsiteRaw = ov.tanggalOnsiteRaw || (ov.tanggalOnsite ? parseKeyDate(ov.tanggalOnsite) : null) || rec.tanggalOnsiteRaw;
       const finalPerubahanRaw = ov.perubahanJadwalOnsite && ov.perubahanJadwalOnsite !== '-' ? parseKeyDate(ov.perubahanJadwalOnsite) : rec.perubahanJadwalOnsiteRaw;
+      const perubahanJadwalOnsite = ov.perubahanJadwalOnsite !== undefined ? ov.perubahanJadwalOnsite : rec.perubahanJadwalOnsite;
+      const hasChange = (perubahanJadwalOnsite && perubahanJadwalOnsite !== '-') || rec.hasChange;
+
       const finalKet = ov.ket !== undefined ? ov.ket : rec.ket;
-      const finalIsCutiSelesai = finalKet === 'Cuti Selesai' || rec.isCutiSelesai;
+      const finalIsCutiSelesai = finalKet === 'Cuti Selesai' || finalKet === 'Cuti Site Selesai' || rec.isCutiSelesai;
+
+      // Jika tanggal berubah dan belum ada manual override angka durasi, hitung ulang durasi dari roster kerja
+      let defaultTravel = rec.travel;
+      let defaultTahunan = rec.tahunanIstimewa;
+      let defaultExtra = rec.extra;
+      let defaultIK = rec.izinKhusus;
+      let defaultIzin = rec.izin;
+      let defaultTT = rec.tambahanTravel;
+
+      const dateChanged = (ov.tanggalCuti && ov.tanggalCuti !== rec.tanggalCuti) ||
+                          (ov.tanggalOnsite && ov.tanggalOnsite !== rec.tanggalOnsite) ||
+                          (ov.perubahanJadwalOnsite !== undefined && ov.perubahanJadwalOnsite !== rec.perubahanJadwalOnsite);
+
+      if (dateChanged && (rec.allScheduleEntries?.length || rec.days?.length)) {
+        const recount = calculateDurationsFromRosterRange(
+          rec.allScheduleEntries || rec.days,
+          finalTanggalCutiRaw,
+          finalPerubahanRaw || finalTanggalOnsiteRaw
+        );
+        defaultTravel = recount.travel;
+        defaultTahunan = recount.tahunanIstimewa;
+        defaultExtra = recount.extra;
+        defaultIK = recount.izinKhusus;
+        defaultIzin = recount.izin;
+        defaultTT = recount.tambahanTravel;
+      }
+
+      const isManual = Boolean(ov.isManualDurationEdit);
+      const travel = (isManual && ov.travel !== undefined) ? ov.travel : defaultTravel;
+      const tahunanIstimewa = (isManual && ov.tahunanIstimewa !== undefined) ? ov.tahunanIstimewa : defaultTahunan;
+      const extra = (isManual && ov.extra !== undefined) ? ov.extra : defaultExtra;
+      const izinKhusus = (isManual && ov.izinKhusus !== undefined) ? ov.izinKhusus : defaultIK;
+      const izin = (isManual && ov.izin !== undefined) ? ov.izin : defaultIzin;
+      const tambahanTravel = (isManual && ov.tambahanTravel !== undefined) ? ov.tambahanTravel : defaultTT;
+      const calculatedTotal = travel + tahunanIstimewa + extra + izinKhusus + izin + tambahanTravel;
+      const totalHari = (isManual && ov.totalHari !== undefined) ? ov.totalHari : calculatedTotal;
 
       return {
         ...rec,
@@ -885,10 +1049,18 @@ export function RosterLeaveScheduleSheet({
             periodSet.add(key);
           }
         });
-      } else if (rec.tanggalCutiRaw) {
+      }
+      if (rec.tanggalCutiRaw) {
         const d = rec.tanggalCutiRaw;
-        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-        periodSet.add(key);
+        periodSet.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+      }
+      if (rec.tanggalOnsiteRaw) {
+        const d = rec.tanggalOnsiteRaw;
+        periodSet.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+      }
+      if (rec.perubahanJadwalOnsiteRaw) {
+        const d = rec.perubahanJadwalOnsiteRaw;
+        periodSet.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
       }
     });
 
@@ -940,6 +1112,10 @@ export function RosterLeaveScheduleSheet({
     list.sort((a, b) => {
       if (a === 'Cuti Selesai') return -1;
       if (b === 'Cuti Selesai') return 1;
+      if (a === 'Cuti Site Selesai') return -1;
+      if (b === 'Cuti Site Selesai') return 1;
+      if (a === 'Cuti Site') return -1;
+      if (b === 'Cuti Site') return 1;
       if (a === 'Sesuai Roster') return -1;
       if (b === 'Sesuai Roster') return 1;
       return a.localeCompare(b);
@@ -988,19 +1164,20 @@ export function RosterLeaveScheduleSheet({
       if (activeTab === 'staff' && rec.isGol1) continue;
       if (activeTab === 'crew' && !rec.isGol1) continue;
 
-      // 2. Periode Cuti (Bulan): Sesuaikan durasi dengan Cuti yang berjalan pada Bulan tersebut
-      let currentMonthDurations: ReturnType<typeof calculateLeaveDurations> | null = null;
+      // 2. Periode Cuti (Bulan):
+      // Filter apakah periode cuti karyawan (dari Tanggal Cuti s/d Tanggal On Site / Perubahan Onsite)
+      // bersinggungan / aktif pada bulan yang dipilih
       if (selectedMonth !== 'ALL' && targetYear !== undefined && targetMonthIndex !== undefined) {
-        currentMonthDurations = calculateLeaveDurations(rec.days, targetYear, targetMonthIndex);
+        const targetMonthStart = new Date(targetYear, targetMonthIndex, 1, 0, 0, 0, 0).getTime();
+        const targetMonthEnd = new Date(targetYear, targetMonthIndex + 1, 0, 23, 59, 59, 999).getTime();
 
-        // Hanya tampilkan jika personil memiliki cuti/travel yang aktif berjalan pada bulan ini
-        if (currentMonthDurations.activeDaysCount === 0) {
-          const cutiMonthIndex = rec.tanggalCutiRaw.getFullYear() * 12 + rec.tanggalCutiRaw.getMonth();
-          const onsiteMonthIndex = rec.tanggalOnsiteRaw.getFullYear() * 12 + rec.tanggalOnsiteRaw.getMonth();
-          const curTargetIndex = targetYear * 12 + targetMonthIndex;
-          if (curTargetIndex < cutiMonthIndex || curTargetIndex > onsiteMonthIndex) {
-            continue;
-          }
+        const cutiStart = rec.tanggalCutiRaw.getTime();
+        const effectiveEndRaw = rec.perubahanJadwalOnsiteRaw || rec.tanggalOnsiteRaw;
+        const cutiEnd = effectiveEndRaw.getTime();
+
+        // Periode cuti harus bersinggungan dengan bulan yang dipilih
+        if (!(cutiStart <= targetMonthEnd && cutiEnd >= targetMonthStart)) {
+          continue;
         }
       }
 
@@ -1013,6 +1190,10 @@ export function RosterLeaveScheduleSheet({
       if (selectedKet !== 'ALL') {
         if (selectedKet === 'Cuti Selesai') {
           if (!rec.isCutiSelesai && rec.ket !== 'Cuti Selesai') continue;
+        } else if (selectedKet === 'Cuti Site Selesai') {
+          if (rec.ket !== 'Cuti Site Selesai') continue;
+        } else if (selectedKet === 'Cuti Site') {
+          if (rec.ket !== 'Cuti Site') continue;
         } else {
           if (rec.ket !== selectedKet) continue;
         }
@@ -1028,31 +1209,32 @@ export function RosterLeaveScheduleSheet({
         if (!matchName && !matchNik && !matchJab && !matchPoh) continue;
       }
 
-      // Custom override check for this row (either month-specific or general)
-      const ov = customOverrides[`${rec.id}_${selectedMonth}`] || customOverrides[rec.id];
+      // Cek apakah ada month-specific override yang sengaja diedit manual
+      const rawMonthOv = selectedMonth !== 'ALL' ? customOverrides[`${rec.id}_${selectedMonth}`] : null;
+      const monthOv = rawMonthOv && (rawMonthOv.isManualDurationEdit || rawMonthOv.tanggalCuti || rawMonthOv.tanggalOnsite || rawMonthOv.perubahanJadwalOnsite || rawMonthOv.ket) ? rawMonthOv : null;
 
-      if (currentMonthDurations) {
-        const travel = ov?.travel !== undefined ? ov.travel : currentMonthDurations.travel;
-        const tahunanIstimewa = ov?.tahunanIstimewa !== undefined ? ov.tahunanIstimewa : currentMonthDurations.tahunanIstimewa;
-        const extra = ov?.extra !== undefined ? ov.extra : currentMonthDurations.extra;
-        const izinKhusus = ov?.izinKhusus !== undefined ? ov.izinKhusus : currentMonthDurations.izinKhusus;
-        const izin = ov?.izin !== undefined ? ov.izin : currentMonthDurations.izin;
-        const tambahanTravel = ov?.tambahanTravel !== undefined ? ov.tambahanTravel : currentMonthDurations.tambahanTravel;
+      if (monthOv) {
+        const travel = monthOv.travel !== undefined ? monthOv.travel : rec.travel;
+        const tahunanIstimewa = monthOv.tahunanIstimewa !== undefined ? monthOv.tahunanIstimewa : rec.tahunanIstimewa;
+        const extra = monthOv.extra !== undefined ? monthOv.extra : rec.extra;
+        const izinKhusus = monthOv.izinKhusus !== undefined ? monthOv.izinKhusus : rec.izinKhusus;
+        const izin = monthOv.izin !== undefined ? monthOv.izin : rec.izin;
+        const tambahanTravel = monthOv.tambahanTravel !== undefined ? monthOv.tambahanTravel : rec.tambahanTravel;
         const calculatedTotal = travel + tahunanIstimewa + extra + izinKhusus + izin + tambahanTravel;
-        const totalHari = ov?.totalHari !== undefined ? ov.totalHari : calculatedTotal;
+        const totalHari = monthOv.totalHari !== undefined ? monthOv.totalHari : calculatedTotal;
 
         list.push({
           ...rec,
-          section: ov?.section !== undefined ? ov.section : rec.section,
-          jabatan: ov?.jabatan !== undefined ? ov.jabatan : rec.jabatan,
-          poh: ov?.poh !== undefined ? ov.poh : rec.poh,
-          tanggalCuti: ov?.tanggalCuti !== undefined ? ov.tanggalCuti : rec.tanggalCuti,
-          tanggalCutiRaw: ov?.tanggalCutiRaw || rec.tanggalCutiRaw,
-          tanggalOnsite: ov?.tanggalOnsite !== undefined ? ov.tanggalOnsite : rec.tanggalOnsite,
-          tanggalOnsiteRaw: ov?.tanggalOnsiteRaw || rec.tanggalOnsiteRaw,
-          perubahanJadwalOnsite: ov?.perubahanJadwalOnsite !== undefined ? ov.perubahanJadwalOnsite : rec.perubahanJadwalOnsite,
-          perubahanJadwalOnsiteRaw: ov?.perubahanJadwalOnsiteRaw || rec.perubahanJadwalOnsiteRaw,
-          ket: ov?.ket !== undefined ? ov.ket : rec.ket,
+          section: monthOv.section !== undefined ? monthOv.section : rec.section,
+          jabatan: monthOv.jabatan !== undefined ? monthOv.jabatan : rec.jabatan,
+          poh: monthOv.poh !== undefined ? monthOv.poh : rec.poh,
+          tanggalCuti: monthOv.tanggalCuti !== undefined ? monthOv.tanggalCuti : rec.tanggalCuti,
+          tanggalCutiRaw: monthOv.tanggalCutiRaw || rec.tanggalCutiRaw,
+          tanggalOnsite: monthOv.tanggalOnsite !== undefined ? monthOv.tanggalOnsite : rec.tanggalOnsite,
+          tanggalOnsiteRaw: monthOv.tanggalOnsiteRaw || rec.tanggalOnsiteRaw,
+          perubahanJadwalOnsite: monthOv.perubahanJadwalOnsite !== undefined ? monthOv.perubahanJadwalOnsite : rec.perubahanJadwalOnsite,
+          perubahanJadwalOnsiteRaw: monthOv.perubahanJadwalOnsiteRaw || rec.perubahanJadwalOnsiteRaw,
+          ket: monthOv.ket !== undefined ? monthOv.ket : rec.ket,
           travel,
           tahunanIstimewa,
           extra,
@@ -1060,7 +1242,7 @@ export function RosterLeaveScheduleSheet({
           izin,
           tambahanTravel,
           totalHari,
-          isCustomEdited: !!ov || rec.isCustomEdited
+          isCustomEdited: true
         });
       } else {
         list.push(rec);
@@ -1831,14 +2013,14 @@ export function RosterLeaveScheduleSheet({
                 {visibleColumns.nama && (
                   <th rowSpan={visibleDurationColsCount > 0 ? 2 : 1} className="py-2.5 px-4 min-w-[190px] border-r border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900">NAMA KARYAWAN</th>
                 )}
+                {visibleColumns.jabatan && (
+                  <th rowSpan={visibleDurationColsCount > 0 ? 2 : 1} className="py-2.5 px-3 min-w-[150px] border-r border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900">JABATAN</th>
+                )}
                 {visibleColumns.section && (
                   <th rowSpan={visibleDurationColsCount > 0 ? 2 : 1} className="py-2.5 px-3 min-w-[130px] border-r border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900">SECTION</th>
                 )}
                 {visibleColumns.poh && (
                   <th rowSpan={visibleDurationColsCount > 0 ? 2 : 1} className="py-2.5 px-3 min-w-[110px] border-r border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900">POH</th>
-                )}
-                {visibleColumns.jabatan && (
-                  <th rowSpan={visibleDurationColsCount > 0 ? 2 : 1} className="py-2.5 px-3 min-w-[150px] border-r border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900">JABATAN</th>
                 )}
                 {visibleColumns.tanggalCuti && (
                   <th rowSpan={visibleDurationColsCount > 0 ? 2 : 1} className="py-2.5 px-3 text-center min-w-[110px] border-r border-slate-200 dark:border-slate-800 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300">
@@ -1885,22 +2067,22 @@ export function RosterLeaveScheduleSheet({
                   }}
                 >
                   {visibleColumns.travel && (
-                    <th className="py-1.5 px-2 text-center w-14 border-r border-slate-200 dark:border-slate-800" title="Jumlah TRV yang muncul pada Cuti berjalan">Travel</th>
+                    <th className="py-1.5 px-2 text-center w-14 border-r border-slate-200 dark:border-slate-800" title="Jumlah kode TRV yang muncul di Roster Kerja antara Tanggal Cuti dan Tanggal On Site">Travel</th>
                   )}
                   {visibleColumns.tahunanIstimewa && (
-                    <th className="py-1.5 px-2 text-center w-24 border-r border-slate-200 dark:border-slate-800" title="Jumlah CT atau CI yang muncul pada Cuti berjalan">Tahunan / Istimewa</th>
+                    <th className="py-1.5 px-2 text-center w-24 border-r border-slate-200 dark:border-slate-800" title="Jumlah kode CT yang muncul di Roster Kerja antara Tanggal Cuti dan Tanggal On Site">Tahunan / Istimewa</th>
                   )}
                   {visibleColumns.extra && (
-                    <th className="py-1.5 px-2 text-center w-14 border-r border-slate-200 dark:border-slate-800" title="Jumlah CE yang muncul pada Cuti berjalan">Extra</th>
+                    <th className="py-1.5 px-2 text-center w-14 border-r border-slate-200 dark:border-slate-800" title="Jumlah kode CE yang muncul di Roster Kerja antara Tanggal Cuti dan Tanggal On Site">Extra</th>
                   )}
                   {visibleColumns.izinKhusus && (
-                    <th className="py-1.5 px-2 text-center w-20 border-r border-slate-200 dark:border-slate-800" title="Jumlah IK yang muncul pada Cuti berjalan">Izin Khusus</th>
+                    <th className="py-1.5 px-2 text-center w-20 border-r border-slate-200 dark:border-slate-800" title="Jumlah kode IK yang muncul di Roster Kerja antara Tanggal Cuti dan Tanggal On Site">Izin Khusus</th>
                   )}
                   {visibleColumns.izin && (
-                    <th className="py-1.5 px-2 text-center w-14 border-r border-slate-200 dark:border-slate-800" title="Jumlah I atau SL yang muncul pada Cuti berjalan">Izin</th>
+                    <th className="py-1.5 px-2 text-center w-14 border-r border-slate-200 dark:border-slate-800" title="Jumlah kode I yang muncul di Roster Kerja antara Tanggal Cuti dan Tanggal On Site">Izin</th>
                   )}
                   {visibleColumns.tambahanTravel && (
-                    <th className="py-1.5 px-2 text-center min-w-[140px] border-r border-slate-200 dark:border-slate-800 text-amber-700 dark:text-amber-400" title="Jumlah TT yang Muncul">
+                    <th className="py-1.5 px-2 text-center min-w-[140px] border-r border-slate-200 dark:border-slate-800 text-amber-700 dark:text-amber-400" title="Jumlah kode TT yang muncul di Roster Kerja antara Tanggal Cuti dan Tanggal On Site">
                       Tambahan Travel (TT)
                     </th>
                   )}
@@ -1962,6 +2144,29 @@ export function RosterLeaveScheduleSheet({
                         </td>
                       )}
 
+                      {/* JABATAN - Inline Editable */}
+                      {visibleColumns.jabatan && (
+                        <td className="py-2 px-2.5 border-r border-slate-100 dark:border-slate-800" onClick={(e) => e.stopPropagation()}>
+                          <input
+                            type="text"
+                            defaultValue={rec.jabatan}
+                            key={`${rec.id}-jab-${rec.jabatan}`}
+                            onBlur={(e) => {
+                              const val = e.target.value.trim();
+                              if (val && val !== rec.jabatan) {
+                                handleInlineUpdateLeave(rec, 'jabatan', val);
+                              }
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                            }}
+                            placeholder="Jabatan..."
+                            className="w-full max-w-[170px] px-1.5 py-0.5 text-xs font-semibold text-slate-800 dark:text-slate-200 rounded bg-transparent hover:bg-slate-100 dark:hover:bg-slate-800 focus:bg-white dark:focus:bg-slate-800 border border-transparent hover:border-slate-300 dark:hover:border-slate-700 focus:border-indigo-500 outline-none transition-all"
+                            title="Edit Jabatan langsung di tabel sebagai referensi"
+                          />
+                        </td>
+                      )}
+
                       {/* SECTION - Inline Editable */}
                       {visibleColumns.section && (
                         <td className="py-2 px-2.5 border-r border-slate-100 dark:border-slate-800" onClick={(e) => e.stopPropagation()}>
@@ -2013,29 +2218,6 @@ export function RosterLeaveScheduleSheet({
                               title="Edit POH langsung di tabel sebagai referensi"
                             />
                           </div>
-                        </td>
-                      )}
-
-                      {/* JABATAN - Inline Editable */}
-                      {visibleColumns.jabatan && (
-                        <td className="py-2 px-2.5 border-r border-slate-100 dark:border-slate-800" onClick={(e) => e.stopPropagation()}>
-                          <input
-                            type="text"
-                            defaultValue={rec.jabatan}
-                            key={`${rec.id}-jab-${rec.jabatan}`}
-                            onBlur={(e) => {
-                              const val = e.target.value.trim();
-                              if (val && val !== rec.jabatan) {
-                                handleInlineUpdateLeave(rec, 'jabatan', val);
-                              }
-                            }}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
-                            }}
-                            placeholder="Jabatan..."
-                            className="w-full max-w-[170px] px-1.5 py-0.5 text-xs font-semibold text-slate-800 dark:text-slate-200 rounded bg-transparent hover:bg-slate-100 dark:hover:bg-slate-800 focus:bg-white dark:focus:bg-slate-800 border border-transparent hover:border-slate-300 dark:hover:border-slate-700 focus:border-indigo-500 outline-none transition-all"
-                            title="Edit Jabatan langsung di tabel sebagai referensi"
-                          />
                         </td>
                       )}
 
@@ -2096,8 +2278,10 @@ export function RosterLeaveScheduleSheet({
                             value={rec.ket || 'Sesuai Roster'}
                             onChange={(e) => handleInlineUpdateLeave(rec, 'ket', e.target.value)}
                             className={`px-2.5 py-1 rounded-lg text-[10.5px] font-bold border cursor-pointer outline-none transition-all shadow-2xs ${
-                              rec.ket === 'Cuti Selesai'
+                              rec.ket === 'Cuti Selesai' || rec.ket === 'Cuti Site Selesai'
                                 ? 'bg-slate-100 text-slate-800 border-slate-300 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700'
+                                : rec.ket === 'Cuti Site'
+                                ? 'bg-indigo-50 text-indigo-800 border-indigo-300 dark:bg-indigo-950/50 dark:text-indigo-300 dark:border-indigo-700'
                                 : rec.ket === 'Sesuai Roster'
                                 ? 'bg-emerald-50 text-emerald-800 border-emerald-300 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-700'
                                 : 'bg-amber-50 text-amber-800 border-amber-300 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-700'
@@ -2106,6 +2290,8 @@ export function RosterLeaveScheduleSheet({
                           >
                             <option value="Sesuai Roster">Sesuai Roster</option>
                             <option value="Cuti Selesai">Cuti Selesai</option>
+                            <option value="Cuti Site">Cuti Site</option>
+                            <option value="Cuti Site Selesai">Cuti Site Selesai</option>
                             <option value="Perubahan Jadwal">Perubahan Jadwal</option>
                             <option value="TT (Travel Delay)">TT (Travel Delay)</option>
                             <option value="Speedboat (XP)">Speedboat (XP)</option>
@@ -2158,13 +2344,14 @@ export function RosterLeaveScheduleSheet({
                       )}
 
                       {/* Travel (TRV) - Inline Editable */}
+                      {/* Travel (TRV) - Inline Editable */}
                       {visibleColumns.travel && (
                         <td className="py-2 px-1 text-center font-semibold text-slate-700 dark:text-slate-300 border-r border-slate-100 dark:border-slate-800" onClick={(e) => e.stopPropagation()}>
                           <input
                             type="number"
                             min={0}
                             defaultValue={rec.travel}
-                            key={`${rec.id}-${selectedMonth}-trv-${rec.travel}`}
+                            key={`${rec.id}-trv-${rec.travel}`}
                             onBlur={(e) => {
                               const val = parseInt(e.target.value, 10) || 0;
                               if (val !== rec.travel) handleInlineUpdateLeave(rec, 'travel', val);
@@ -2173,7 +2360,7 @@ export function RosterLeaveScheduleSheet({
                               if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
                             }}
                             className="w-11 px-1 py-0.5 text-xs font-bold text-center text-amber-700 dark:text-amber-300 rounded bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-amber-400 focus:border-amber-500 outline-none transition-all shadow-2xs"
-                            title="Travel: Jumlah 'TRV' yang muncul pada Cuti berjalan"
+                            title={`Travel: Jumlah 'TRV' yang muncul di Roster Kerja antara Tanggal Cuti (${rec.tanggalCuti}) dan Tanggal On Site (${rec.perubahanJadwalOnsite !== '-' ? rec.perubahanJadwalOnsite : rec.tanggalOnsite})`}
                           />
                         </td>
                       )}
@@ -2185,7 +2372,7 @@ export function RosterLeaveScheduleSheet({
                             type="number"
                             min={0}
                             defaultValue={rec.tahunanIstimewa}
-                            key={`${rec.id}-${selectedMonth}-ct-${rec.tahunanIstimewa}`}
+                            key={`${rec.id}-ct-${rec.tahunanIstimewa}`}
                             onBlur={(e) => {
                               const val = parseInt(e.target.value, 10) || 0;
                               if (val !== rec.tahunanIstimewa) handleInlineUpdateLeave(rec, 'tahunanIstimewa', val);
@@ -2194,7 +2381,7 @@ export function RosterLeaveScheduleSheet({
                               if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
                             }}
                             className="w-11 px-1 py-0.5 text-xs font-bold text-center text-purple-700 dark:text-purple-300 rounded bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-purple-400 focus:border-purple-500 outline-none transition-all shadow-2xs"
-                            title="Tahunan/Istimewa: Jumlah 'CT' atau 'CI' yang muncul pada Cuti berjalan"
+                            title={`Tahunan / Istimewa: Jumlah 'CT' yang muncul di Roster Kerja antara Tanggal Cuti (${rec.tanggalCuti}) dan Tanggal On Site (${rec.perubahanJadwalOnsite !== '-' ? rec.perubahanJadwalOnsite : rec.tanggalOnsite})`}
                           />
                         </td>
                       )}
@@ -2206,7 +2393,7 @@ export function RosterLeaveScheduleSheet({
                             type="number"
                             min={0}
                             defaultValue={rec.extra}
-                            key={`${rec.id}-${selectedMonth}-ce-${rec.extra}`}
+                            key={`${rec.id}-ce-${rec.extra}`}
                             onBlur={(e) => {
                               const val = parseInt(e.target.value, 10) || 0;
                               if (val !== rec.extra) handleInlineUpdateLeave(rec, 'extra', val);
@@ -2215,7 +2402,7 @@ export function RosterLeaveScheduleSheet({
                               if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
                             }}
                             className="w-11 px-1 py-0.5 text-xs font-bold text-center text-blue-700 dark:text-blue-300 rounded bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-blue-400 focus:border-blue-500 outline-none transition-all shadow-2xs"
-                            title="Extra: Jumlah 'CE' yang muncul pada Cuti berjalan"
+                            title={`Extra: Jumlah 'CE' yang muncul di Roster Kerja antara Tanggal Cuti (${rec.tanggalCuti}) dan Tanggal On Site (${rec.perubahanJadwalOnsite !== '-' ? rec.perubahanJadwalOnsite : rec.tanggalOnsite})`}
                           />
                         </td>
                       )}
@@ -2227,7 +2414,7 @@ export function RosterLeaveScheduleSheet({
                             type="number"
                             min={0}
                             defaultValue={rec.izinKhusus}
-                            key={`${rec.id}-${selectedMonth}-ik-${rec.izinKhusus}`}
+                            key={`${rec.id}-ik-${rec.izinKhusus}`}
                             onBlur={(e) => {
                               const val = parseInt(e.target.value, 10) || 0;
                               if (val !== rec.izinKhusus) handleInlineUpdateLeave(rec, 'izinKhusus', val);
@@ -2236,7 +2423,7 @@ export function RosterLeaveScheduleSheet({
                               if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
                             }}
                             className="w-11 px-1 py-0.5 text-xs font-bold text-center text-indigo-700 dark:text-indigo-300 rounded bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-indigo-400 focus:border-indigo-500 outline-none transition-all shadow-2xs"
-                            title="Izin Khusus: Jumlah 'IK' yang muncul pada Cuti berjalan"
+                            title={`Izin Khusus: Jumlah 'IK' yang muncul di Roster Kerja antara Tanggal Cuti (${rec.tanggalCuti}) dan Tanggal On Site (${rec.perubahanJadwalOnsite !== '-' ? rec.perubahanJadwalOnsite : rec.tanggalOnsite})`}
                           />
                         </td>
                       )}
@@ -2248,7 +2435,7 @@ export function RosterLeaveScheduleSheet({
                             type="number"
                             min={0}
                             defaultValue={rec.izin}
-                            key={`${rec.id}-${selectedMonth}-i-${rec.izin}`}
+                            key={`${rec.id}-i-${rec.izin}`}
                             onBlur={(e) => {
                               const val = parseInt(e.target.value, 10) || 0;
                               if (val !== rec.izin) handleInlineUpdateLeave(rec, 'izin', val);
@@ -2257,7 +2444,7 @@ export function RosterLeaveScheduleSheet({
                               if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
                             }}
                             className="w-11 px-1 py-0.5 text-xs font-bold text-center text-yellow-800 dark:text-yellow-300 rounded bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-yellow-400 focus:border-yellow-500 outline-none transition-all shadow-2xs"
-                            title="Izin: Jumlah 'I' atau 'SL' yang muncul pada Cuti berjalan"
+                            title={`Izin: Jumlah 'I' atau 'SL' yang muncul di Roster Kerja antara Tanggal Cuti (${rec.tanggalCuti}) dan Tanggal On Site (${rec.perubahanJadwalOnsite !== '-' ? rec.perubahanJadwalOnsite : rec.tanggalOnsite})`}
                           />
                         </td>
                       )}
@@ -2269,7 +2456,7 @@ export function RosterLeaveScheduleSheet({
                             type="number"
                             min={0}
                             defaultValue={rec.tambahanTravel}
-                            key={`${rec.id}-${selectedMonth}-tt-${rec.tambahanTravel}`}
+                            key={`${rec.id}-tt-${rec.tambahanTravel}`}
                             onBlur={(e) => {
                               const val = parseInt(e.target.value, 10) || 0;
                               if (val !== rec.tambahanTravel) handleInlineUpdateLeave(rec, 'tambahanTravel', val);
@@ -2278,7 +2465,7 @@ export function RosterLeaveScheduleSheet({
                               if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
                             }}
                             className="w-11 px-1 py-0.5 text-xs font-black text-center text-rose-700 dark:text-rose-400 rounded bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-rose-400 focus:border-rose-500 outline-none transition-all shadow-2xs"
-                            title="TAMBAHAN TRAVEL (TT): Jumlah 'TT' yang Muncul"
+                            title={`Tambahan Travel (TT): Jumlah 'TT' yang muncul di Roster Kerja antara Tanggal Cuti (${rec.tanggalCuti}) dan Tanggal On Site (${rec.perubahanJadwalOnsite !== '-' ? rec.perubahanJadwalOnsite : rec.tanggalOnsite})`}
                           />
                         </td>
                       )}

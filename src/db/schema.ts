@@ -1243,3 +1243,30 @@ export const employeeTardinessRecords = pgTable('employee_tardiness_records', {
   index('idx_tardiness_status').on(t.statusFinger),
 ]);
 
+
+
+// Define employee_finger_records table (Rekapan Finger Karyawan)
+export const employeeFingerRecords = pgTable('employee_finger_records', {
+  id: serial('id').primaryKey(),
+  sheetRowId: text('sheet_row_id').unique(),
+  nik: text('nik').notNull(),
+  name: text('name').notNull(),
+  pt: text('pt'),
+  section: text('section'),
+  jabatan: text('jabatan'),
+  tanggal: text('tanggal').notNull(),
+  jamMasuk: text('jam_masuk'),
+  jamPulang: text('jam_pulang'),
+  schedule: text('schedule'),
+  alasanKategori: text('alasan_kategori'),
+  keteranganLain: text('keterangan_lain'),
+  tandaTangan: text('tanda_tangan'),
+  catatan: text('catatan'),
+  source: text('source').default('google_sheet'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (t) => [
+  index('idx_finger_nik').on(t.nik),
+  index('idx_finger_tanggal').on(t.tanggal),
+  index('idx_finger_pt').on(t.pt),
+]);

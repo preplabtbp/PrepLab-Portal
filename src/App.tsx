@@ -116,6 +116,7 @@ const ClinicScreen = lazyWithRetry(() => import('./components/clinic-screen').th
 const EmployeeLeavesScreen = lazyWithRetry(() => import('./components/employee-leaves-screen').then(m => ({ default: m.EmployeeLeavesScreen })));
 const EmployeeLeaveFormScreen = lazyWithRetry(() => import('./components/employee-leave-form-screen').then(m => ({ default: m.EmployeeLeaveFormScreen })));
 const EmployeeTardinessScreen = lazyWithRetry(() => import('./components/employee-tardiness-screen').then(m => ({ default: m.EmployeeTardinessScreen })));
+const EmployeeFingerScreen = lazyWithRetry(() => import('./components/employee-finger-screen').then(m => ({ default: m.EmployeeFingerScreen })));
 const EmployeeTardinessFormScreen = lazyWithRetry(() => import('./components/employee-tardiness-form-screen').then(m => ({ default: m.EmployeeTardinessFormScreen })));
 const XrfCalibrationScreen = lazyWithRetry(() => import('./components/xrf-calibration/XrfCalibrationScreen').then(m => ({ default: m.XrfCalibrationScreen })));
 const ScreenTestSmelterScreen = lazyWithRetry(() => import('./components/screen-test/ScreenTestSmelterScreen').then(m => ({ default: m.ScreenTestSmelterScreen })));
@@ -580,7 +581,7 @@ export default function App() {
   useEffect(() => {
     if (!isCrewRole) return;
     const path = location.pathname.replace(/^\//, '');
-    const allowedCrewPaths = ['', 'home', 'quiz', 'clinic', 'kunjungan-klinik', 'employee-leaves', 'izin-karyawan', 'pelaporan-izin', 'form-izin', 'rekapan-izin', 'keterlambatan', 'rekapan-keterlambatan', 'form-keterlambatan', 'pelaporan-keterlambatan', 'settings', 'logbook'];
+    const allowedCrewPaths = ['', 'home', 'quiz', 'clinic', 'kunjungan-klinik', 'employee-leaves', 'izin-karyawan', 'pelaporan-izin', 'form-izin', 'rekapan-izin', 'keterlambatan', 'rekapan-keterlambatan', 'form-keterlambatan', 'pelaporan-keterlambatan', 'rekapan-finger', 'rekap-finger', 'finger', 'settings', 'logbook'];
     if (isMaintenanceCrew) {
       allowedCrewPaths.push('wo-list', 'wo-maintenance-dashboard', 'wo-dashboard');
     }
@@ -790,7 +791,7 @@ export default function App() {
 
     // Role guard for Crew: restrict navigation to allowed modules only
     if (isCrewRole) {
-      const allowedCrewTabs = ['home', '', 'quiz', 'clinic', 'kunjungan-klinik', 'employee-leaves', 'izin-karyawan', 'pelaporan-izin', 'keterlambatan', 'rekapan-keterlambatan', 'form-keterlambatan', 'pelaporan-keterlambatan', 'settings', 'logbook'];
+      const allowedCrewTabs = ['home', '', 'quiz', 'clinic', 'kunjungan-klinik', 'employee-leaves', 'izin-karyawan', 'pelaporan-izin', 'keterlambatan', 'rekapan-keterlambatan', 'form-keterlambatan', 'pelaporan-keterlambatan', 'rekapan-finger', 'rekap-finger', 'finger', 'settings', 'logbook'];
       if (isMaintenanceCrew) {
         allowedCrewTabs.push('wo-list', 'wo-maintenance-dashboard', 'wo-dashboard');
       }
@@ -2068,6 +2069,9 @@ export default function App() {
   <Route path="/rekapan-keterlambatan" element={<Navigate to="/keterlambatan" replace />} />
   <Route path="/form-keterlambatan" element={<EmployeeTardinessFormScreen inspectorName={inspectorName!} inspectorNik={inspectorNik!} userProfile={userProfile} onNav={handleNav} onBack={() => handleNav('keterlambatan')} />} />
   <Route path="/pelaporan-keterlambatan" element={<Navigate to="/form-keterlambatan" replace />} />
+  <Route path="/rekapan-finger" element={<EmployeeFingerScreen userProfile={userProfile} inspectorName={inspectorName!} inspectorNik={inspectorNik!} onNav={handleNav} onBack={() => handleNav('home')} />} />
+  <Route path="/rekap-finger" element={<Navigate to="/rekapan-finger" replace />} />
+  <Route path="/finger" element={<Navigate to="/rekapan-finger" replace />} />
   <Route path="/roster-admin" element={<RosterAdminScreen />} />
   <Route path="/training-database" element={<TrainingDatabaseScreen key="internal" scope="internal" inspectorNik={inspectorNik!} inspectorName={inspectorName!} onBack={() => handleNav('home')} />} />
   <Route path="/safety-rekap" element={<SafetyRekapScreen inspectorNik={inspectorNik!} inspectorName={inspectorName!} inspectorRole={userProfile?.jabatan} inspectorSection={userProfile?.section} onBack={() => handleNav('home')} />} />

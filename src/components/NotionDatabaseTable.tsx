@@ -1124,6 +1124,34 @@ export function NotionDatabaseTable({
     );
   }, [title, section]);
 
+  // Strict check for Labnote - Administration - Daily
+  const isAdministrationDaily = useMemo(() => {
+    const t = String(title || '').toLowerCase().trim();
+    const s = String(section || '').toLowerCase().trim();
+    const isDaily = t.includes('daily') && !t.includes('weekly') && !t.includes('monthly');
+    const isAdmin = s.includes('admin') || s.includes('info') || s.includes('administrasi') || t.includes('admin') || String(postId) === '425';
+    return isDaily && isAdmin;
+  }, [title, section, postId]);
+
+  // Dedicated validator for Rekapan Keterlambatan shortcut (Strictly only for Task = Update Keterlambatan Karyawan in Labnote - Administration - Daily)
+  const checkIsTardinessShortcut = useCallback((text: string) => {
+    if (!text) return false;
+    const t = text.toLowerCase().trim();
+    // Strictly exclude KTA/TTA
+    if (t.includes('kta') || t.includes('tta')) return false;
+
+    // Must strictly be in Labnote - Administration - Daily
+    if (!isAdministrationDaily) return false;
+
+    // Must strictly be Task = Update Keterlambatan Karyawan (or keterlambatan karyawan / pulang cepat)
+    return (
+      t.includes('update keterlambatan karyawan') ||
+      (t.includes('keterlambatan') && t.includes('karyawan')) ||
+      t.includes('pulang cepat') ||
+      t.includes('tardiness')
+    );
+  }, [isAdministrationDaily]);
+
   // Logbook Dynamic Meta & Date View Filter State
   const [logbookActiveTab, setLogbookActiveTab] = useState<'changelog' | 'planning'>('planning');
   const [logbookDateFilter, setLogbookDateFilter] = useState<'today' | 'yesterday' | 'all'>('today');
@@ -8920,10 +8948,7 @@ export function NotionDatabaseTable({
                                           window.location.href = `/safety-rekap?returnTo=${returnUrl}`;
                                           return;
                                         }
-                                        if (
-                                          (tLower.includes('keterlambatan') || tLower.includes('pulang cepat') || tLower.includes('tardiness')) &&
-                                          !tLower.includes('kta')
-                                        ) {
+                                        if (checkIsTardinessShortcut(tLower)) {
                                           e.stopPropagation();
                                           const returnUrl = encodeURIComponent(window.location.pathname + window.location.search);
                                           window.location.href = `/keterlambatan?returnTo=${returnUrl}`;
@@ -9141,11 +9166,7 @@ export function NotionDatabaseTable({
                                                 (taskText.includes('keterlambatan') && taskText.includes('kta')) ||
                                                 taskText.includes('rekap kta')
                                               );
-                                              const isTardinessShortcut = (
-                                                taskText.includes('keterlambatan') ||
-                                                taskText.includes('pulang cepat') ||
-                                                taskText.includes('tardiness')
-                                              );
+                                              const isTardinessShortcut = checkIsTardinessShortcut(taskText);
                                               const hasModuleShortcut = isLeaveShortcut || isOffShortcut || isPermissionShortcut || isTrainingShortcut || isInspectionScheduleShortcut || isSafetyRekapShortcut || isTardinessShortcut;
 
                                               return (
@@ -12304,13 +12325,7 @@ export function NotionDatabaseTable({
                     )}
 
                     {/* Integrated Rekapan Keterlambatan & Pulang Cepat Banner */}
-                    {selectedRow && (() => {
-                      const t = String(baseTopicTitle || '').toLowerCase();
-                      return (
-                        (t.includes('keterlambatan') || t.includes('pulang cepat') || t.includes('tardiness')) &&
-                        !t.includes('kta')
-                      );
-                    })() && (
+                    {selectedRow && checkIsTardinessShortcut(String(baseTopicTitle || '')) && (
                       <div className="p-3.5 rounded-xl border border-rose-500/30 bg-rose-500/10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs mb-3">
                         <div className="flex items-center gap-2.5">
                           <div className="p-2 rounded-lg bg-rose-600 text-white shrink-0">

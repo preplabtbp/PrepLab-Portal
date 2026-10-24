@@ -436,7 +436,8 @@ export function computeMealOrderByRoster(
       res.siangLapangan = '1';
       res.soreLapangan = '1';
       res.malamLapangan = '1';
-      res.catatan = getCatatanString(pref);
+      // Longshift untuk NR Nirwana sudah baku: Pagi = Kantin (Bungkusan), Siang/Sore/Malam = Lapangan (Bungkusan)
+      res.catatan = null;
     } else if (code === 'CUTI') {
       res.shiftKerja = 'CUTI';
       res.statusKerja = 'Cuti';

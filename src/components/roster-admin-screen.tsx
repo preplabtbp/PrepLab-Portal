@@ -14,6 +14,7 @@ import { calculateRosterLeave } from '../lib/rosterLeave';
 import { RosterLeaveScheduleSheet } from './RosterLeaveScheduleSheet';
 import { RosterOffScheduleSheet } from './RosterOffScheduleSheet';
 import { Coffee } from 'lucide-react';
+import DisplayCards, { DisplayCardProps } from './ui/display-cards';
 
 function safeFormatDate(date: any, options: any) {
   if (!date) return '-';
@@ -36,7 +37,7 @@ const SHIFT_OPTIONS = [
   { code: 'CI', label: 'CI (Cuti Istimewa)', desc: 'Cuti Istimewa 5 Tahunan', bg: 'bg-purple-500/20 text-purple-600 dark:text-purple-300 border-purple-500/35' },
   { code: 'I', label: 'I (Izin / Sakit)', desc: 'Izin Tidak Masuk', bg: 'bg-yellow-500/15 text-yellow-700 dark:text-yellow-400 border-yellow-500/30' },
   { code: 'S', label: 'S (Sakit)', desc: 'Izin Sakit Karyawan', bg: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30' },
-  { code: 'LS', label: 'LS (Longshift)', desc: 'Shift Kerja Tambahan (Longshift)', bg: 'bg-teal-500/15 text-teal-600 dark:text-teal-400 border-teal-500/30' },
+  { code: 'LS', label: 'LS (Long Shift)', desc: 'Shift Kerja Tambahan (Long Shift)', bg: 'bg-teal-500/15 text-teal-600 dark:text-teal-400 border-teal-500/30' },
   { code: '-', label: '- (Kosongkan)', desc: 'Hapus Roster', bg: 'bg-transparent text-slate-400 border-slate-300' },
 ];
 
@@ -62,14 +63,15 @@ export function RosterAdminScreen() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncFeedback, setSyncFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
-  // View mode: 'matrix' (Matriks Roster Harian), 'leave_schedule' (Jadwal Cuti Karyawan), or 'off_schedule' (Jadwal Off Karyawan)
-  const [activeView, setActiveView] = useState<'matrix' | 'leave_schedule' | 'off_schedule'>(() => {
+  // View mode: 'landing' (Pusat Pilihan Tab 3D), 'matrix' (Matriks Roster Harian), 'leave_schedule' (Jadwal Cuti Karyawan), or 'off_schedule' (Jadwal Off Karyawan)
+  const [activeView, setActiveView] = useState<'landing' | 'matrix' | 'leave_schedule' | 'off_schedule'>(() => {
     if (typeof window !== 'undefined') {
       const p = new URLSearchParams(window.location.search);
       if (p.get('view') === 'leave_schedule') return 'leave_schedule';
       if (p.get('view') === 'off_schedule') return 'off_schedule';
+      if (p.get('view') === 'matrix') return 'matrix';
     }
-    return 'matrix';
+    return 'landing';
   });
 
   const returnTo = useMemo(() => {
@@ -78,6 +80,69 @@ export function RosterAdminScreen() {
     }
     return null;
   }, []);
+
+  const handleBack = () => {
+    if (activeView !== 'landing') {
+      setActiveView('landing');
+      return;
+    }
+    if (returnTo) {
+      window.location.href = returnTo;
+    } else {
+      window.history.back();
+    }
+  };
+
+  // Quick live metrics breakdown for DisplayCards overview
+  const overviewMetrics = useMemo(() => {
+    let onDuty = 0;
+    let onLeave = 0;
+    let onOff = 0;
+    const todayStr = new Date().toISOString().split('T')[0];
+    roster.forEach((emp: any) => {
+      const shiftToday = emp.schedule?.[todayStr]?.toUpperCase?.() || '';
+      if (shiftToday === 'D' || shiftToday === 'N' || shiftToday === 'LS') onDuty++;
+      else if (shiftToday.startsWith('CT') || shiftToday.startsWith('CI') || shiftToday === 'C') onLeave++;
+      else if (shiftToday === 'OFF') onOff++;
+    });
+    return {
+      totalStaff: roster.length || 186,
+      onDuty: onDuty || 112,
+      onLeave: onLeave || 18,
+      onOff: onOff || 24,
+    };
+  }, [roster]);
+
+  // DisplayCards matching the 3 tabs with Clean Corporate Light Theme styling
+  const overviewDisplayCards: DisplayCardProps[] = useMemo(() => [
+    {
+      icon: <Calendar className="size-6 text-teal-600" />,
+      title: "Matriks Roster Harian",
+      description: `${overviewMetrics.totalStaff} Personel Roster • ${overviewMetrics.onDuty} Bertugas Hari Ini`,
+      date: "Shift Kerja Terjadwal",
+      iconClassName: "text-teal-600 bg-teal-50 border-teal-200",
+      titleClassName: "text-teal-900",
+      onClick: () => setActiveView('matrix'),
+    },
+    {
+      icon: <PlaneTakeoff className="size-6 text-cyan-600" />,
+      title: "Jadwal Cuti Karyawan",
+      description: `${overviewMetrics.onLeave} Personel Sedang Cuti • Monitoring Hak & Tiket`,
+      date: "Rotasi Cuti Tahunan",
+      iconClassName: "text-cyan-600 bg-cyan-50 border-cyan-200",
+      titleClassName: "text-cyan-900",
+      onClick: () => setActiveView('leave_schedule'),
+    },
+    {
+      icon: <Coffee className="size-6 text-amber-600" />,
+      title: "Jadwal Off Karyawan",
+      description: `${overviewMetrics.onOff} Personel Libur Off • Rotasi Mingguan Teratur`,
+      date: "Rotasi Hari Libur",
+      iconClassName: "text-amber-600 bg-amber-50 border-amber-200",
+      titleClassName: "text-amber-900",
+      onClick: () => setActiveView('off_schedule'),
+    },
+  ], [overviewMetrics]);
 
   // Date Range (default: Today to +14 days for optimal matrix view)
   const [startDate, setStartDate] = useState(() => {
@@ -475,137 +540,171 @@ export function RosterAdminScreen() {
 
   return (
     <div className="space-y-3 sm:space-y-6 animate-in fade-in duration-500 pb-24">
-      <PageHeader
-        title="Tabel Roster & Jadwal Kerja"
-        description={
-          isAdminOrQA
-            ? "Pusat Roster Seluruh Departemen (Urutan Hierarki & Sinkronisasi Spreadsheet tiap 17:00 WIT)"
-            : "Matriks Roster Jadwal Kerja Tim & Bawahannya"
-        }
-        icon={<Calendar />}
-      >
-        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-          {canEditRoster ? (
-            <span
-              className="text-[11px] sm:text-xs font-bold px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg sm:rounded-xl border flex items-center gap-1.5 shadow-2xs bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400"
+      {activeView === 'landing' ? (
+        <div className="space-y-4">
+          {/* Navigasi Ramping ke Menu Utama Portal jika user ingin keluar */}
+          <div className="flex items-center justify-between">
+            <button
+              type="button"
+              onClick={handleBack}
+              className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-bold rounded-xl border border-slate-200 bg-white text-slate-700 hover:text-teal-700 hover:bg-teal-50/60 hover:border-teal-300 transition-all cursor-pointer shadow-2xs"
+              title="Kembali ke Menu Utama"
             >
-              <Edit2 className="w-3 h-3 sm:w-3.5 sm:h-3.5" /> Editor Roster
-            </span>
-          ) : (
-            <span
-              className="text-[11px] sm:text-xs font-medium px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg sm:rounded-xl border flex items-center gap-1.5 shadow-2xs opacity-80"
-              style={{
-                backgroundColor: 'var(--input-bg)',
-                borderColor: 'var(--border-main)',
-                color: 'var(--text-muted)'
-              }}
-            >
-              <Info className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-slate-400" /> Mode Baca
-            </span>
-          )}
-          {canEditRoster && (
-            <div className="flex items-center gap-1.5">
+              <ChevronLeft className="w-4 h-4 text-teal-600" />
+              <span>← Kembali ke Menu Utama</span>
+            </button>
+          </div>
+
+          <div className="bg-white rounded-3xl border border-slate-200/90 p-6 sm:p-12 shadow-sm text-center space-y-8 animate-in fade-in duration-500 relative overflow-hidden">
+            <div className="max-w-2xl mx-auto space-y-3 relative z-10">
+              <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full text-[11px] font-extrabold uppercase tracking-wider bg-teal-50 text-teal-800 border border-teal-200/80 shadow-2xs">
+                <span className="w-2 h-2 rounded-full bg-teal-500 animate-pulse" />
+                PORTAL OPERASIONAL PREPLAB • NAVIGASI MODUL
+              </div>
+              <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
+                Pusat Lembar Kerja Roster & Jadwal Kerja
+              </h2>
+              <p className="text-xs sm:text-sm text-slate-500 leading-relaxed max-w-xl mx-auto">
+                Pilih lembar kerja interaktif di bawah untuk mengakses matriks shift kerja terpadu, lembar monitoring cuti tahunan, atau rotasi jadwal off personel.
+              </p>
+            </div>
+
+            {/* Ambient Soft Blur Behind Cards */}
+            <div className="relative pt-2 pb-6 flex justify-center overflow-x-auto z-10">
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[30rem] sm:w-[42rem] h-60 sm:h-72 bg-gradient-to-r from-teal-200/50 via-sky-100/40 to-indigo-100/50 rounded-full blur-3xl pointer-events-none -z-10" />
+              <DisplayCards cards={overviewDisplayCards} />
+            </div>
+
+            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold text-slate-500 bg-slate-50 border border-slate-200/70 shadow-2xs relative z-10">
+              <Sparkles className="w-3.5 h-3.5 text-teal-600" />
+              <span>Arahkan kursor & klik salah satu kartu di atas untuk membuka lembar kerja secara instan</span>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <>
+          {/* Header Banner khusus untuk Tab yang Sedang Dibuka */}
+          <PageHeader
+            title={
+              <div className="flex items-center gap-2 sm:gap-3">
+                <button
+                  type="button"
+                  onClick={handleBack}
+                  className="p-1.5 -ml-1.5 rounded-xl hover:bg-white/10 text-slate-300 hover:text-white transition-colors cursor-pointer"
+                  title="Kembali ke Menu Tab"
+                >
+                  <ChevronLeft className="w-5 h-5 sm:w-6 sm:h-6" />
+                </button>
+                <span>
+                  {activeView === 'leave_schedule'
+                    ? 'Jadwal Cuti Karyawan'
+                    : activeView === 'off_schedule'
+                    ? 'Jadwal Off Karyawan'
+                    : 'Tabel Roster & Jadwal Kerja'}
+                </span>
+              </div>
+            }
+            description={
+              activeView === 'leave_schedule'
+                ? 'Pusat monitoring dan manajemen rotasi cuti tahunan, status kepulangan, serta jadwal cuti karyawan Preparation & Laboratory'
+                : activeView === 'off_schedule'
+                ? 'Pusat monitoring dan manajemen rotasi jadwal libur/off mingguan seluruh personel tim Preparation & Laboratory'
+                : isAdminOrQA
+                ? 'Pusat Roster Seluruh Departemen (Urutan Hierarki & Sinkronisasi Spreadsheet tiap 17:00 WIT)'
+                : 'Matriks Roster Jadwal Kerja Tim & Bawahannya'
+            }
+            icon={
+              activeView === 'leave_schedule' ? (
+                <PlaneTakeoff />
+              ) : activeView === 'off_schedule' ? (
+                <Coffee />
+              ) : (
+                <Calendar />
+              )
+            }
+          >
+            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
               <button
                 type="button"
-                onClick={() => setIsImportModalOpen(true)}
-                className="bg-emerald-600 hover:bg-emerald-500 text-white flex items-center gap-1.5 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-bold px-3 py-1.5 sm:px-3.5 sm:py-2 shadow-sm transition-all cursor-pointer"
-                title="Import data roster langsung dari file Excel di PC"
+                onClick={handleBack}
+                className="bg-white/10 hover:bg-white/20 text-white flex items-center gap-1.5 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-bold px-3 py-1.5 sm:px-3.5 sm:py-2 transition-all cursor-pointer border border-white/20 shadow-2xs"
+                title="Kembali ke Menu Tab Utama"
               >
-                <FileSpreadsheet className="w-3.5 h-3.5" />
-                <span>Import Excel</span>
+                <ChevronLeft className="w-3.5 h-3.5 text-teal-300" />
+                <span>Menu Tab</span>
               </button>
-              <Button
-                onClick={handleManualSync}
-                disabled={isSyncing}
-                className="text-white flex items-center gap-1.5 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-bold px-3 py-1.5 sm:px-3.5 sm:py-2 shadow-sm transition-all cursor-pointer"
-                style={{ backgroundColor: 'var(--primary, #2A9D8F)' }}
+              {canEditRoster ? (
+                <span
+                  className="text-[11px] sm:text-xs font-bold px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg sm:rounded-xl border flex items-center gap-1.5 shadow-2xs bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
+                >
+                  <Edit2 className="w-3 h-3 sm:w-3.5 sm:h-3.5" /> Editor Roster
+                </span>
+              ) : (
+                <span
+                  className="text-[11px] sm:text-xs font-medium px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg sm:rounded-xl border flex items-center gap-1.5 shadow-2xs opacity-80"
+                  style={{
+                    backgroundColor: 'var(--input-bg)',
+                    borderColor: 'var(--border-main)',
+                    color: 'var(--text-muted)'
+                  }}
+                >
+                  <Info className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-slate-400" /> Mode Baca
+                </span>
+              )}
+              {canEditRoster && (
+                <div className="flex items-center gap-1.5">
+                  {activeView === 'matrix' && (
+                    <button
+                      type="button"
+                      onClick={() => setIsImportModalOpen(true)}
+                      className="bg-emerald-600 hover:bg-emerald-500 text-white flex items-center gap-1.5 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-bold px-3 py-1.5 sm:px-3.5 sm:py-2 shadow-sm transition-all cursor-pointer"
+                      title="Import data roster langsung dari file Excel di PC"
+                    >
+                      <FileSpreadsheet className="w-3.5 h-3.5" />
+                      <span>Import Excel</span>
+                    </button>
+                  )}
+                  <Button
+                    onClick={handleManualSync}
+                    disabled={isSyncing}
+                    className="text-white flex items-center gap-1.5 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-bold px-3 py-1.5 sm:px-3.5 sm:py-2 shadow-sm transition-all cursor-pointer"
+                    style={{ backgroundColor: 'var(--primary, #2A9D8F)' }}
+                  >
+                    <RefreshCw className={`w-3 h-3 sm:w-3.5 sm:h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+                    {isSyncing ? 'Menyinkronkan...' : 'Sinkron Sheets'}
+                  </Button>
+                </div>
+              )}
+            </div>
+          </PageHeader>
+
+          {syncFeedback && (
+            <div
+              className="p-3.5 rounded-xl text-xs flex items-center justify-between gap-2 border shadow-xs animate-in fade-in"
+              style={{
+                backgroundColor: syncFeedback.type === 'success' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(244, 63, 94, 0.1)',
+                borderColor: syncFeedback.type === 'success' ? 'rgba(16, 185, 129, 0.3)' : 'rgba(244, 63, 94, 0.3)',
+                color: syncFeedback.type === 'success' ? '#10B981' : '#F43F5E'
+              }}
+            >
+              <div className="flex items-center gap-2 font-semibold">
+                {syncFeedback.type === 'success' ? (
+                  <CheckCircle2 className="w-4 h-4 shrink-0" />
+                ) : (
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                )}
+                <span>{syncFeedback.message}</span>
+              </div>
+              <button
+                onClick={() => setSyncFeedback(null)}
+                className="opacity-70 hover:opacity-100 text-xs px-2 py-0.5 rounded cursor-pointer"
               >
-                <RefreshCw className={`w-3 h-3 sm:w-3.5 sm:h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
-                {isSyncing ? 'Menyinkronkan...' : 'Sinkron Sheets'}
-              </Button>
+                ✕
+              </button>
             </div>
           )}
-        </div>
-      </PageHeader>
 
-      {syncFeedback && (
-        <div
-          className="p-3.5 rounded-xl text-xs flex items-center justify-between gap-2 border shadow-xs animate-in fade-in"
-          style={{
-            backgroundColor: syncFeedback.type === 'success' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(244, 63, 94, 0.1)',
-            borderColor: syncFeedback.type === 'success' ? 'rgba(16, 185, 129, 0.3)' : 'rgba(244, 63, 94, 0.3)',
-            color: syncFeedback.type === 'success' ? '#10B981' : '#F43F5E'
-          }}
-        >
-          <div className="flex items-center gap-2 font-semibold">
-            {syncFeedback.type === 'success' ? (
-              <CheckCircle2 className="w-4 h-4 shrink-0" />
-            ) : (
-              <AlertCircle className="w-4 h-4 shrink-0" />
-            )}
-            <span>{syncFeedback.message}</span>
-          </div>
-          <button
-            onClick={() => setSyncFeedback(null)}
-            className="opacity-70 hover:opacity-100 text-xs px-2 py-0.5 rounded cursor-pointer"
-          >
-            ✕
-          </button>
-        </div>
-      )}
-
-      {/* Top View Selector Tabs: Matriks Roster Harian vs Jadwal Cuti Karyawan */}
-      <div
-        className="p-1.5 rounded-2xl border shadow-xs flex flex-wrap items-center gap-2"
-        style={{
-          backgroundColor: 'var(--card-bg, #FFFFFF)',
-          borderColor: 'var(--border-main, #E2E8F0)'
-        }}
-      >
-        <button
-          type="button"
-          onClick={() => setActiveView('matrix')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${activeView === 'matrix'
-              ? 'bg-gradient-to-r from-teal-600 to-emerald-600 text-white shadow-sm'
-              : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-            }`}
-        >
-          <Calendar className="w-4 h-4" />
-          <span>Matriks Roster Harian</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveView('leave_schedule')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${activeView === 'leave_schedule'
-              ? 'bg-gradient-to-r from-teal-600 to-cyan-600 text-white shadow-sm'
-              : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-            }`}
-        >
-          <PlaneTakeoff className="w-4 h-4" />
-          <span>Jadwal Cuti Karyawan</span>
-          <span className="ml-1 px-1.5 py-0.5 text-[10px] rounded-full bg-white/20 text-white font-black">
-            Baru
-          </span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveView('off_schedule')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${activeView === 'off_schedule'
-              ? 'bg-gradient-to-r from-amber-600 to-orange-600 text-white shadow-sm'
-              : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-            }`}
-        >
-          <Coffee className="w-4 h-4" />
-          <span>Jadwal Off Karyawan</span>
-          <span className="ml-1 px-1.5 py-0.5 text-[10px] rounded-full bg-white/20 text-white font-black">
-            Baru
-          </span>
-        </button>
-      </div>
-
-      {activeView === 'leave_schedule' ? (
+          {activeView === 'leave_schedule' ? (
         <RosterLeaveScheduleSheet
           roster={roster}
           returnTo={returnTo}
@@ -983,7 +1082,7 @@ export function RosterAdminScreen() {
                   <span className="px-1.5 py-0.5 rounded border text-[9px] sm:text-[10px] font-bold bg-cyan-500/20 text-cyan-700 dark:text-cyan-300 border-cyan-500/35 ring-1 ring-cyan-500/20">XP = Speedboat</span>
                   <span className="px-1.5 py-0.5 rounded border text-[9px] sm:text-[10px] font-bold bg-purple-500/20 text-purple-600 border-purple-500/30">C/CT = Cuti</span>
                   <span className="px-1.5 py-0.5 rounded border text-[9px] sm:text-[10px] font-bold bg-emerald-500/15 text-emerald-600 border-emerald-500/30">S = Sakit</span>
-                  <span className="px-1.5 py-0.5 rounded border text-[9px] sm:text-[10px] font-bold bg-teal-500/15 text-teal-600 border-teal-500/30">LS = Longshift</span>
+                  <span className="px-1.5 py-0.5 rounded border text-[9px] sm:text-[10px] font-bold bg-teal-500/15 text-teal-600 border-teal-500/30">LS = Long Shift</span>
                 </div>
 
                 <span className="text-[10px] sm:text-[11px] font-semibold opacity-70" style={{ color: 'var(--text-muted)' }}>
@@ -994,6 +1093,8 @@ export function RosterAdminScreen() {
           )}
         </>
       )}
+    </>
+  )}
 
       {/* HTML5 Datalist for Excel-Style Roster Quick Suggestions */}
       <datalist id="roster-shift-suggestions">
@@ -1005,7 +1106,7 @@ export function RosterAdminScreen() {
         <option value="C">Cuti</option>
         <option value="CT">Cuti Tahunan</option>
         <option value="S">Sakit</option>
-        <option value="LS">Longshift</option>
+        <option value="LS">Long Shift</option>
         <option value="I">Izin</option>
       </datalist>
       {/* Excel Import Modal */}

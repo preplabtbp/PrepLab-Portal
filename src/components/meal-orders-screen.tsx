@@ -684,6 +684,11 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                     /^off\b/i.test(sh) ||
                     /^off\b/i.test(cat);
 
+      // Karyawan Residence Nirwana pada Export Excel: jika di orderan Off, Status otomatis menjadi 'On Duty'
+      if (isResidenceNirwana(r) && isOff) {
+        statusExport = 'On Duty';
+      }
+
       const emp = empByNik.get(String(r.nik || '').trim().toUpperCase()) ||
                   empByName.get(String(r.nama || '').trim().toLowerCase());
       const isGol2To5 = isGolongan2To5(emp, r);
@@ -701,13 +706,27 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
       const kantin = isAbsentWithoutMeal
         ? kantinSlots.map(() => '')
         : kantinSlots.map(s => {
-            const count = mealCounts(r, s).makanKantin;
+            const mc = mealCounts(r, s);
+            let count = mc.makanKantin;
+            // Karyawan Mess NR di Nirwana: jatah makan kantin terisi jika kolom Kantin bernilai 1 atau batch terisi
+            if (count === 0 && isMessNR && isResidenceNirwana(r, emp)) {
+              const kVal = String((r as any)[`${s}Kantin`] || '').trim();
+              if (kVal === '1') count = 1;
+            }
             return count > 0 ? count : (isOffWithMeal ? 1 : '');
           });
 
       const bungkus = isAbsentWithoutMeal || isOffWithMeal
         ? bungkusCols.map(() => '')
         : bungkusCols.map(c => {
+            // Untuk karyawan Mess NR di Nirwana, jika waktu makan tsb sudah masuk ke kolom Kantin (mis. Pagi), jangan diduplikasi di kolom Bungkusan
+            if (isMessNR && isResidenceNirwana(r, emp)) {
+              const kVal = String((r as any)[`${c.slot}Kantin`] || '').trim();
+              if (kVal === '1' && (c.slot === 'pagi' || c.slot === 'siang' || c.slot === 'sore')) {
+                const lapCount = mealPortions((r as any)[`${c.slot}Lapangan`]);
+                return lapCount > 0 ? lapCount : '';
+              }
+            }
             const count = bungkusOf(r, c.slot);
             return count > 0 ? count : '';
           });
@@ -731,7 +750,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
 
       return [
         // Shift hanya Siang / Malam / Longshift: Nonshift, Cuti, Cuti Site, dll. → Siang
-        i + 1, r.nik, r.nama, /malam/i.test(r.shiftKerja || '') ? 'Malam' : /long/i.test(r.shiftKerja || '') ? 'Longshift' : 'Siang', jenisMeal,
+        i + 1, r.nik, r.nama, /malam/i.test(r.shiftKerja || '') ? 'Malam' : /long/i.test(r.shiftKerja || '') ? 'Long Shift' : 'Siang', jenisMeal,
         statusExport, ...kantin, ...bungkus,
       ];
     });
@@ -1093,7 +1112,9 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
     if (c === 'Bungkusan Sore') return isLockedSore ? '-' : c;
     // Deteksi fallback dari porsi lapangan
     const p = portions(r.pagiLapangan) > 0;
-    const s = portions(r.soreLapangan) > 0 && String(r.shiftKerja || '').toUpperCase() !== 'LONGSHIFT';
+    const isLS = String(r.shiftKerja || '').toUpperCase() === 'LONGSHIFT';
+    if (isLS) return '-';
+    const s = portions(r.soreLapangan) > 0;
     if (p && s && !isLockedSore) return 'Bungkusan Pagi dan Bungkusan Sore';
     if (p) return 'Bungkusan Pagi';
     if (s && !isLockedSore) return 'Bungkusan Sore';
@@ -2086,7 +2107,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                               <option value="Nonshift">Nonshift</option>
                               <option value="Siang">Siang</option>
                               <option value="Malam">Malam</option>
-                              <option value="Longshift">Longshift</option>
+                              <option value="Longshift">Long Shift</option>
                               <option value="OFF">OFF</option>
                               <option value="CUTI">CUTI</option>
                               <option value="Cuti Site">Cuti Site</option>
@@ -2313,7 +2334,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                 <option value="Nonshift">Nonshift</option>
                 <option value="SIANG">Siang</option>
                 <option value="MALAM">Malam</option>
-                <option value="LONGSHIFT">Longshift</option>
+                <option value="LONGSHIFT">Long Shift</option>
                 <option value="OFF">OFF</option>
                 <option value="CUTI">CUTI</option>
                 <option value="Cuti Site">Cuti Site</option>
